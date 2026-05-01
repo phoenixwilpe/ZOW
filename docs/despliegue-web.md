@@ -31,12 +31,15 @@ JWT_SECRET=valor-largo-seguro
 SYSTEM_PASSWORD=ZowAdmin2026
 ZOW_OWNER_PASSWORD=2501Ramliw##
 DATABASE_PROVIDER=postgres
-DATABASE_URL=postgresql://postgres:[PASSWORD]@db.[PROJECT-REF].supabase.co:5432/postgres
+DATABASE_URL=postgresql://postgres.[PROJECT-REF]:[PASSWORD_URL_ENCODED]@aws-1-sa-east-1.pooler.supabase.com:6543/postgres
+PGSSLMODE=disable
 SUPABASE_URL=https://[PROJECT-REF].supabase.co
 SUPABASE_ANON_KEY=tu-anon-key
 SUPABASE_SERVICE_ROLE_KEY=tu-service-role-key
 SUPABASE_STORAGE_BUCKET=documentos
 ```
+
+Si tu password tiene caracteres especiales, debes codificarlos para la URL. Ejemplo: `#` se escribe como `%23`.
 
 Solo para preview temporal sin PostgreSQL:
 

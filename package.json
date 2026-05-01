@@ -14,7 +14,7 @@
     "dev:ventas": "node backend/ventas-server.js",
     "start": "node backend/server.js",
     "vercel-build": "npm run check && node scripts/prepare-public.js",
-    "check": "node --check app.js && node --check backend/server.js && node --check backend/server-postgres.js && node --check backend/db.js && node --check backend/auth.js && node --check backend/auth-postgres.js && node --check backend/pg.js && node --check api/index.js"
+    "check": "node --check app.js && node --check backend/server.js && node --check backend/server-postgres.js && node --check backend/db.js && node --check backend/auth.js && node --check backend/auth-postgres.js && node --check backend/pg.js && node --check api/index.js && node --check scripts/migrate-sqlite-to-postgres.js"
   },
   "keywords": [],
   "author": "",
