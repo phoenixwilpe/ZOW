@@ -40,11 +40,11 @@ app.use(express.static(path.join(__dirname, "..")));
 
 app.post("/api/auth/login", (req, res) => {
   const { username, password } = req.body;
-  const normalizedUsername = String(username || "").trim();
+  const normalizedUsername = normalizeUsername(username);
   const user =
-    db.prepare("SELECT * FROM users WHERE username = ? AND is_active = 1").get(normalizedUsername) ||
+    db.prepare("SELECT * FROM users WHERE lower(username) = lower(?) AND is_active = 1").get(normalizedUsername) ||
     (!normalizedUsername.includes("@")
-      ? db.prepare("SELECT * FROM users WHERE username = ? AND is_active = 1").get(`${normalizedUsername}@zow.com`)
+      ? db.prepare("SELECT * FROM users WHERE lower(username) = lower(?) AND is_active = 1").get(`${normalizedUsername}@zow.com`)
       : null);
 
   if (!user || !bcrypt.compareSync(password || "", user.password_hash)) {
@@ -163,7 +163,7 @@ app.post("/api/users", requireAuth, requireRole("admin"), (req, res) => {
   const user = {
     id: randomUUID(),
     name: String(req.body.name || "").trim(),
-    username: String(req.body.username || "").trim(),
+    username: normalizeUsername(req.body.username),
     role: String(req.body.role || "funcionario"),
     unitId: String(req.body.unitId || "").trim(),
     position: String(req.body.position || "").trim(),
@@ -175,6 +175,8 @@ app.post("/api/users", requireAuth, requireRole("admin"), (req, res) => {
     return res.status(400).json({ error: "Faltan datos obligatorios" });
   }
   if (!USER_ROLES.has(user.role)) return res.status(400).json({ error: "Rol invalido" });
+  const duplicate = db.prepare("SELECT id FROM users WHERE lower(username) = lower(?)").get(user.username);
+  if (duplicate) return res.status(400).json({ error: "Ese usuario ya existe" });
   const unit = db.prepare("SELECT id FROM units WHERE id = ? AND company_id = ?").get(user.unitId, req.user.company_id);
   if (!unit) return res.status(400).json({ error: "La unidad no pertenece a esta empresa" });
 
@@ -188,12 +190,12 @@ app.post("/api/users", requireAuth, requireRole("admin"), (req, res) => {
 });
 
 app.patch("/api/users/:id", requireAuth, requireRole("admin"), (req, res) => {
-  const existing = db.prepare("SELECT id, username, is_protected FROM users WHERE id = ? AND company_id = ?").get(req.params.id, req.user.company_id);
+  const existing = db.prepare("SELECT id, username, role, unit_id, is_protected FROM users WHERE id = ? AND company_id = ?").get(req.params.id, req.user.company_id);
   if (!existing) return res.status(404).json({ error: "Usuario no encontrado" });
 
   const user = {
     name: String(req.body.name || "").trim(),
-    username: String(req.body.username || "").trim(),
+    username: normalizeUsername(req.body.username),
     role: String(req.body.role || "funcionario"),
     unitId: String(req.body.unitId || "").trim(),
     position: String(req.body.position || "").trim(),
@@ -207,13 +209,13 @@ app.patch("/api/users/:id", requireAuth, requireRole("admin"), (req, res) => {
   }
   if (!USER_ROLES.has(user.role)) return res.status(400).json({ error: "Rol invalido" });
 
-  const duplicate = db.prepare("SELECT id FROM users WHERE username = ? AND id <> ?").get(user.username, existing.id);
+  const duplicate = db.prepare("SELECT id FROM users WHERE lower(username) = lower(?) AND id <> ?").get(user.username, existing.id);
   if (duplicate) return res.status(400).json({ error: "Ese usuario ya existe" });
   const unit = db.prepare("SELECT id FROM units WHERE id = ? AND company_id = ?").get(user.unitId, req.user.company_id);
   if (!existing.is_protected && !unit) return res.status(400).json({ error: "La unidad no pertenece a esta empresa" });
 
-  const finalRole = existing.is_protected ? "admin" : user.role;
-  const finalUnit = existing.is_protected ? "unit-admin" : user.unitId;
+  const finalRole = existing.is_protected ? existing.role : user.role;
+  const finalUnit = existing.is_protected ? existing.unit_id : user.unitId;
 
   db.prepare(
     `UPDATE users
@@ -614,13 +616,23 @@ app.get("/api/companies", requireAuth, requireRole("zow_owner"), (req, res) => {
               COUNT(DISTINCT users.id) AS user_count,
               COUNT(DISTINCT units.id) AS unit_count,
               COUNT(DISTINCT documents.id) AS document_count,
-              COALESCE(GROUP_CONCAT(DISTINCT saas_systems.name), '') AS systems
+              COALESCE(GROUP_CONCAT(DISTINCT saas_systems.name), '') AS systems,
+              admin_user.id AS admin_user_id,
+              admin_user.name AS admin_name,
+              admin_user.username AS admin_username
        FROM companies
        LEFT JOIN users ON users.company_id = companies.id
        LEFT JOIN units ON units.company_id = companies.id
        LEFT JOIN documents ON documents.company_id = companies.id
        LEFT JOIN company_system_access ON company_system_access.company_id = companies.id AND company_system_access.status = 'active'
        LEFT JOIN saas_systems ON saas_systems.id = company_system_access.system_id
+       LEFT JOIN users AS admin_user ON admin_user.id = (
+         SELECT id
+         FROM users AS company_admin
+         WHERE company_admin.company_id = companies.id AND company_admin.role = 'admin'
+         ORDER BY company_admin.is_protected DESC, company_admin.created_at ASC
+         LIMIT 1
+       )
        WHERE companies.id <> 'zow-internal'
        GROUP BY companies.id
        ORDER BY companies.created_at DESC`
@@ -646,7 +658,7 @@ app.post("/api/companies", requireAuth, requireRole("zow_owner"), (req, res) => 
     startsAt: String(req.body.startsAt || "").trim(),
     endsAt: String(req.body.endsAt || "").trim(),
     adminName: String(req.body.adminName || "Encargado de Sistema").trim(),
-    adminUsername: String(req.body.adminUsername || "").trim(),
+    adminUsername: normalizeUsername(req.body.adminUsername),
     adminPassword: String(req.body.adminPassword || "").trim()
   };
   const requestedSystems = Array.isArray(req.body.systems) && req.body.systems.length ? req.body.systems : ["correspondencia"];
@@ -657,7 +669,7 @@ app.post("/api/companies", requireAuth, requireRole("zow_owner"), (req, res) => 
 
   const duplicateCompany = db.prepare("SELECT id FROM companies WHERE slug = ?").get(company.slug);
   if (duplicateCompany) return res.status(400).json({ error: "Ese identificador de empresa ya existe" });
-  const duplicateUser = db.prepare("SELECT id FROM users WHERE username = ?").get(company.adminUsername);
+  const duplicateUser = db.prepare("SELECT id FROM users WHERE lower(username) = lower(?)").get(company.adminUsername);
   if (duplicateUser) return res.status(400).json({ error: "Ese usuario inicial ya existe" });
 
   const adminUnitId = randomUUID();
@@ -744,6 +756,84 @@ app.post("/api/companies", requireAuth, requireRole("zow_owner"), (req, res) => 
     company: db.prepare("SELECT * FROM companies WHERE id = ?").get(company.id),
     adminUser: { id: adminUserId, username: company.adminUsername, name: company.adminName }
   });
+});
+
+app.patch("/api/companies/:id", requireAuth, requireRole("zow_owner"), (req, res) => {
+  const existing = db.prepare("SELECT id FROM companies WHERE id = ? AND id <> 'zow-internal'").get(req.params.id);
+  if (!existing) return res.status(404).json({ error: "Empresa no encontrada" });
+
+  const now = new Date().toISOString();
+  const company = {
+    name: String(req.body.name || "").trim(),
+    slug: slugify(req.body.slug || req.body.name || ""),
+    plan: String(req.body.plan || "basico").trim(),
+    status: String(req.body.status || "active").trim(),
+    maxUsers: Number(req.body.maxUsers || 10),
+    maxUnits: Number(req.body.maxUnits || 10),
+    storageMb: Number(req.body.storageMb || 1024),
+    contactName: String(req.body.contactName || "").trim(),
+    contactEmail: String(req.body.contactEmail || "").trim(),
+    contactPhone: String(req.body.contactPhone || "").trim(),
+    startsAt: String(req.body.startsAt || "").trim(),
+    endsAt: String(req.body.endsAt || "").trim(),
+    adminUserId: String(req.body.adminUserId || "").trim(),
+    adminName: String(req.body.adminName || "Encargado de Sistema").trim(),
+    adminUsername: normalizeUsername(req.body.adminUsername),
+    adminPassword: String(req.body.adminPassword || "").trim()
+  };
+  if (!company.name || !company.slug || !company.adminUsername) return res.status(400).json({ error: "Empresa y usuario encargado son obligatorios" });
+  if (!["active", "suspended", "cancelled"].includes(company.status)) return res.status(400).json({ error: "Estado invalido" });
+  const duplicateCompany = db.prepare("SELECT id FROM companies WHERE slug = ? AND id <> ?").get(company.slug, existing.id);
+  if (duplicateCompany) return res.status(400).json({ error: "Ese identificador de empresa ya existe" });
+  const adminUser =
+    (company.adminUserId && db.prepare("SELECT id FROM users WHERE id = ? AND company_id = ? AND role = 'admin'").get(company.adminUserId, existing.id)) ||
+    db.prepare("SELECT id FROM users WHERE company_id = ? AND role = 'admin' ORDER BY is_protected DESC, created_at ASC LIMIT 1").get(existing.id);
+  if (!adminUser) return res.status(404).json({ error: "No se encontro el encargado de sistema" });
+  const duplicateUser = db.prepare("SELECT id FROM users WHERE lower(username) = lower(?) AND id <> ?").get(company.adminUsername, adminUser.id);
+  if (duplicateUser) return res.status(400).json({ error: "Ese usuario administrador ya existe" });
+
+  db.exec("BEGIN");
+  try {
+    db.prepare(
+      `UPDATE companies
+       SET name = ?, slug = ?, plan = ?, status = ?, max_users = ?, max_units = ?, storage_mb = ?,
+           contact_name = ?, contact_email = ?, contact_phone = ?, starts_at = ?, ends_at = ?, updated_at = ?
+       WHERE id = ?`
+    ).run(
+      company.name,
+      company.slug,
+      company.plan,
+      company.status,
+      company.maxUsers,
+      company.maxUnits,
+      company.storageMb,
+      company.contactName,
+      company.contactEmail,
+      company.contactPhone,
+      company.startsAt,
+      company.endsAt,
+      now,
+      existing.id
+    );
+    db.prepare(
+      `INSERT INTO organization_settings (id, company_id, company_name, updated_at)
+       VALUES (?, ?, ?, ?)
+       ON CONFLICT(id) DO UPDATE SET company_name = excluded.company_name, updated_at = excluded.updated_at`
+    ).run(existing.id, existing.id, company.name, now);
+    db.prepare("UPDATE users SET name = ?, username = ?, phone = ? WHERE id = ?").run(
+      company.adminName,
+      company.adminUsername,
+      company.contactPhone,
+      adminUser.id
+    );
+    if (company.adminPassword) db.prepare("UPDATE users SET password_hash = ? WHERE id = ?").run(bcrypt.hashSync(company.adminPassword, 12), adminUser.id);
+    db.exec("COMMIT");
+  } catch (error) {
+    db.exec("ROLLBACK");
+    return res.status(400).json({ error: error.message || "No se pudo actualizar la empresa" });
+  }
+
+  res.json({ ok: true });
 });
 
 app.get("/api/systems", requireAuth, requireRole("zow_owner"), (req, res) => {
@@ -1140,6 +1230,10 @@ function slugify(value) {
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "")
     .slice(0, 64);
+}
+
+function normalizeUsername(value) {
+  return String(value || "").trim().toLowerCase();
 }
 
 function getDocumentById(id, companyId) {

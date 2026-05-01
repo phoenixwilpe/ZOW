@@ -39,11 +39,11 @@ app.get("/api/health", async (_req, res) => {
 });
 
 app.post("/api/auth/login", async (req, res) => {
-  const normalizedUsername = String(req.body.username || "").trim();
+  const normalizedUsername = normalizeUsername(req.body.username);
   const user =
-    (await pg.get("SELECT * FROM users WHERE username = ? AND is_active = true", [normalizedUsername])) ||
+    (await pg.get("SELECT * FROM users WHERE lower(username) = lower(?) AND is_active = true", [normalizedUsername])) ||
     (!normalizedUsername.includes("@")
-      ? await pg.get("SELECT * FROM users WHERE username = ? AND is_active = true", [`${normalizedUsername}@zow.com`])
+      ? await pg.get("SELECT * FROM users WHERE lower(username) = lower(?) AND is_active = true", [`${normalizedUsername}@zow.com`])
       : null);
 
   if (!user || !bcrypt.compareSync(req.body.password || "", user.password_hash)) {
@@ -148,6 +148,8 @@ app.post("/api/users", requireAuth, requireRole("admin"), async (req, res) => {
   user.id = randomUUID();
   if (!user.name || !user.username || !password || !user.unitId) return res.status(400).json({ error: "Faltan datos obligatorios" });
   if (!USER_ROLES.has(user.role)) return res.status(400).json({ error: "Rol invalido" });
+  const duplicate = await pg.get("SELECT id FROM users WHERE lower(username) = lower(?)", [user.username]);
+  if (duplicate) return res.status(400).json({ error: "Ese usuario ya existe" });
   const unit = await pg.get("SELECT id FROM units WHERE id = ? AND company_id = ?", [user.unitId, req.user.company_id]);
   if (!unit) return res.status(400).json({ error: "La unidad no pertenece a esta empresa" });
   await pg.run(
@@ -159,18 +161,18 @@ app.post("/api/users", requireAuth, requireRole("admin"), async (req, res) => {
 });
 
 app.patch("/api/users/:id", requireAuth, requireRole("admin"), async (req, res) => {
-  const existing = await pg.get("SELECT id, username, is_protected FROM users WHERE id = ? AND company_id = ?", [req.params.id, req.user.company_id]);
+  const existing = await pg.get("SELECT id, username, role, unit_id, is_protected FROM users WHERE id = ? AND company_id = ?", [req.params.id, req.user.company_id]);
   if (!existing) return res.status(404).json({ error: "Usuario no encontrado" });
   const user = readUserPayload(req.body);
   user.password = String(req.body.password || "").trim();
   if (!user.name || !user.username || !user.unitId) return res.status(400).json({ error: "Nombre, usuario y unidad son obligatorios" });
   if (!USER_ROLES.has(user.role)) return res.status(400).json({ error: "Rol invalido" });
-  const duplicate = await pg.get("SELECT id FROM users WHERE username = ? AND id <> ?", [user.username, existing.id]);
+  const duplicate = await pg.get("SELECT id FROM users WHERE lower(username) = lower(?) AND id <> ?", [user.username, existing.id]);
   if (duplicate) return res.status(400).json({ error: "Ese usuario ya existe" });
   const unit = await pg.get("SELECT id FROM units WHERE id = ? AND company_id = ?", [user.unitId, req.user.company_id]);
   if (!existing.is_protected && !unit) return res.status(400).json({ error: "La unidad no pertenece a esta empresa" });
-  const finalRole = existing.is_protected ? "admin" : user.role;
-  const finalUnit = existing.is_protected ? "unit-admin" : user.unitId;
+  const finalRole = existing.is_protected ? existing.role : user.role;
+  const finalUnit = existing.is_protected ? existing.unit_id : user.unitId;
   await pg.run(
     `UPDATE users SET name = ?, username = ?, role = ?::user_role, unit_id = ?, position = ?, ci = ?, phone = ? WHERE id = ?`,
     [user.name, user.username, finalRole, finalUnit, user.position, user.ci, user.phone, existing.id]
@@ -467,9 +469,24 @@ app.get("/api/companies", requireAuth, requireRole("zow_owner"), async (_req, re
   const companies = await pg.all(
     `SELECT companies.*,
             COALESCE((SELECT COUNT(*)::int FROM users WHERE users.company_id = companies.id), 0) AS user_count,
-            COALESCE((SELECT COUNT(*)::int FROM units WHERE units.company_id = companies.id), 0) AS unit_count
+            COALESCE((SELECT COUNT(*)::int FROM units WHERE units.company_id = companies.id), 0) AS unit_count,
+            COALESCE((SELECT COUNT(*)::int FROM documents WHERE documents.company_id = companies.id), 0) AS document_count,
+            COALESCE((SELECT STRING_AGG(saas_systems.name, ', ' ORDER BY saas_systems.name)
+              FROM company_system_access
+              JOIN saas_systems ON saas_systems.id = company_system_access.system_id
+              WHERE company_system_access.company_id = companies.id AND company_system_access.status = 'active'), '') AS systems,
+            admin_user.id AS admin_user_id,
+            admin_user.name AS admin_name,
+            admin_user.username AS admin_username
      FROM companies
-     WHERE id <> 'zow-internal'
+     LEFT JOIN LATERAL (
+       SELECT id, name, username
+       FROM users
+       WHERE users.company_id = companies.id AND users.role = 'admin'
+       ORDER BY is_protected DESC, created_at ASC
+       LIMIT 1
+     ) AS admin_user ON true
+     WHERE companies.id <> 'zow-internal'
      ORDER BY created_at DESC`
   );
   res.json({ companies });
@@ -482,6 +499,7 @@ app.post("/api/companies", requireAuth, requireRole("zow_owner"), async (req, re
     name: String(req.body.name || "").trim(),
     slug: slugify(req.body.slug || req.body.name),
     plan: String(req.body.plan || "basico"),
+    status: String(req.body.status || "active"),
     maxUsers: Number(req.body.maxUsers || 10),
     maxUnits: Number(req.body.maxUnits || 10),
     storageMb: Number(req.body.storageMb || 1024),
@@ -491,21 +509,22 @@ app.post("/api/companies", requireAuth, requireRole("zow_owner"), async (req, re
     startsAt: String(req.body.startsAt || ""),
     endsAt: String(req.body.endsAt || ""),
     adminName: String(req.body.adminName || "Encargado de Sistema").trim(),
-    adminUsername: String(req.body.adminUsername || "").trim(),
+    adminUsername: normalizeUsername(req.body.adminUsername),
     adminPassword: String(req.body.adminPassword || "").trim(),
     systems: Array.isArray(req.body.systems) ? req.body.systems.map(String) : ["correspondencia"]
   };
   if (!company.name || !company.slug || !company.adminUsername || !company.adminPassword) return res.status(400).json({ error: "Faltan datos obligatorios" });
+  if (!["active", "suspended", "cancelled"].includes(company.status)) return res.status(400).json({ error: "Estado invalido" });
   if (await pg.get("SELECT id FROM companies WHERE slug = ?", [company.slug])) return res.status(400).json({ error: "Ese identificador de empresa ya existe" });
-  if (await pg.get("SELECT id FROM users WHERE username = ?", [company.adminUsername])) return res.status(400).json({ error: "Ese usuario administrador ya existe" });
+  if (await pg.get("SELECT id FROM users WHERE lower(username) = lower(?)", [company.adminUsername])) return res.status(400).json({ error: "Ese usuario administrador ya existe" });
   const adminUnitId = randomUUID();
   const receptionUnitId = randomUUID();
   const adminUserId = randomUUID();
   await pg.tx(async (client) => {
     await client.run(
       `INSERT INTO companies (id, name, slug, plan, status, max_users, max_units, storage_mb, contact_name, contact_email, contact_phone, starts_at, ends_at, created_at, updated_at)
-       VALUES (?, ?, ?, ?, 'active', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [company.id, company.name, company.slug, company.plan, company.maxUsers, company.maxUnits, company.storageMb, company.contactName, company.contactEmail, company.contactPhone, company.startsAt, company.endsAt, now, now]
+       VALUES (?, ?, ?, ?, ?::company_status, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [company.id, company.name, company.slug, company.plan, company.status || "active", company.maxUsers, company.maxUnits, company.storageMb, company.contactName, company.contactEmail, company.contactPhone, company.startsAt, company.endsAt, now, now]
     );
     await client.run("INSERT INTO organization_settings (id, company_id, company_name, updated_at) VALUES (?, ?, ?, ?)", [company.id, company.id, company.name, now]);
     await client.run("INSERT INTO units (id, company_id, name, code, parent_unit_id, level) VALUES (?, ?, ?, ?, ?, ?)", [adminUnitId, company.id, "Administracion del Sistema", "ADM", "", "principal"]);
@@ -528,6 +547,79 @@ app.post("/api/companies", requireAuth, requireRole("zow_owner"), async (req, re
     }
   });
   res.status(201).json({ company: await pg.get("SELECT * FROM companies WHERE id = ?", [company.id]), adminUser: { id: adminUserId, username: company.adminUsername, name: company.adminName } });
+});
+
+app.patch("/api/companies/:id", requireAuth, requireRole("zow_owner"), async (req, res) => {
+  const existing = await pg.get("SELECT id FROM companies WHERE id = ? AND id <> 'zow-internal'", [req.params.id]);
+  if (!existing) return res.status(404).json({ error: "Empresa no encontrada" });
+  const now = new Date().toISOString();
+  const company = {
+    name: String(req.body.name || "").trim(),
+    slug: slugify(req.body.slug || req.body.name),
+    plan: String(req.body.plan || "basico"),
+    status: String(req.body.status || "active"),
+    maxUsers: Number(req.body.maxUsers || 10),
+    maxUnits: Number(req.body.maxUnits || 10),
+    storageMb: Number(req.body.storageMb || 1024),
+    contactName: String(req.body.contactName || "").trim(),
+    contactEmail: String(req.body.contactEmail || "").trim(),
+    contactPhone: String(req.body.contactPhone || "").trim(),
+    startsAt: String(req.body.startsAt || "").trim(),
+    endsAt: String(req.body.endsAt || "").trim(),
+    adminUserId: String(req.body.adminUserId || "").trim(),
+    adminName: String(req.body.adminName || "Encargado de Sistema").trim(),
+    adminUsername: normalizeUsername(req.body.adminUsername),
+    adminPassword: String(req.body.adminPassword || "").trim()
+  };
+  if (!company.name || !company.slug || !company.adminUsername) return res.status(400).json({ error: "Empresa y usuario encargado son obligatorios" });
+  if (!["active", "suspended", "cancelled"].includes(company.status)) return res.status(400).json({ error: "Estado invalido" });
+  const duplicateCompany = await pg.get("SELECT id FROM companies WHERE slug = ? AND id <> ?", [company.slug, existing.id]);
+  if (duplicateCompany) return res.status(400).json({ error: "Ese identificador de empresa ya existe" });
+  const adminUser =
+    (company.adminUserId && (await pg.get("SELECT id FROM users WHERE id = ? AND company_id = ? AND role = 'admin'", [company.adminUserId, existing.id]))) ||
+    (await pg.get("SELECT id FROM users WHERE company_id = ? AND role = 'admin' ORDER BY is_protected DESC, created_at ASC LIMIT 1", [existing.id]));
+  if (!adminUser) return res.status(404).json({ error: "No se encontro el encargado de sistema" });
+  const duplicateUser = await pg.get("SELECT id FROM users WHERE lower(username) = lower(?) AND id <> ?", [company.adminUsername, adminUser.id]);
+  if (duplicateUser) return res.status(400).json({ error: "Ese usuario administrador ya existe" });
+
+  await pg.tx(async (client) => {
+    await client.run(
+      `UPDATE companies
+       SET name = ?, slug = ?, plan = ?, status = ?::company_status, max_users = ?, max_units = ?, storage_mb = ?,
+           contact_name = ?, contact_email = ?, contact_phone = ?, starts_at = ?, ends_at = ?, updated_at = ?
+       WHERE id = ?`,
+      [
+        company.name,
+        company.slug,
+        company.plan,
+        company.status,
+        company.maxUsers,
+        company.maxUnits,
+        company.storageMb,
+        company.contactName,
+        company.contactEmail,
+        company.contactPhone,
+        company.startsAt,
+        company.endsAt,
+        now,
+        existing.id
+      ]
+    );
+    await client.run(
+      `INSERT INTO organization_settings (id, company_id, company_name, updated_at)
+       VALUES (?, ?, ?, ?)
+       ON CONFLICT(id) DO UPDATE SET company_name = excluded.company_name, updated_at = excluded.updated_at`,
+      [existing.id, existing.id, company.name, now]
+    );
+    await client.run("UPDATE users SET name = ?, username = ?, phone = ? WHERE id = ?", [
+      company.adminName,
+      company.adminUsername,
+      company.contactPhone,
+      adminUser.id
+    ]);
+    if (company.adminPassword) await client.run("UPDATE users SET password_hash = ? WHERE id = ?", [bcrypt.hashSync(company.adminPassword, 12), adminUser.id]);
+  });
+  res.json({ ok: true });
 });
 
 app.get("/api/systems", requireAuth, requireRole("zow_owner"), async (_req, res) => {
@@ -599,13 +691,17 @@ function publicUser(user) {
 function readUserPayload(body) {
   return {
     name: String(body.name || "").trim(),
-    username: String(body.username || "").trim(),
+    username: normalizeUsername(body.username),
     role: String(body.role || "funcionario"),
     unitId: String(body.unitId || "").trim(),
     position: String(body.position || "").trim(),
     ci: String(body.ci || "").trim(),
     phone: String(body.phone || "").trim()
   };
+}
+
+function normalizeUsername(value) {
+  return String(value || "").trim().toLowerCase();
 }
 
 function getUploadedFiles(req) {

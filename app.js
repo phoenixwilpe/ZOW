@@ -440,7 +440,7 @@ const notificationBtn = document.querySelector("#notificationBtn");
 
 loginForm.addEventListener("submit", async (event) => {
   event.preventDefault();
-  const username = documentWindowValue("#loginUsername").trim();
+  const username = normalizeUsernameInput("#loginUsername");
   const password = documentWindowValue("#loginPassword");
 
   try {
@@ -1139,6 +1139,10 @@ function persistAll() {
 
 function documentWindowValue(selector) {
   return document.querySelector(selector).value;
+}
+
+function normalizeUsernameInput(selector) {
+  return documentWindowValue(selector).trim().toLowerCase();
 }
 
 function getSelectedUnitIds(selector) {
@@ -1856,8 +1860,12 @@ function renderZowAdmin(mode = "overview") {
     button.addEventListener("click", () => renderZowAdmin(button.dataset.zowTab));
   });
   document.querySelector("#zowCompanyForm")?.addEventListener("submit", handleZowCompanySubmit);
+  document.querySelector("#zowCompanyEditForm")?.addEventListener("submit", handleZowCompanyEditSubmit);
   document.querySelectorAll("[data-company-systems]").forEach((button) => {
     button.addEventListener("click", () => renderCompanySystemsPanel(button.dataset.companySystems));
+  });
+  document.querySelectorAll("[data-company-edit]").forEach((button) => {
+    button.addEventListener("click", () => renderCompanyEditPanel(button.dataset.companyEdit));
   });
   document.querySelectorAll("[data-company-status]").forEach((button) => {
     button.addEventListener("click", async () => {
@@ -1956,6 +1964,9 @@ function renderCompanyListPanel() {
                 <button class="ghost-button" type="button" data-company-id="${company.id}" data-company-status="${company.status === "active" ? "suspended" : "active"}">
                   ${company.status === "active" ? "Suspender" : "Activar"}
                 </button>
+                <button class="ghost-button" type="button" data-company-edit="${company.id}">
+                  Editar
+                </button>
                 <button class="ghost-button" type="button" data-company-systems="${company.id}">
                   Sistemas
                 </button>
@@ -1966,6 +1977,92 @@ function renderCompanyListPanel() {
       </div>
     </section>
   `;
+}
+
+function renderCompanyEditPanel(companyId) {
+  const company = companies.find((item) => item.id === companyId);
+  if (!company) return renderZowAdmin();
+
+  listEl.innerHTML = `
+    <section class="admin-panel">
+      <div class="admin-panel-head">
+        <div>
+          <p class="eyebrow">Cliente SaaS</p>
+          <h3>Editar empresa y credencial</h3>
+        </div>
+      </div>
+      <form class="admin-form" id="zowCompanyEditForm" data-company-id="${escapeHtml(company.id)}">
+        <div class="form-grid">
+          <label>
+            Nombre de empresa
+            <input id="zowEditCompanyName" type="text" value="${escapeHtml(company.name || "")}" required />
+          </label>
+          <label>
+            Identificador
+            <input id="zowEditCompanySlug" type="text" value="${escapeHtml(company.slug || "")}" required />
+          </label>
+          <label>
+            Plan
+            <select id="zowEditCompanyPlan">
+              <option value="basico" ${company.plan === "basico" ? "selected" : ""}>Basico</option>
+              <option value="profesional" ${company.plan === "profesional" ? "selected" : ""}>Profesional</option>
+              <option value="institucional" ${company.plan === "institucional" ? "selected" : ""}>Institucional</option>
+            </select>
+          </label>
+          <label>
+            Estado
+            <select id="zowEditCompanyStatus">
+              <option value="active" ${company.status === "active" ? "selected" : ""}>Activo</option>
+              <option value="suspended" ${company.status === "suspended" ? "selected" : ""}>Suspendido</option>
+              <option value="cancelled" ${company.status === "cancelled" ? "selected" : ""}>Cancelado</option>
+            </select>
+          </label>
+          <label>
+            Max. usuarios
+            <input id="zowEditMaxUsers" type="number" min="1" value="${Number(company.max_users || 10)}" required />
+          </label>
+          <label>
+            Max. areas
+            <input id="zowEditMaxUnits" type="number" min="2" value="${Number(company.max_units || 10)}" required />
+          </label>
+          <label>
+            Almacenamiento MB
+            <input id="zowEditStorageMb" type="number" min="100" value="${Number(company.storage_mb || 1024)}" required />
+          </label>
+          <label>
+            Contacto comercial
+            <input id="zowEditContactName" type="text" value="${escapeHtml(company.contact_name || "")}" />
+          </label>
+          <label>
+            Email contacto
+            <input id="zowEditContactEmail" type="email" value="${escapeHtml(company.contact_email || "")}" />
+          </label>
+          <label>
+            Celular contacto
+            <input id="zowEditContactPhone" type="tel" value="${escapeHtml(company.contact_phone || "")}" />
+          </label>
+          <label>
+            Usuario encargado
+            <input id="zowEditAdminUsername" type="email" value="${escapeHtml(company.admin_username || "")}" required />
+          </label>
+          <label>
+            Nueva contrasena opcional
+            <input id="zowEditAdminPassword" type="text" placeholder="Dejar vacio para mantenerla" />
+          </label>
+          <label class="span-2">
+            Nombre del encargado
+            <input id="zowEditAdminName" type="text" value="${escapeHtml(company.admin_name || "Encargado de Sistema")}" required />
+          </label>
+        </div>
+        <div class="modal-actions">
+          <button class="ghost-button" type="button" id="cancelCompanyEdit">Volver</button>
+          <button class="primary-button" type="submit">Guardar empresa y credencial</button>
+        </div>
+      </form>
+    </section>
+  `;
+  document.querySelector("#cancelCompanyEdit")?.addEventListener("click", () => renderZowAdmin());
+  document.querySelector("#zowCompanyEditForm")?.addEventListener("submit", handleZowCompanyEditSubmit);
 }
 
 function renderCompanyCreatePanel() {
@@ -2064,12 +2161,39 @@ async function handleZowCompanySubmit(event) {
     contactName: documentWindowValue("#zowContactName").trim(),
     contactEmail: documentWindowValue("#zowContactEmail").trim(),
     contactPhone: documentWindowValue("#zowContactPhone").trim(),
-    adminUsername: documentWindowValue("#zowAdminUsername").trim(),
+    adminUsername: normalizeUsernameInput("#zowAdminUsername"),
     adminPassword: documentWindowValue("#zowAdminPassword").trim(),
     adminName: documentWindowValue("#zowAdminName").trim(),
     systems: getCheckedValues("[data-system-check]")
   };
   await apiRequest("/companies", { method: "POST", body: payload });
+  await loadRemoteConfig();
+  renderMetrics();
+  renderZowAdmin();
+}
+
+async function handleZowCompanyEditSubmit(event) {
+  event.preventDefault();
+  const companyId = event.currentTarget.dataset.companyId;
+  const company = companies.find((item) => item.id === companyId);
+  if (!company) return;
+  const payload = {
+    name: documentWindowValue("#zowEditCompanyName").trim(),
+    slug: documentWindowValue("#zowEditCompanySlug").trim(),
+    plan: documentWindowValue("#zowEditCompanyPlan"),
+    status: documentWindowValue("#zowEditCompanyStatus"),
+    maxUsers: Number(documentWindowValue("#zowEditMaxUsers")),
+    maxUnits: Number(documentWindowValue("#zowEditMaxUnits")),
+    storageMb: Number(documentWindowValue("#zowEditStorageMb")),
+    contactName: documentWindowValue("#zowEditContactName").trim(),
+    contactEmail: documentWindowValue("#zowEditContactEmail").trim(),
+    contactPhone: documentWindowValue("#zowEditContactPhone").trim(),
+    adminUserId: company.admin_user_id || "",
+    adminUsername: normalizeUsernameInput("#zowEditAdminUsername"),
+    adminPassword: documentWindowValue("#zowEditAdminPassword").trim(),
+    adminName: documentWindowValue("#zowEditAdminName").trim()
+  };
+  await apiRequest(`/companies/${companyId}`, { method: "PATCH", body: payload });
   await loadRemoteConfig();
   renderMetrics();
   renderZowAdmin();
@@ -2433,8 +2557,8 @@ function renderUnitForm() {
 
 async function handleAdminUserSubmit(event) {
   event.preventDefault();
-  const username = documentWindowValue("#adminUsername").trim();
-  if (users.some((user) => user.username === username && user.id !== editingUserId)) {
+  const username = normalizeUsernameInput("#adminUsername");
+  if (users.some((user) => user.username.toLowerCase() === username && user.id !== editingUserId)) {
     alert("Ese usuario ya existe.");
     return;
   }
