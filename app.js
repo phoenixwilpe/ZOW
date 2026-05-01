@@ -3,7 +3,9 @@ const USERS_KEY = "zowCorrespondencia.users";
 const UNITS_KEY = "zowCorrespondencia.units";
 const SESSION_KEY = "zowCorrespondencia.session";
 const TOKEN_KEY = "zowCorrespondencia.token";
-const API_BASE_URL = "http://localhost:4174/api";
+const API_BASE_URL = window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1"
+  ? "http://localhost:4174/api"
+  : "/api";
 
 const defaultUnits = [
   { id: "unit-admin", name: "Administracion del Sistema", code: "ADM" },
