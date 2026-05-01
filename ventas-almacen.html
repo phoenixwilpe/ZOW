@@ -1,0 +1,215 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Zow Ventas-Almacen</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body class="app-ventas">
+    <section class="login-screen" id="loginScreen">
+      <div class="login-layout">
+        <section class="login-intro" aria-label="Zow Ventas-Almacen">
+          <img class="login-product-logo" src="assets/brand/zow-ventas-almacen-logo-transparent.png" alt="Zow Ventas-Almacen" />
+          <div class="login-copy">
+            <p class="eyebrow">SaaS comercial</p>
+            <h1>Zow Ventas-Almacen</h1>
+            <p>Productos, stock, movimientos de almacen, ventas y control operativo para empresas.</p>
+          </div>
+          <div class="login-highlights" aria-label="Capacidades principales">
+            <div>
+              <strong>01</strong>
+              <span>Inventario</span>
+            </div>
+            <div>
+              <strong>02</strong>
+              <span>Ventas</span>
+            </div>
+            <div>
+              <strong>03</strong>
+              <span>Stock auditable</span>
+            </div>
+          </div>
+        </section>
+
+        <form class="login-card" id="loginForm">
+          <div>
+            <p class="eyebrow">Acceso seguro</p>
+            <h2>Ingresar al sistema</h2>
+          </div>
+          <label>
+            Usuario
+            <input id="loginUsername" type="text" autocomplete="username" required placeholder="usuario@empresa.com" />
+          </label>
+          <label>
+            Contrasena
+            <input id="loginPassword" type="password" autocomplete="current-password" required placeholder="Contrasena" />
+          </label>
+          <button class="primary-button" type="submit">Ingresar</button>
+          <p id="loginError" class="form-error"></p>
+        </form>
+      </div>
+    </section>
+
+    <main class="app-shell hidden ventas-shell" id="appShell">
+      <header class="topbar">
+        <div>
+          <p class="eyebrow" id="companyLabel">Empresa</p>
+          <h1>Zow Ventas-Almacen</h1>
+        </div>
+        <div class="topbar-actions">
+          <span class="user-badge" id="currentUserBadge"></span>
+          <button class="ghost-button" id="logoutBtn" type="button">Salir</button>
+        </div>
+      </header>
+
+      <section class="metrics" aria-label="Indicadores de almacen">
+        <article>
+          <span>Productos</span>
+          <strong id="productsMetric">0</strong>
+        </article>
+        <article>
+          <span>Stock total</span>
+          <strong id="stockMetric">0</strong>
+        </article>
+        <article>
+          <span>Valor inventario</span>
+          <strong id="valueMetric">0</strong>
+        </article>
+        <article>
+          <span>Bajo minimo</span>
+          <strong id="lowStockMetric">0</strong>
+        </article>
+      </section>
+
+      <section class="workspace">
+        <div class="admin-tabs ventas-tabs" role="tablist" aria-label="Modulos Ventas-Almacen">
+          <button class="is-active" type="button" data-view="summary">Resumen</button>
+          <button type="button" data-view="alerts">Alertas</button>
+          <button type="button" data-view="sell">Vender</button>
+          <button type="button" data-view="finance">Finanzas</button>
+          <button type="button" data-view="catalog">Catalogos</button>
+          <button type="button" data-view="customers">Clientes</button>
+          <button type="button" data-view="inventory">Inventario</button>
+          <button type="button" data-view="settings">Configuracion</button>
+        </div>
+
+        <section id="workflowPanel" class="workflow-panel" aria-label="Acciones principales">
+          <div>
+            <strong>Control inicial de almacen</strong>
+            <span>Registra productos, define precios y controla entradas o salidas de stock.</span>
+          </div>
+              <button class="primary-button" type="button" id="showProductForm">Nuevo producto</button>
+        </section>
+
+        <div class="content-grid admin-mode">
+          <section class="document-list" aria-label="Productos">
+            <div class="section-heading">
+              <div>
+                <p class="eyebrow" id="viewEyebrow">Inventario</p>
+                <h2 id="viewTitle">Productos y stock</h2>
+              </div>
+              <span id="resultCount">0 registros</span>
+            </div>
+            <div id="mainList"></div>
+          </section>
+        </div>
+      </section>
+    </main>
+
+    <dialog id="productModal">
+      <form id="productForm" method="dialog" class="modal-body">
+        <div class="modal-header">
+          <div>
+            <p class="eyebrow">Inventario</p>
+            <h2>Nuevo producto</h2>
+          </div>
+          <button class="icon-button" type="button" id="closeProductModal" aria-label="Cerrar">x</button>
+        </div>
+        <div class="form-grid">
+          <label>
+            Codigo
+            <input id="productCode" type="text" required placeholder="SKU-001" />
+          </label>
+          <label>
+            Nombre
+            <input id="productName" type="text" required />
+          </label>
+          <label>
+            Categoria
+            <input id="productCategory" type="text" />
+          </label>
+          <label>
+            Unidad
+            <input id="productUnit" type="text" value="Unidad" required />
+          </label>
+          <label>
+            Costo
+            <input id="productCost" type="number" min="0" step="0.01" value="0" />
+          </label>
+          <label>
+            Precio venta
+            <input id="productSale" type="number" min="0" step="0.01" value="0" />
+          </label>
+          <label>
+            Stock minimo
+            <input id="productMin" type="number" min="0" step="0.01" value="0" />
+          </label>
+          <label>
+            Stock inicial
+            <input id="productStock" type="number" min="0" step="0.01" value="0" />
+          </label>
+        </div>
+        <div class="modal-actions">
+          <button class="ghost-button" type="button" id="cancelProductModal">Cancelar</button>
+          <button class="primary-button" type="submit">Guardar producto</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="customerModal">
+      <form id="customerForm" method="dialog" class="modal-body">
+        <div class="modal-header">
+          <div>
+            <p class="eyebrow">Clientes</p>
+            <h2>Nuevo cliente</h2>
+          </div>
+          <button class="icon-button" type="button" id="closeCustomerModal" aria-label="Cerrar">x</button>
+        </div>
+        <div class="form-grid">
+          <label>Nombre<input id="customerName" type="text" required /></label>
+          <label>Celular<input id="customerPhone" type="tel" /></label>
+          <label>CI/NIT<input id="customerCi" type="text" /></label>
+          <label>Email<input id="customerEmail" type="email" /></label>
+          <label class="span-2">Direccion<input id="customerAddress" type="text" /></label>
+        </div>
+        <div class="modal-actions">
+          <button class="ghost-button" type="button" id="cancelCustomerModal">Cancelar</button>
+          <button class="primary-button" type="submit">Guardar cliente</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="categoryModal">
+      <form id="categoryForm" method="dialog" class="modal-body">
+        <div class="modal-header">
+          <div>
+            <p class="eyebrow">Catalogos</p>
+            <h2>Nueva categoria</h2>
+          </div>
+          <button class="icon-button" type="button" id="closeCategoryModal" aria-label="Cerrar">x</button>
+        </div>
+        <div class="form-grid">
+          <label>Nombre<input id="categoryName" type="text" required /></label>
+          <label class="span-2">Descripcion<input id="categoryDescription" type="text" /></label>
+        </div>
+        <div class="modal-actions">
+          <button class="ghost-button" type="button" id="cancelCategoryModal">Cancelar</button>
+          <button class="primary-button" type="submit">Guardar categoria</button>
+        </div>
+      </form>
+    </dialog>
+
+    <script src="ventas-almacen.js"></script>
+  </body>
+</html>

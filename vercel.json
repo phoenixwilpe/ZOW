@@ -1,0 +1,17 @@
+{
+  "version": 2,
+  "rewrites": [
+    {
+      "source": "/api/(.*)",
+      "destination": "/api/index.js"
+    },
+    {
+      "source": "/correspondencia",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/panel",
+      "destination": "/index.html"
+    }
+  ]
+}

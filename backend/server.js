@@ -1,0 +1,1258 @@
+require("dotenv").config();
+
+const express = require("express");
+const cors = require("cors");
+const multer = require("multer");
+const bcrypt = require("bcryptjs");
+const path = require("node:path");
+const fs = require("node:fs");
+const { randomUUID } = require("node:crypto");
+const { db, initDb } = require("./db");
+const { signToken, requireAuth, requireRole, canSeeDocument } = require("./auth");
+
+initDb();
+
+const USER_ROLES = new Set([
+  "admin",
+  "recepcion_principal",
+  "recepcion_secundaria",
+  "funcionario",
+  "supervisor",
+  "ventas_admin",
+  "cajero",
+  "almacen",
+  "vendedor"
+]);
+
+const app = express();
+const port = Number(process.env.PORT || 4174);
+const uploadsDir = process.env.UPLOADS_DIR || (process.env.VERCEL ? "/tmp/zow-uploads" : path.join(__dirname, "..", "uploads"));
+fs.mkdirSync(uploadsDir, { recursive: true });
+
+const upload = multer({
+  dest: uploadsDir,
+  limits: { fileSize: 20 * 1024 * 1024 }
+});
+
+app.use(cors());
+app.use(express.json());
+app.use(express.static(path.join(__dirname, "..")));
+
+app.post("/api/auth/login", (req, res) => {
+  const { username, password } = req.body;
+  const normalizedUsername = String(username || "").trim();
+  const user =
+    db.prepare("SELECT * FROM users WHERE username = ? AND is_active = 1").get(normalizedUsername) ||
+    (!normalizedUsername.includes("@")
+      ? db.prepare("SELECT * FROM users WHERE username = ? AND is_active = 1").get(`${normalizedUsername}@zow.com`)
+      : null);
+
+  if (!user || !bcrypt.compareSync(password || "", user.password_hash)) {
+    return res.status(401).json({ error: "Usuario o contrasena incorrectos" });
+  }
+  const company = db.prepare("SELECT status FROM companies WHERE id = ?").get(user.company_id);
+  if (!company || company.status !== "active") {
+    return res.status(403).json({ error: "La empresa no esta activa. Contacte a ZOW." });
+  }
+
+  res.json({
+    token: signToken(user),
+    user: publicUser(db
+      .prepare(
+      `SELECT users.id, users.company_id, users.name, users.username, users.role, users.unit_id, users.position, users.ci, users.phone,
+                units.name AS unit_name, companies.name AS company_name
+         FROM users
+         JOIN units ON units.id = users.unit_id
+         JOIN companies ON companies.id = users.company_id
+         WHERE users.id = ?`
+      )
+      .get(user.id))
+  });
+});
+
+app.get("/api/auth/me", requireAuth, (req, res) => {
+  res.json({ user: req.user });
+});
+
+app.get("/api/auth/systems", requireAuth, (req, res) => {
+  if (req.user.role === "zow_owner") {
+    const systems = db.prepare("SELECT * FROM saas_systems WHERE status = 'active' ORDER BY name").all();
+    return res.json({ systems });
+  }
+
+  const systems = db
+    .prepare(
+      `SELECT saas_systems.*, company_system_access.plan, company_system_access.status AS access_status
+       FROM company_system_access
+       JOIN saas_systems ON saas_systems.id = company_system_access.system_id
+       WHERE company_system_access.company_id = ? AND company_system_access.status = 'active' AND saas_systems.status = 'active'
+       ORDER BY saas_systems.name`
+    )
+    .all(req.user.company_id);
+  res.json({ systems });
+});
+
+app.get("/api/units", requireAuth, (req, res) => {
+  if (req.user.role === "zow_owner") return res.json({ units: [] });
+  const units = db
+    .prepare("SELECT id, company_id, name, code, parent_unit_id, level, is_active FROM units WHERE company_id = ? ORDER BY name")
+    .all(req.user.company_id);
+  res.json({ units });
+});
+
+app.get("/api/settings", requireAuth, (req, res) => {
+  if (req.user.role === "zow_owner") return res.json({ settings: { companyName: "Panel ZOW SaaS" } });
+  res.json({ settings: mapSettings(loadSettings(req.user.company_id)) });
+});
+
+app.patch("/api/settings", requireAuth, requireRole("admin"), (req, res) => {
+  const companyName = String(req.body.companyName || "").trim();
+  if (!companyName) return res.status(400).json({ error: "Nombre de empresa obligatorio" });
+
+  db.prepare(
+    `INSERT INTO organization_settings (id, company_id, company_name, updated_at)
+     VALUES (?, ?, ?, ?)
+     ON CONFLICT(id) DO UPDATE SET company_name = excluded.company_name, updated_at = excluded.updated_at`
+  ).run(req.user.company_id, req.user.company_id, companyName, new Date().toISOString());
+
+  res.json({ settings: { companyName } });
+});
+
+app.post("/api/units", requireAuth, requireRole("admin"), (req, res) => {
+  const unit = {
+    id: randomUUID(),
+    name: String(req.body.name || "").trim(),
+    code: String(req.body.code || "").trim().toUpperCase(),
+    parentUnitId: String(req.body.parentUnitId || ""),
+    level: String(req.body.level || "secundaria")
+  };
+
+  if (!unit.name || !unit.code) {
+    return res.status(400).json({ error: "Nombre y codigo son obligatorios" });
+  }
+  const parent = unit.parentUnitId ? db.prepare("SELECT id FROM units WHERE id = ? AND company_id = ?").get(unit.parentUnitId, req.user.company_id) : null;
+  if (unit.parentUnitId && !parent) return res.status(400).json({ error: "El area padre no pertenece a esta empresa" });
+
+  db.prepare("INSERT INTO units (id, company_id, name, code, parent_unit_id, level) VALUES (?, ?, ?, ?, ?, ?)").run(
+    unit.id,
+    req.user.company_id,
+    unit.name,
+    unit.code,
+    unit.parentUnitId,
+    unit.level
+  );
+  res.status(201).json({ unit });
+});
+
+app.get("/api/users", requireAuth, requireRole("admin"), (req, res) => {
+  const users = db
+    .prepare(
+      `SELECT users.id, users.name, users.username, users.role, users.unit_id, users.position, users.ci, users.phone,
+              users.is_active, users.is_protected, units.name AS unit_name
+       FROM users
+       JOIN units ON units.id = users.unit_id
+       WHERE users.company_id = ?
+       ORDER BY users.name`
+    )
+    .all(req.user.company_id);
+  res.json({ users });
+});
+
+app.post("/api/users", requireAuth, requireRole("admin"), (req, res) => {
+  const password = String(req.body.password || "").trim();
+  const user = {
+    id: randomUUID(),
+    name: String(req.body.name || "").trim(),
+    username: String(req.body.username || "").trim(),
+    role: String(req.body.role || "funcionario"),
+    unitId: String(req.body.unitId || "").trim(),
+    position: String(req.body.position || "").trim(),
+    ci: String(req.body.ci || "").trim(),
+    phone: String(req.body.phone || "").trim()
+  };
+
+  if (!user.name || !user.username || !password || !user.unitId) {
+    return res.status(400).json({ error: "Faltan datos obligatorios" });
+  }
+  if (!USER_ROLES.has(user.role)) return res.status(400).json({ error: "Rol invalido" });
+  const unit = db.prepare("SELECT id FROM units WHERE id = ? AND company_id = ?").get(user.unitId, req.user.company_id);
+  if (!unit) return res.status(400).json({ error: "La unidad no pertenece a esta empresa" });
+
+  const passwordHash = bcrypt.hashSync(password, 12);
+  db.prepare(
+    `INSERT INTO users (id, company_id, name, username, password_hash, role, unit_id, position, ci, phone)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+  ).run(user.id, req.user.company_id, user.name, user.username, passwordHash, user.role, user.unitId, user.position, user.ci, user.phone);
+
+  res.status(201).json({ user });
+});
+
+app.patch("/api/users/:id", requireAuth, requireRole("admin"), (req, res) => {
+  const existing = db.prepare("SELECT id, username, is_protected FROM users WHERE id = ? AND company_id = ?").get(req.params.id, req.user.company_id);
+  if (!existing) return res.status(404).json({ error: "Usuario no encontrado" });
+
+  const user = {
+    name: String(req.body.name || "").trim(),
+    username: String(req.body.username || "").trim(),
+    role: String(req.body.role || "funcionario"),
+    unitId: String(req.body.unitId || "").trim(),
+    position: String(req.body.position || "").trim(),
+    ci: String(req.body.ci || "").trim(),
+    phone: String(req.body.phone || "").trim(),
+    password: String(req.body.password || "").trim()
+  };
+
+  if (!user.name || !user.username || !user.unitId) {
+    return res.status(400).json({ error: "Nombre, usuario y unidad son obligatorios" });
+  }
+  if (!USER_ROLES.has(user.role)) return res.status(400).json({ error: "Rol invalido" });
+
+  const duplicate = db.prepare("SELECT id FROM users WHERE username = ? AND id <> ?").get(user.username, existing.id);
+  if (duplicate) return res.status(400).json({ error: "Ese usuario ya existe" });
+  const unit = db.prepare("SELECT id FROM units WHERE id = ? AND company_id = ?").get(user.unitId, req.user.company_id);
+  if (!existing.is_protected && !unit) return res.status(400).json({ error: "La unidad no pertenece a esta empresa" });
+
+  const finalRole = existing.is_protected ? "admin" : user.role;
+  const finalUnit = existing.is_protected ? "unit-admin" : user.unitId;
+
+  db.prepare(
+    `UPDATE users
+     SET name = ?, username = ?, role = ?, unit_id = ?, position = ?, ci = ?, phone = ?
+     WHERE id = ?`
+  ).run(user.name, user.username, finalRole, finalUnit, user.position, user.ci, user.phone, existing.id);
+
+  if (user.password) {
+    db.prepare("UPDATE users SET password_hash = ? WHERE id = ?").run(bcrypt.hashSync(user.password, 12), existing.id);
+  }
+
+  res.json({ user: db.prepare("SELECT id, company_id, name, username, role, unit_id, position, ci, phone, is_active, is_protected FROM users WHERE id = ?").get(existing.id) });
+});
+
+app.patch("/api/users/:id/status", requireAuth, requireRole("admin"), (req, res) => {
+  const user = db.prepare("SELECT id, is_protected FROM users WHERE id = ? AND company_id = ?").get(req.params.id, req.user.company_id);
+  if (!user) return res.status(404).json({ error: "Usuario no encontrado" });
+  if (user.is_protected) return res.status(400).json({ error: "No se puede desactivar un usuario protegido" });
+
+  const active = req.body.active ? 1 : 0;
+  db.prepare("UPDATE users SET is_active = ? WHERE id = ?").run(active, user.id);
+  res.json({ ok: true });
+});
+
+app.get("/api/documents", requireAuth, (req, res) => {
+  if (req.user.role === "zow_owner") return res.json({ documents: [] });
+  const documents = db
+    .prepare(
+      `SELECT documents.*,
+              COALESCE((SELECT COUNT(*) FROM document_files WHERE document_files.company_id = documents.company_id AND document_files.document_id = documents.id), 0) AS digital_file_count,
+              COALESCE((SELECT GROUP_CONCAT(original_name, ', ') FROM document_files WHERE document_files.company_id = documents.company_id AND document_files.document_id = documents.id), documents.digital_file_name) AS digital_file_names
+       FROM documents
+       WHERE documents.company_id = ?
+       ORDER BY documents.created_at DESC`
+    )
+    .all(req.user.company_id)
+    .filter((doc) => canSeeDocument(req.user, doc));
+  res.json({ documents });
+});
+
+app.get("/api/notifications", requireAuth, (req, res) => {
+  if (["admin", "recepcion_principal"].includes(req.user.role)) {
+    return res.json({ notifications: [], pendingCount: 0 });
+  }
+
+  const notifications = db
+    .prepare(
+      `SELECT documents.id, documents.code, documents.subject, documents.reference, documents.applicant_name,
+              documents.status, document_recipients.received_at
+       FROM document_recipients
+       JOIN documents ON documents.id = document_recipients.document_id
+       WHERE document_recipients.company_id = ? AND documents.company_id = ? AND document_recipients.unit_id = ? AND document_recipients.status = 'Pendiente'
+       ORDER BY document_recipients.received_at DESC`
+    )
+    .all(req.user.company_id, req.user.company_id, req.user.unit_id);
+
+  res.json({ notifications, pendingCount: notifications.length });
+});
+
+const documentUpload = upload.fields([
+  { name: "digitalFile", maxCount: 1 },
+  { name: "digitalFiles", maxCount: 20 }
+]);
+
+app.post("/api/documents", requireAuth, requireRole("recepcion_principal", "funcionario"), documentUpload, (req, res) => {
+  const id = randomUUID();
+  const now = new Date().toISOString();
+  const direction = req.body.direction === "Saliente" ? "Saliente" : "Entrante";
+  if (direction === "Entrante" && !["admin", "recepcion_principal"].includes(req.user.role)) {
+    return res.status(403).json({ error: "Solo Recepcion puede registrar documentacion entrante" });
+  }
+
+  const receptionUnitId = db.prepare("SELECT id FROM units WHERE company_id = ? AND level = 'principal' AND code IN ('VU', 'REC') ORDER BY code DESC").get(req.user.company_id)?.id || req.user.unit_id;
+  const currentUnitId = direction === "Entrante" ? receptionUnitId : req.user.unit_id;
+  const uploadedFiles = getUploadedFiles(req);
+  const primaryFile = uploadedFiles[0];
+  const hasFile = uploadedFiles.length > 0;
+
+  const doc = {
+    id,
+    direction,
+    year: String(req.body.year || new Date().getFullYear()),
+    type: String(req.body.type || "Oficio"),
+    code: buildNextDocumentCode(req.user.company_id, String(req.body.year || new Date().getFullYear()), now),
+    internalNumber: String(req.body.internalNumber || ""),
+    reference: String(req.body.reference || ""),
+    subject: String(req.body.subject || req.body.reference || ""),
+    applicantName: String(req.body.applicantName || req.body.sender || "").trim(),
+    applicantCi: String(req.body.applicantCi || "").trim(),
+    applicantPhone: String(req.body.applicantPhone || "").trim(),
+    sheetCount: Number(req.body.sheetCount || 0),
+    sender: String(req.body.sender || req.body.applicantName || req.user.unit_name),
+    receiver: String(req.body.receiver || ""),
+    targetUnitId: String(req.body.targetUnitId || ""),
+    currentUnitId,
+    ownerName: direction === "Entrante" ? "Recepcion Principal" : req.user.name,
+    priority: String(req.body.priority || "Normal"),
+    status: direction === "Entrante" ? "En recepcion" : "Recibido",
+    dueDate: String(req.body.dueDate || now.slice(0, 10))
+  };
+
+  db.prepare(
+    `INSERT INTO documents (
+      id, direction, year, type, code, internal_number, reference, subject, sender, receiver,
+      company_id, source_unit_id, target_unit_id, current_unit_id, created_by_unit_id, owner_name, priority,
+      status, due_date, has_digital_file, digital_file_name, digital_file_path, digital_file_size,
+      digital_attached_at, physical_received, created_by, created_at, updated_at,
+      applicant_name, applicant_ci, applicant_phone, sheet_count, received_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+  ).run(
+    doc.id,
+    doc.direction,
+    doc.year,
+    doc.type,
+    doc.code,
+    doc.internalNumber,
+    doc.reference,
+    doc.subject,
+    doc.sender,
+    doc.receiver,
+    req.user.company_id,
+    direction === "Entrante" ? "external" : req.user.unit_id,
+    doc.targetUnitId,
+    doc.currentUnitId,
+    req.user.unit_id,
+    doc.ownerName,
+    doc.priority,
+    doc.status,
+    doc.dueDate,
+    hasFile ? 1 : 0,
+    primaryFile?.originalname || "",
+    primaryFile?.filename || "",
+    primaryFile?.size || 0,
+    hasFile ? now : "",
+    direction === "Entrante" ? 1 : 0,
+    req.user.id,
+    now,
+    now,
+    doc.applicantName,
+    doc.applicantCi,
+    doc.applicantPhone,
+    doc.sheetCount,
+    now
+  );
+
+  attachUploadedFiles({
+    files: uploadedFiles,
+    companyId: req.user.company_id,
+    documentId: doc.id,
+    userId: req.user.id,
+    uploadedAt: now
+  });
+
+  db.prepare(
+    `INSERT INTO movements (id, company_id, document_id, from_unit_id, to_unit_id, instruction_type, due_days, comment, status, created_by, derived_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+  ).run(
+    randomUUID(),
+    req.user.company_id,
+    doc.id,
+    null,
+    doc.currentUnitId,
+    "Registro inicial",
+    0,
+    direction === "Entrante"
+      ? `Documento registrado en Recepcion Principal. Adjuntos digitales: ${uploadedFiles.length || 0}.`
+      : `Documento saliente registrado. Adjuntos digitales: ${uploadedFiles.length || 0}.`,
+    doc.status,
+    req.user.id,
+    now
+  );
+
+  db.prepare(
+    `INSERT OR IGNORE INTO document_recipients (company_id, document_id, unit_id, status, received_at)
+     VALUES (?, ?, ?, ?, ?)`
+  ).run(req.user.company_id, doc.id, doc.currentUnitId, doc.status, now);
+
+  res.status(201).json({ document: getDocumentById(id, req.user.company_id) });
+});
+
+app.patch("/api/documents/:id/status", requireAuth, (req, res) => {
+  const doc = db.prepare("SELECT * FROM documents WHERE id = ? AND company_id = ?").get(req.params.id, req.user.company_id);
+  if (!doc) return res.status(404).json({ error: "Documento no encontrado" });
+  if (!canSeeDocument(req.user, doc)) return res.status(403).json({ error: "Permiso insuficiente" });
+
+  const allowed = ["En revision", "Atendido", "Archivado", "Recibido", "Vencido"];
+  const status = String(req.body.status || "");
+  if (!allowed.includes(status)) return res.status(400).json({ error: "Estado invalido" });
+  if (req.user.role === "recepcion_principal" && ["Atendido", "Archivado"].includes(status)) {
+    return res.status(403).json({ error: "Recepcion principal no puede atender o archivar documentacion de areas" });
+  }
+
+  const now = new Date().toISOString();
+  db.prepare("UPDATE documents SET status = ?, updated_at = ? WHERE id = ?").run(status, now, doc.id);
+  db.prepare("UPDATE document_recipients SET status = ? WHERE document_id = ? AND unit_id = ?").run(status, doc.id, req.user.unit_id);
+  db.prepare(
+    `INSERT INTO movements (id, company_id, document_id, from_unit_id, to_unit_id, instruction_type, due_days, comment, status, created_by, derived_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+  ).run(
+    randomUUID(),
+    req.user.company_id,
+    doc.id,
+    doc.current_unit_id,
+    doc.current_unit_id,
+    "Cambio de estado",
+    0,
+    String(req.body.comment || `Estado actualizado a ${status}.`),
+    status,
+    req.user.id,
+    now
+  );
+
+  res.json({ document: db.prepare("SELECT * FROM documents WHERE id = ? AND company_id = ?").get(doc.id, req.user.company_id) });
+});
+
+app.patch("/api/documents/:id/physical-received", requireAuth, (req, res) => {
+  const doc = db.prepare("SELECT * FROM documents WHERE id = ? AND company_id = ?").get(req.params.id, req.user.company_id);
+  if (!doc) return res.status(404).json({ error: "Documento no encontrado" });
+  if (!canSeeDocument(req.user, doc)) return res.status(403).json({ error: "Permiso insuficiente" });
+
+  const now = new Date().toISOString();
+  const status = doc.status === "Reservado" ? "Recibido" : doc.status;
+  db.prepare("UPDATE documents SET physical_received = 1, status = ?, updated_at = ? WHERE id = ?").run(status, now, doc.id);
+  db.prepare(
+    `INSERT INTO movements (id, company_id, document_id, from_unit_id, to_unit_id, instruction_type, due_days, comment, status, created_by, derived_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+  ).run(
+    randomUUID(),
+    req.user.company_id,
+    doc.id,
+    doc.current_unit_id,
+    doc.current_unit_id,
+    "Recepcion fisica",
+    0,
+    "Se confirmo la recepcion fisica del documento.",
+    status,
+    req.user.id,
+    now
+  );
+
+  res.json({ document: db.prepare("SELECT * FROM documents WHERE id = ? AND company_id = ?").get(doc.id, req.user.company_id) });
+});
+
+app.post("/api/documents/:id/derive", requireAuth, requireRole("recepcion_principal", "recepcion_secundaria", "funcionario", "supervisor"), (req, res) => {
+  const doc = db.prepare("SELECT * FROM documents WHERE id = ? AND company_id = ?").get(req.params.id, req.user.company_id);
+  if (!doc) return res.status(404).json({ error: "Documento no encontrado" });
+  if (!canSeeDocument(req.user, doc)) return res.status(403).json({ error: "Permiso insuficiente" });
+
+  const requestedUnitIds = Array.isArray(req.body.toUnitIds)
+    ? req.body.toUnitIds
+    : [req.body.toUnitId].filter(Boolean);
+  const uniqueUnitIds = [...new Set(requestedUnitIds.map((unitId) => String(unitId || "").trim()).filter(Boolean))];
+  if (!uniqueUnitIds.length) return res.status(400).json({ error: "Debe seleccionar al menos una unidad destino" });
+
+  const units = uniqueUnitIds.map((unitId) => db.prepare("SELECT id, name FROM units WHERE id = ? AND company_id = ?").get(unitId, req.user.company_id));
+  if (units.some((unit) => !unit)) return res.status(400).json({ error: "Una o mas unidades destino son invalidas" });
+
+  const now = new Date().toISOString();
+  const insertMovement = db.prepare(
+    `INSERT INTO movements (id, company_id, document_id, from_unit_id, to_unit_id, instruction_type, due_days, comment, status, created_by, derived_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+  );
+  const upsertRecipient = db.prepare(
+    `INSERT INTO document_recipients (company_id, document_id, unit_id, status, received_at)
+     VALUES (?, ?, ?, ?, ?)
+     ON CONFLICT(document_id, unit_id) DO UPDATE SET status = excluded.status, received_at = excluded.received_at`
+  );
+
+  units.forEach((unit) => {
+    insertMovement.run(
+      randomUUID(),
+      req.user.company_id,
+      doc.id,
+      req.user.unit_id,
+      unit.id,
+      String(req.body.instructionType || "Para conocimiento"),
+      Number(req.body.dueDays || 0),
+      buildDerivationComment(unit.name, req.body.comment),
+      "Derivado",
+      req.user.id,
+      now
+    );
+    upsertRecipient.run(req.user.company_id, doc.id, unit.id, "Pendiente", now);
+  });
+
+  db.prepare(
+    `UPDATE documents SET current_unit_id = ?, target_unit_id = ?, owner_name = ?, status = ?, updated_at = ?
+     WHERE id = ?`
+  ).run(units[0].id, units[0].id, units.length === 1 ? units[0].name : `${units.length} unidades derivadas`, "Derivado", now, doc.id);
+
+  res.json({ document: getDocumentById(doc.id, req.user.company_id) });
+});
+
+app.get("/api/documents/:id/digital-file", requireAuth, (req, res) => {
+  const doc = db.prepare("SELECT * FROM documents WHERE id = ? AND company_id = ?").get(req.params.id, req.user.company_id);
+  if (!doc) return res.status(404).json({ error: "Documento no encontrado" });
+  if (!canSeeDocument(req.user, doc)) return res.status(403).json({ error: "Permiso insuficiente" });
+  if (!doc.digital_file_path) return res.status(404).json({ error: "El documento no tiene archivo digital" });
+
+  const filePath = path.join(uploadsDir, doc.digital_file_path);
+  if (!fs.existsSync(filePath)) return res.status(404).json({ error: "Archivo no encontrado" });
+
+  res.download(filePath, doc.digital_file_name || `${doc.code}.pdf`);
+});
+
+app.get("/api/documents/:id/files", requireAuth, (req, res) => {
+  const doc = db.prepare("SELECT * FROM documents WHERE id = ? AND company_id = ?").get(req.params.id, req.user.company_id);
+  if (!doc) return res.status(404).json({ error: "Documento no encontrado" });
+  if (!canSeeDocument(req.user, doc)) return res.status(403).json({ error: "Permiso insuficiente" });
+
+  const files = db
+    .prepare("SELECT id, original_name, size, mime_type, uploaded_at FROM document_files WHERE company_id = ? AND document_id = ? ORDER BY uploaded_at ASC")
+    .all(req.user.company_id, doc.id);
+  res.json({ files });
+});
+
+app.post("/api/documents/:id/digital-file", requireAuth, documentUpload, (req, res) => {
+  const doc = db.prepare("SELECT * FROM documents WHERE id = ? AND company_id = ?").get(req.params.id, req.user.company_id);
+  if (!doc) return res.status(404).json({ error: "Documento no encontrado" });
+  if (!canSeeDocument(req.user, doc)) return res.status(403).json({ error: "Permiso insuficiente" });
+  const uploadedFiles = getUploadedFiles(req);
+  const primaryFile = uploadedFiles[0];
+  if (!uploadedFiles.length) return res.status(400).json({ error: "Archivo requerido" });
+
+  const now = new Date().toISOString();
+  db.prepare(
+    `UPDATE documents
+     SET has_digital_file = 1, digital_file_name = ?, digital_file_path = ?, digital_file_size = ?,
+         digital_attached_at = ?, updated_at = ?
+     WHERE id = ?`
+  ).run(primaryFile.originalname, primaryFile.filename, primaryFile.size, now, now, doc.id);
+
+  attachUploadedFiles({
+    files: uploadedFiles,
+    companyId: req.user.company_id,
+    documentId: doc.id,
+    userId: req.user.id,
+    uploadedAt: now
+  });
+
+  db.prepare(
+    `INSERT INTO movements (id, company_id, document_id, from_unit_id, to_unit_id, instruction_type, due_days, comment, status, created_by, derived_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+  ).run(
+    randomUUID(),
+    req.user.company_id,
+    doc.id,
+    req.user.unit_id,
+    doc.current_unit_id,
+    "Actualizacion de documento digital",
+    0,
+    String(req.body.comment || `Archivos adjuntados: ${uploadedFiles.map((file) => file.originalname).join(", ")}`),
+    doc.status,
+    req.user.id,
+    now
+  );
+
+  res.json({ document: getDocumentById(doc.id, req.user.company_id) });
+});
+
+app.get("/api/documents/:id/movements", requireAuth, (req, res) => {
+  const doc = db.prepare("SELECT * FROM documents WHERE id = ? AND company_id = ?").get(req.params.id, req.user.company_id);
+  if (!doc) return res.status(404).json({ error: "Documento no encontrado" });
+  if (!canSeeDocument(req.user, doc)) return res.status(403).json({ error: "Permiso insuficiente" });
+
+  const movements = db
+    .prepare(
+      `SELECT movements.*, from_units.name AS from_unit_name, to_units.name AS to_unit_name, users.name AS created_by_name
+       FROM movements
+       LEFT JOIN units AS from_units ON from_units.id = movements.from_unit_id
+       LEFT JOIN units AS to_units ON to_units.id = movements.to_unit_id
+       LEFT JOIN users ON users.id = movements.created_by
+       WHERE movements.company_id = ? AND movements.document_id = ?
+       ORDER BY movements.derived_at DESC`
+    )
+    .all(req.user.company_id, doc.id);
+  res.json({ movements });
+});
+
+app.patch("/api/documents/:id/seen", requireAuth, (req, res) => {
+  const doc = db.prepare("SELECT * FROM documents WHERE id = ? AND company_id = ?").get(req.params.id, req.user.company_id);
+  if (!doc) return res.status(404).json({ error: "Documento no encontrado" });
+  if (!canSeeDocument(req.user, doc)) return res.status(403).json({ error: "Permiso insuficiente" });
+  if (["admin", "recepcion_principal"].includes(req.user.role)) return res.json({ ok: true });
+
+  db.prepare("UPDATE document_recipients SET status = 'En revision' WHERE company_id = ? AND document_id = ? AND unit_id = ? AND status = 'Pendiente'").run(
+    req.user.company_id,
+    doc.id,
+    req.user.unit_id
+  );
+  res.json({ ok: true });
+});
+
+app.get("/api/companies", requireAuth, requireRole("zow_owner"), (req, res) => {
+  const companies = db
+    .prepare(
+      `SELECT companies.*,
+              COUNT(DISTINCT users.id) AS user_count,
+              COUNT(DISTINCT units.id) AS unit_count,
+              COUNT(DISTINCT documents.id) AS document_count,
+              COALESCE(GROUP_CONCAT(DISTINCT saas_systems.name), '') AS systems
+       FROM companies
+       LEFT JOIN users ON users.company_id = companies.id
+       LEFT JOIN units ON units.company_id = companies.id
+       LEFT JOIN documents ON documents.company_id = companies.id
+       LEFT JOIN company_system_access ON company_system_access.company_id = companies.id AND company_system_access.status = 'active'
+       LEFT JOIN saas_systems ON saas_systems.id = company_system_access.system_id
+       WHERE companies.id <> 'zow-internal'
+       GROUP BY companies.id
+       ORDER BY companies.created_at DESC`
+    )
+    .all();
+  res.json({ companies });
+});
+
+app.post("/api/companies", requireAuth, requireRole("zow_owner"), (req, res) => {
+  const now = new Date().toISOString();
+  const company = {
+    id: randomUUID(),
+    name: String(req.body.name || "").trim(),
+    slug: slugify(req.body.slug || req.body.name || ""),
+    plan: String(req.body.plan || "basico").trim(),
+    status: String(req.body.status || "active").trim(),
+    maxUsers: Number(req.body.maxUsers || 10),
+    maxUnits: Number(req.body.maxUnits || 10),
+    storageMb: Number(req.body.storageMb || 1024),
+    contactName: String(req.body.contactName || "").trim(),
+    contactEmail: String(req.body.contactEmail || "").trim(),
+    contactPhone: String(req.body.contactPhone || "").trim(),
+    startsAt: String(req.body.startsAt || "").trim(),
+    endsAt: String(req.body.endsAt || "").trim(),
+    adminName: String(req.body.adminName || "Encargado de Sistema").trim(),
+    adminUsername: String(req.body.adminUsername || "").trim(),
+    adminPassword: String(req.body.adminPassword || "").trim()
+  };
+  const requestedSystems = Array.isArray(req.body.systems) && req.body.systems.length ? req.body.systems : ["correspondencia"];
+
+  if (!company.name || !company.slug || !company.adminUsername || !company.adminPassword) {
+    return res.status(400).json({ error: "Empresa, usuario y contrasena inicial son obligatorios" });
+  }
+
+  const duplicateCompany = db.prepare("SELECT id FROM companies WHERE slug = ?").get(company.slug);
+  if (duplicateCompany) return res.status(400).json({ error: "Ese identificador de empresa ya existe" });
+  const duplicateUser = db.prepare("SELECT id FROM users WHERE username = ?").get(company.adminUsername);
+  if (duplicateUser) return res.status(400).json({ error: "Ese usuario inicial ya existe" });
+
+  const adminUnitId = randomUUID();
+  const receptionUnitId = randomUUID();
+  const adminUserId = randomUUID();
+
+  db.exec("BEGIN");
+  try {
+    db.prepare(
+      `INSERT INTO companies (
+        id, name, slug, plan, status, max_users, max_units, storage_mb, contact_name, contact_email,
+        contact_phone, starts_at, ends_at, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    ).run(
+      company.id,
+      company.name,
+      company.slug,
+      company.plan,
+      company.status,
+      company.maxUsers,
+      company.maxUnits,
+      company.storageMb,
+      company.contactName,
+      company.contactEmail,
+      company.contactPhone,
+      company.startsAt,
+      company.endsAt,
+      now,
+      now
+    );
+    db.prepare("INSERT INTO organization_settings (id, company_id, company_name, updated_at) VALUES (?, ?, ?, ?)").run(
+      company.id,
+      company.id,
+      company.name,
+      now
+    );
+    db.prepare("INSERT INTO units (id, company_id, name, code, parent_unit_id, level) VALUES (?, ?, ?, ?, ?, ?)").run(
+      adminUnitId,
+      company.id,
+      "Administracion del Sistema",
+      "ADM",
+      "",
+      "principal"
+    );
+    db.prepare("INSERT INTO units (id, company_id, name, code, parent_unit_id, level) VALUES (?, ?, ?, ?, ?, ?)").run(
+      receptionUnitId,
+      company.id,
+      "Recepcion Principal",
+      "REC",
+      "",
+      "principal"
+    );
+    db.prepare(
+      `INSERT INTO users (id, company_id, name, username, password_hash, role, unit_id, position, is_protected, ci, phone)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    ).run(
+      adminUserId,
+      company.id,
+      company.adminName,
+      company.adminUsername,
+      bcrypt.hashSync(company.adminPassword, 12),
+      "admin",
+      adminUnitId,
+      "Encargado de sistema",
+      1,
+      "",
+      company.contactPhone
+    );
+    const insertAccess = db.prepare(
+      `INSERT OR IGNORE INTO company_system_access (company_id, system_id, status, plan, starts_at, ends_at, updated_at)
+       VALUES (?, ?, 'active', ?, ?, ?, ?)`
+    );
+    requestedSystems.forEach((systemId) => {
+      const system = db.prepare("SELECT id FROM saas_systems WHERE id = ?").get(systemId);
+      if (system) insertAccess.run(company.id, system.id, company.plan, company.startsAt, company.endsAt, now);
+    });
+    db.exec("COMMIT");
+  } catch (error) {
+    db.exec("ROLLBACK");
+    return res.status(400).json({ error: error.message || "No se pudo crear la empresa" });
+  }
+
+  res.status(201).json({
+    company: db.prepare("SELECT * FROM companies WHERE id = ?").get(company.id),
+    adminUser: { id: adminUserId, username: company.adminUsername, name: company.adminName }
+  });
+});
+
+app.get("/api/systems", requireAuth, requireRole("zow_owner"), (req, res) => {
+  const systems = db.prepare("SELECT * FROM saas_systems ORDER BY name").all();
+  res.json({ systems });
+});
+
+app.get("/api/companies/:id/systems", requireAuth, requireRole("zow_owner"), (req, res) => {
+  const company = db.prepare("SELECT id FROM companies WHERE id = ? AND id <> 'zow-internal'").get(req.params.id);
+  if (!company) return res.status(404).json({ error: "Empresa no encontrada" });
+  const systems = db
+    .prepare(
+      `SELECT saas_systems.*, COALESCE(company_system_access.status, 'inactive') AS access_status,
+              COALESCE(company_system_access.plan, '') AS access_plan
+       FROM saas_systems
+       LEFT JOIN company_system_access ON company_system_access.system_id = saas_systems.id AND company_system_access.company_id = ?
+       ORDER BY saas_systems.name`
+    )
+    .all(company.id);
+  res.json({ systems });
+});
+
+app.patch("/api/companies/:id/systems", requireAuth, requireRole("zow_owner"), (req, res) => {
+  const company = db.prepare("SELECT id FROM companies WHERE id = ? AND id <> 'zow-internal'").get(req.params.id);
+  if (!company) return res.status(404).json({ error: "Empresa no encontrada" });
+  const enabledSystems = Array.isArray(req.body.systems) ? req.body.systems.map(String) : [];
+  const plan = String(req.body.plan || "basico");
+  const now = new Date().toISOString();
+
+  const systems = db.prepare("SELECT id FROM saas_systems").all().map((system) => system.id);
+  const upsertAccess = db.prepare(
+    `INSERT INTO company_system_access (company_id, system_id, status, plan, updated_at)
+     VALUES (?, ?, ?, ?, ?)
+     ON CONFLICT(company_id, system_id) DO UPDATE SET status = excluded.status, plan = excluded.plan, updated_at = excluded.updated_at`
+  );
+  systems.forEach((systemId) => {
+    upsertAccess.run(company.id, systemId, enabledSystems.includes(systemId) ? "active" : "inactive", plan, now);
+  });
+  res.json({ ok: true });
+});
+
+app.get("/api/ventas/summary", requireAuth, requireSystemAccess("ventas_almacen"), (req, res) => {
+  const inventory = db
+    .prepare(
+      `SELECT COUNT(*) AS products,
+              COALESCE(SUM(stock), 0) AS stock,
+              COALESCE(SUM(stock * cost_price), 0) AS inventory_value,
+              COALESCE(SUM(CASE WHEN stock <= min_stock THEN 1 ELSE 0 END), 0) AS low_stock
+       FROM inventory_products
+       WHERE company_id = ? AND is_active = 1`
+    )
+    .get(req.user.company_id);
+  const sales = db
+    .prepare(
+      `SELECT COUNT(*) AS sales, COALESCE(SUM(total), 0) AS income
+       FROM sales_orders
+       WHERE company_id = ? AND status = 'confirmada'`
+    )
+    .get(req.user.company_id);
+  const pendingCash = db
+    .prepare(
+      `SELECT COUNT(*) AS pending_sales, COALESCE(SUM(total), 0) AS pending_total
+       FROM sales_orders
+       WHERE company_id = ? AND status = 'confirmada' AND cash_closed = 0`
+    )
+    .get(req.user.company_id);
+  res.json({ summary: { ...inventory, ...sales, ...pendingCash } });
+});
+
+app.get("/api/ventas/settings", requireAuth, requireSystemAccess("ventas_almacen"), (req, res) => {
+  res.json({ settings: mapSettings(loadSettings(req.user.company_id)) });
+});
+
+app.patch("/api/ventas/settings", requireAuth, requireSystemAccess("ventas_almacen"), requireVentasRole("admin", "ventas_admin"), (req, res) => {
+  const current = mapSettings(loadSettings(req.user.company_id));
+  const settings = {
+    companyName: String(req.body.companyName || current.companyName || "").trim(),
+    storeName: String(req.body.storeName || "").trim(),
+    currency: String(req.body.currency || current.currency || "BOB").trim().toUpperCase().slice(0, 8),
+    taxId: String(req.body.taxId || "").trim(),
+    phone: String(req.body.phone || "").trim(),
+    address: String(req.body.address || "").trim(),
+    ticketNote: String(req.body.ticketNote || "").trim()
+  };
+  if (!settings.companyName) return res.status(400).json({ error: "Nombre de empresa obligatorio" });
+  if (!settings.currency) return res.status(400).json({ error: "Moneda obligatoria" });
+
+  db.prepare(
+    `INSERT INTO organization_settings (
+       id, company_id, company_name, store_name, currency, tax_id, phone, address, ticket_note, updated_at
+     )
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+     ON CONFLICT(id) DO UPDATE SET
+       company_name = excluded.company_name,
+       store_name = excluded.store_name,
+       currency = excluded.currency,
+       tax_id = excluded.tax_id,
+       phone = excluded.phone,
+       address = excluded.address,
+       ticket_note = excluded.ticket_note,
+       updated_at = excluded.updated_at`
+  ).run(
+    req.user.company_id,
+    req.user.company_id,
+    settings.companyName,
+    settings.storeName,
+    settings.currency,
+    settings.taxId,
+    settings.phone,
+    settings.address,
+    settings.ticketNote,
+    new Date().toISOString()
+  );
+
+  res.json({ settings: mapSettings(loadSettings(req.user.company_id)) });
+});
+
+app.get("/api/ventas/products", requireAuth, requireSystemAccess("ventas_almacen"), (req, res) => {
+  const products = db
+    .prepare("SELECT * FROM inventory_products WHERE company_id = ? ORDER BY name")
+    .all(req.user.company_id);
+  res.json({ products });
+});
+
+app.post("/api/ventas/products", requireAuth, requireSystemAccess("ventas_almacen"), requireVentasRole("admin", "ventas_admin", "almacen"), (req, res) => {
+  const now = new Date().toISOString();
+  const product = {
+    id: randomUUID(),
+    code: String(req.body.code || "").trim().toUpperCase(),
+    name: String(req.body.name || "").trim(),
+    category: String(req.body.category || "").trim(),
+    unit: String(req.body.unit || "Unidad").trim(),
+    costPrice: Number(req.body.costPrice || 0),
+    salePrice: Number(req.body.salePrice || 0),
+    minStock: Number(req.body.minStock || 0),
+    stock: Number(req.body.stock || 0)
+  };
+  if (!product.code || !product.name) return res.status(400).json({ error: "Codigo y nombre son obligatorios" });
+
+  db.prepare(
+    `INSERT INTO inventory_products (id, company_id, code, name, category, unit, cost_price, sale_price, min_stock, stock, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+  ).run(
+    product.id,
+    req.user.company_id,
+    product.code,
+    product.name,
+    product.category,
+    product.unit,
+    product.costPrice,
+    product.salePrice,
+    product.minStock,
+    product.stock,
+    now,
+    now
+  );
+
+  if (product.stock !== 0) {
+    db.prepare(
+      `INSERT INTO inventory_movements (id, company_id, product_id, type, quantity, reference, note, created_by, created_at)
+       VALUES (?, ?, ?, 'entrada', ?, ?, ?, ?, ?)`
+    ).run(randomUUID(), req.user.company_id, product.id, product.stock, "Stock inicial", "Registro inicial de producto", req.user.id, now);
+  }
+
+  res.status(201).json({ product: db.prepare("SELECT * FROM inventory_products WHERE id = ?").get(product.id) });
+});
+
+app.get("/api/ventas/categories", requireAuth, requireSystemAccess("ventas_almacen"), (req, res) => {
+  const categories = db.prepare("SELECT * FROM inventory_categories WHERE company_id = ? ORDER BY name").all(req.user.company_id);
+  res.json({ categories });
+});
+
+app.post("/api/ventas/categories", requireAuth, requireSystemAccess("ventas_almacen"), requireVentasRole("admin", "ventas_admin", "almacen"), (req, res) => {
+  const category = {
+    id: randomUUID(),
+    name: String(req.body.name || "").trim(),
+    description: String(req.body.description || "").trim()
+  };
+  if (!category.name) return res.status(400).json({ error: "Nombre de categoria obligatorio" });
+  db.prepare("INSERT INTO inventory_categories (id, company_id, name, description) VALUES (?, ?, ?, ?)").run(
+    category.id,
+    req.user.company_id,
+    category.name,
+    category.description
+  );
+  res.status(201).json({ category });
+});
+
+app.get("/api/ventas/customers", requireAuth, requireSystemAccess("ventas_almacen"), (req, res) => {
+  const customers = db.prepare("SELECT * FROM sales_customers WHERE company_id = ? ORDER BY name").all(req.user.company_id);
+  res.json({ customers });
+});
+
+app.post("/api/ventas/customers", requireAuth, requireSystemAccess("ventas_almacen"), requireVentasRole("admin", "ventas_admin", "cajero", "vendedor"), (req, res) => {
+  const now = new Date().toISOString();
+  const customer = {
+    id: randomUUID(),
+    name: String(req.body.name || "").trim(),
+    phone: String(req.body.phone || "").trim(),
+    ci: String(req.body.ci || "").trim(),
+    email: String(req.body.email || "").trim(),
+    address: String(req.body.address || "").trim()
+  };
+  if (!customer.name) return res.status(400).json({ error: "Nombre de cliente obligatorio" });
+  db.prepare(
+    `INSERT INTO sales_customers (id, company_id, name, phone, ci, email, address, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+  ).run(customer.id, req.user.company_id, customer.name, customer.phone, customer.ci, customer.email, customer.address, now, now);
+  res.status(201).json({ customer });
+});
+
+app.get("/api/ventas/sales", requireAuth, requireSystemAccess("ventas_almacen"), (req, res) => {
+  const ownOnly = !["admin", "ventas_admin"].includes(req.user.role);
+  const sales = db
+    .prepare(
+      `SELECT sales_orders.*, users.name AS seller_name
+       FROM sales_orders
+       LEFT JOIN users ON users.id = sales_orders.created_by
+       WHERE sales_orders.company_id = ? ${ownOnly ? "AND sales_orders.created_by = ?" : ""}
+       ORDER BY sales_orders.created_at DESC`
+    )
+    .all(...(ownOnly ? [req.user.company_id, req.user.id] : [req.user.company_id]));
+  res.json({ sales });
+});
+
+app.get("/api/ventas/sales/:id", requireAuth, requireSystemAccess("ventas_almacen"), (req, res) => {
+  const sale = db.prepare("SELECT * FROM sales_orders WHERE id = ? AND company_id = ?").get(req.params.id, req.user.company_id);
+  if (!sale) return res.status(404).json({ error: "Venta no encontrada" });
+  if (!["admin", "ventas_admin"].includes(req.user.role) && sale.created_by !== req.user.id) {
+    return res.status(403).json({ error: "Permiso insuficiente" });
+  }
+  const items = db.prepare("SELECT * FROM sales_order_items WHERE sale_id = ? AND company_id = ?").all(sale.id, req.user.company_id);
+  res.json({ sale, items });
+});
+
+app.post("/api/ventas/sales", requireAuth, requireSystemAccess("ventas_almacen"), requireVentasRole("admin", "ventas_admin", "cajero", "vendedor"), (req, res) => {
+  const items = Array.isArray(req.body.items) ? req.body.items : [];
+  if (!items.length) return res.status(400).json({ error: "Agrega al menos un producto a la venta" });
+
+  const now = new Date().toISOString();
+  const saleId = randomUUID();
+  const saleCode = buildNextSaleCode(req.user.company_id, now);
+  const customerId = String(req.body.customerId || "").trim();
+  const customer = customerId ? db.prepare("SELECT * FROM sales_customers WHERE id = ? AND company_id = ?").get(customerId, req.user.company_id) : null;
+  const customerName = customer?.name || String(req.body.customerName || "Cliente sin registrar").trim();
+
+  const preparedItems = items.map((item) => {
+    const product = db.prepare("SELECT * FROM inventory_products WHERE id = ? AND company_id = ? AND is_active = 1").get(String(item.productId || ""), req.user.company_id);
+    const quantity = Number(item.quantity || 0);
+    if (!product || quantity <= 0) throw new Error("Producto o cantidad invalida");
+    if (Number(product.stock) < quantity) throw new Error(`Stock insuficiente para ${product.name}`);
+    return {
+      product,
+      quantity,
+      unitPrice: Number(item.unitPrice || product.sale_price || 0),
+      total: quantity * Number(item.unitPrice || product.sale_price || 0)
+    };
+  });
+
+  const subtotal = preparedItems.reduce((total, item) => total + item.total, 0);
+  const discount = Number(req.body.discount || 0);
+  const total = Math.max(subtotal - discount, 0);
+  const cashReceived = Number(req.body.cashReceived || total);
+  const changeAmount = Math.max(cashReceived - total, 0);
+
+  db.exec("BEGIN");
+  try {
+    db.prepare(
+      `INSERT INTO sales_orders (
+        id, company_id, code, customer_id, customer_name, subtotal, discount, total,
+        cash_received, change_amount, status, cash_closed, created_by, created_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'confirmada', 0, ?, ?)`
+    ).run(saleId, req.user.company_id, saleCode, customer?.id || null, customerName, subtotal, discount, total, cashReceived, changeAmount, req.user.id, now);
+
+    const insertItem = db.prepare(
+      `INSERT INTO sales_order_items (id, company_id, sale_id, product_id, product_name, quantity, unit_price, total)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+    );
+    const insertMovement = db.prepare(
+      `INSERT INTO inventory_movements (id, company_id, product_id, type, quantity, reference, note, created_by, created_at)
+       VALUES (?, ?, ?, 'salida', ?, ?, ?, ?, ?)`
+    );
+    const updateStock = db.prepare("UPDATE inventory_products SET stock = stock - ?, updated_at = ? WHERE id = ?");
+    preparedItems.forEach((item) => {
+      insertItem.run(randomUUID(), req.user.company_id, saleId, item.product.id, item.product.name, item.quantity, item.unitPrice, item.total);
+      insertMovement.run(randomUUID(), req.user.company_id, item.product.id, item.quantity, saleCode, "Venta confirmada", req.user.id, now);
+      updateStock.run(item.quantity, now, item.product.id);
+    });
+    db.exec("COMMIT");
+  } catch (error) {
+    db.exec("ROLLBACK");
+    return res.status(400).json({ error: error.message || "No se pudo registrar la venta" });
+  }
+
+  res.status(201).json({
+    sale: db.prepare("SELECT * FROM sales_orders WHERE id = ?").get(saleId),
+    items: db.prepare("SELECT * FROM sales_order_items WHERE sale_id = ?").all(saleId)
+  });
+});
+
+app.get("/api/ventas/cash", requireAuth, requireSystemAccess("ventas_almacen"), (req, res) => {
+  const pendingSales = db
+    .prepare("SELECT * FROM sales_orders WHERE company_id = ? AND status = 'confirmada' AND cash_closed = 0 ORDER BY created_at DESC")
+    .all(req.user.company_id);
+  const total = pendingSales.reduce((sum, sale) => sum + Number(sale.total || 0), 0);
+  res.json({ pendingSales, total });
+});
+
+app.post("/api/ventas/cash/close", requireAuth, requireSystemAccess("ventas_almacen"), requireVentasRole("admin", "ventas_admin", "cajero"), (req, res) => {
+  const pendingSales = db.prepare("SELECT * FROM sales_orders WHERE company_id = ? AND status = 'confirmada' AND cash_closed = 0").all(req.user.company_id);
+  if (!pendingSales.length) return res.status(400).json({ error: "No hay ventas pendientes de cierre" });
+  const now = new Date().toISOString();
+  const closureId = randomUUID();
+  const code = buildNextCashCode(req.user.company_id, now);
+  const total = pendingSales.reduce((sum, sale) => sum + Number(sale.total || 0), 0);
+  db.prepare(
+    `INSERT INTO cash_closures (id, company_id, code, total_sales, sale_count, created_by, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?)`
+  ).run(closureId, req.user.company_id, code, total, pendingSales.length, req.user.id, now);
+  db.prepare("UPDATE sales_orders SET cash_closed = 1 WHERE company_id = ? AND status = 'confirmada' AND cash_closed = 0").run(req.user.company_id);
+  res.status(201).json({ closure: db.prepare("SELECT * FROM cash_closures WHERE id = ?").get(closureId) });
+});
+
+app.get("/api/ventas/cash/history", requireAuth, requireSystemAccess("ventas_almacen"), (req, res) => {
+  const closures = db.prepare("SELECT * FROM cash_closures WHERE company_id = ? ORDER BY created_at DESC").all(req.user.company_id);
+  res.json({ closures });
+});
+
+app.post("/api/ventas/products/:id/movements", requireAuth, requireSystemAccess("ventas_almacen"), requireVentasRole("admin", "ventas_admin", "almacen"), (req, res) => {
+  const product = db.prepare("SELECT * FROM inventory_products WHERE id = ? AND company_id = ?").get(req.params.id, req.user.company_id);
+  if (!product) return res.status(404).json({ error: "Producto no encontrado" });
+  const type = String(req.body.type || "entrada");
+  const quantity = Number(req.body.quantity || 0);
+  if (!["entrada", "salida", "ajuste"].includes(type) || quantity <= 0) return res.status(400).json({ error: "Movimiento invalido" });
+  const signedQuantity = type === "salida" ? -quantity : quantity;
+  const now = new Date().toISOString();
+
+  db.prepare(
+    `INSERT INTO inventory_movements (id, company_id, product_id, type, quantity, reference, note, created_by, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+  ).run(
+    randomUUID(),
+    req.user.company_id,
+    product.id,
+    type,
+    quantity,
+    String(req.body.reference || ""),
+    String(req.body.note || ""),
+    req.user.id,
+    now
+  );
+  db.prepare("UPDATE inventory_products SET stock = stock + ?, updated_at = ? WHERE id = ?").run(signedQuantity, now, product.id);
+  res.json({ product: db.prepare("SELECT * FROM inventory_products WHERE id = ?").get(product.id) });
+});
+
+app.patch("/api/companies/:id/status", requireAuth, requireRole("zow_owner"), (req, res) => {
+  const status = String(req.body.status || "").trim();
+  if (!["active", "suspended", "cancelled"].includes(status)) return res.status(400).json({ error: "Estado invalido" });
+  const company = db.prepare("SELECT id FROM companies WHERE id = ? AND id <> 'zow-internal'").get(req.params.id);
+  if (!company) return res.status(404).json({ error: "Empresa no encontrada" });
+  db.prepare("UPDATE companies SET status = ?, updated_at = ? WHERE id = ?").run(status, new Date().toISOString(), company.id);
+  res.json({ ok: true });
+});
+
+if (require.main === module) {
+  app.listen(port, () => {
+    console.log(`Correspondencia ZOW backend listo en http://localhost:${port}`);
+  });
+}
+
+module.exports = app;
+
+function publicUser(user) {
+  return {
+    id: user.id,
+    companyId: user.company_id,
+    companyName: user.company_name || "",
+    name: user.name,
+    username: user.username,
+    role: user.role,
+    unitId: user.unit_id,
+    unitName: user.unit_name,
+    position: user.position,
+    ci: user.ci || "",
+    phone: user.phone || ""
+  };
+}
+
+function slugify(value) {
+  return String(value || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 64);
+}
+
+function getDocumentById(id, companyId) {
+  return db
+    .prepare(
+      `SELECT documents.*,
+              COALESCE((SELECT COUNT(*) FROM document_files WHERE document_files.company_id = documents.company_id AND document_files.document_id = documents.id), 0) AS digital_file_count,
+              COALESCE((SELECT GROUP_CONCAT(original_name, ', ') FROM document_files WHERE document_files.company_id = documents.company_id AND document_files.document_id = documents.id), documents.digital_file_name) AS digital_file_names
+       FROM documents
+       WHERE documents.id = ? AND documents.company_id = ?`
+    )
+    .get(id, companyId);
+}
+
+function getUploadedFiles(req) {
+  if (!req.files) return [];
+  if (Array.isArray(req.files)) return req.files;
+  return [...(req.files.digitalFile || []), ...(req.files.digitalFiles || [])];
+}
+
+function attachUploadedFiles({ files, companyId, documentId, userId, uploadedAt }) {
+  if (!files.length) return;
+  const insertFile = db.prepare(
+    `INSERT INTO document_files (id, company_id, document_id, original_name, stored_name, size, mime_type, uploaded_by, uploaded_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+  );
+  files.forEach((file) => {
+    insertFile.run(
+      randomUUID(),
+      companyId,
+      documentId,
+      file.originalname,
+      file.filename,
+      file.size || 0,
+      file.mimetype || "",
+      userId,
+      uploadedAt
+    );
+  });
+}
+
+function buildDerivationComment(unitName, comment) {
+  const detail = String(comment || "").trim();
+  return `Destino: ${unitName}. ${detail || "Sin comentario adicional."}`;
+}
+
+function requireSystemAccess(systemId) {
+  return (req, res, next) => {
+    if (req.user.role === "zow_owner") return res.status(403).json({ error: "El panel ZOW no opera sistemas de empresas" });
+    const access = db
+      .prepare("SELECT status FROM company_system_access WHERE company_id = ? AND system_id = ?")
+      .get(req.user.company_id, systemId);
+    if (!access || access.status !== "active") {
+      return res.status(403).json({ error: "La empresa no tiene acceso activo a este sistema" });
+    }
+    next();
+  };
+}
+
+function requireVentasRole(...roles) {
+  return (req, res, next) => {
+    if (!roles.includes(req.user.role)) {
+      return res.status(403).json({ error: "Este rol no tiene permiso para esta funcion de Ventas-Almacen" });
+    }
+    next();
+  };
+}
+
+function loadSettings(companyId) {
+  return db.prepare("SELECT * FROM organization_settings WHERE company_id = ? OR id = ? ORDER BY id = ? DESC LIMIT 1").get(companyId, companyId, companyId);
+}
+
+function mapSettings(settings = {}) {
+  return {
+    companyName: settings.company_name || "Empresa sin configurar",
+    storeName: settings.store_name || "",
+    currency: settings.currency || "BOB",
+    taxId: settings.tax_id || "",
+    phone: settings.phone || "",
+    address: settings.address || "",
+    ticketNote: settings.ticket_note || ""
+  };
+}
+
+function buildNextDocumentCode(companyId, year, date = new Date().toISOString()) {
+  const month = String(new Date(date).getMonth() + 1).padStart(2, "0");
+  const prefix = `${month}-${year}`;
+  const rows = db.prepare("SELECT code FROM documents WHERE company_id = ? AND code LIKE ?").all(companyId, `${prefix}-%`);
+  const next = rows.reduce((max, row) => {
+    const match = String(row.code || "").match(/(\d+)$/);
+    return match ? Math.max(max, Number(match[1])) : max;
+  }, 0) + 1;
+  return `${prefix}-${String(next).padStart(4, "0")}`;
+}
+
+function buildNextSaleCode(companyId, date = new Date().toISOString()) {
+  const year = new Date(date).getFullYear();
+  const prefix = `V-${year}`;
+  const rows = db.prepare("SELECT code FROM sales_orders WHERE company_id = ? AND code LIKE ?").all(companyId, `${prefix}-%`);
+  const next = rows.reduce((max, row) => {
+    const match = String(row.code || "").match(/(\d+)$/);
+    return match ? Math.max(max, Number(match[1])) : max;
+  }, 0) + 1;
+  return `${prefix}-${String(next).padStart(5, "0")}`;
+}
+
+function buildNextCashCode(companyId, date = new Date().toISOString()) {
+  const year = new Date(date).getFullYear();
+  const prefix = `C-${year}`;
+  const rows = db.prepare("SELECT code FROM cash_closures WHERE company_id = ? AND code LIKE ?").all(companyId, `${prefix}-%`);
+  const next = rows.reduce((max, row) => {
+    const match = String(row.code || "").match(/(\d+)$/);
+    return match ? Math.max(max, Number(match[1])) : max;
+  }, 0) + 1;
+  return `${prefix}-${String(next).padStart(5, "0")}`;
+}
