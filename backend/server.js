@@ -133,6 +133,14 @@ app.post("/api/auth/login", (req, res) => {
 
   if (!safePasswordCompare(password, user?.password_hash)) {
     recordLoginFailure(loginStatus.key);
+    recordAuditEvent({
+      req,
+      action: "login_failed",
+      entityType: "user",
+      entityId: "",
+      description: `Intento fallido para ${normalizedUsername}`,
+      metadata: { username: normalizedUsername }
+    });
     return res.status(401).json({ error: "Usuario o contrasena incorrectos" });
   }
   const company = db.prepare("SELECT status, billing_period, starts_at, ends_at FROM companies WHERE id = ?").get(user.company_id);
@@ -360,16 +368,31 @@ app.patch("/api/users/:id", requireAuth, requireRole("admin"), (req, res) => {
     db.prepare("UPDATE users SET password_hash = ? WHERE id = ?").run(bcrypt.hashSync(user.password, 12), existing.id);
   }
 
+  recordAuditEvent({
+    req,
+    action: "user_update",
+    entityType: "user",
+    entityId: existing.id,
+    description: `Actualizo usuario ${user.username}`,
+    metadata: { role: finalRole, passwordChanged: Boolean(user.password) }
+  });
   res.json({ user: db.prepare("SELECT id, company_id, name, username, role, unit_id, position, ci, phone, is_active, is_protected FROM users WHERE id = ?").get(existing.id) });
 });
 
 app.patch("/api/users/:id/status", requireAuth, requireRole("admin"), (req, res) => {
-  const user = db.prepare("SELECT id, is_protected FROM users WHERE id = ? AND company_id = ?").get(req.params.id, req.user.company_id);
+  const user = db.prepare("SELECT id, username, is_protected FROM users WHERE id = ? AND company_id = ?").get(req.params.id, req.user.company_id);
   if (!user) return res.status(404).json({ error: "Usuario no encontrado" });
   if (user.is_protected) return res.status(400).json({ error: "No se puede desactivar un usuario protegido" });
 
   const active = req.body.active ? 1 : 0;
   db.prepare("UPDATE users SET is_active = ? WHERE id = ?").run(active, user.id);
+  recordAuditEvent({
+    req,
+    action: "user_status",
+    entityType: "user",
+    entityId: user.id,
+    description: `${active ? "Activo" : "Desactivo"} usuario ${user.username}`
+  });
   res.json({ ok: true });
 });
 
@@ -1068,6 +1091,14 @@ app.patch("/api/companies/:id/systems", requireAuth, requireRole("zow_owner"), (
   systems.forEach((systemId) => {
     upsertAccess.run(company.id, systemId, enabledSystems.includes(systemId) ? "active" : "inactive", plan, now);
   });
+  recordAuditEvent({
+    req,
+    action: "company_systems_update",
+    entityType: "company",
+    entityId: company.id,
+    description: "Actualizo accesos SaaS de empresa",
+    metadata: { systems: enabledSystems, plan }
+  });
   res.json({ ok: true });
 });
 
@@ -1391,6 +1422,13 @@ app.patch("/api/companies/:id/status", requireAuth, requireRole("zow_owner"), (r
   const company = db.prepare("SELECT id FROM companies WHERE id = ? AND id <> 'zow-internal'").get(req.params.id);
   if (!company) return res.status(404).json({ error: "Empresa no encontrada" });
   db.prepare("UPDATE companies SET status = ?, updated_at = ? WHERE id = ?").run(status, new Date().toISOString(), company.id);
+  recordAuditEvent({
+    req,
+    action: "company_status",
+    entityType: "company",
+    entityId: company.id,
+    description: `Cambio estado de empresa a ${status}`
+  });
   res.json({ ok: true });
 });
 

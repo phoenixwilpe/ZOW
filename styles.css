@@ -1192,6 +1192,32 @@ h3 {
   gap: 16px;
 }
 
+.report-filter-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(120px, 1fr)) auto;
+  gap: 12px;
+  align-items: end;
+}
+
+.report-filter-grid label {
+  display: grid;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-weight: 750;
+}
+
+.report-filter-grid select,
+.report-filter-grid input {
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 10px 11px;
+  background: var(--panel);
+  color: var(--text);
+  font: inherit;
+}
+
 .report-box h4 {
   margin: 0 0 10px;
 }
@@ -1950,6 +1976,7 @@ dialog::backdrop {
   .form-grid,
   .institutional-block,
   .report-form,
+  .report-filter-grid,
   .permission-grid,
   .report-columns {
     grid-template-columns: 1fr;

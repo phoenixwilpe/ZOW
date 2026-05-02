@@ -135,6 +135,15 @@ app.post("/api/auth/login", async (req, res) => {
 
   if (!safePasswordCompare(req.body.password, user?.password_hash)) {
     recordLoginFailure(loginStatus.key);
+    await ensureAuditSchema();
+    await recordAuditEvent({
+      req,
+      action: "login_failed",
+      entityType: "user",
+      entityId: "",
+      description: `Intento fallido para ${normalizedUsername}`,
+      metadata: { username: normalizedUsername }
+    });
     return res.status(401).json({ error: "Usuario o contrasena incorrectos" });
   }
   const company = await pg.get("SELECT status, billing_period, starts_at, ends_at FROM companies WHERE id = ?", [user.company_id]);
@@ -321,14 +330,29 @@ app.patch("/api/users/:id", requireAuth, requireRole("admin"), async (req, res) 
     if (passwordError) return res.status(400).json({ error: passwordError });
     await pg.run("UPDATE users SET password_hash = ? WHERE id = ?", [bcrypt.hashSync(user.password, 12), existing.id]);
   }
+  await recordAuditEvent({
+    req,
+    action: "user_update",
+    entityType: "user",
+    entityId: existing.id,
+    description: `Actualizo usuario ${user.username}`,
+    metadata: { role: finalRole, passwordChanged: Boolean(user.password) }
+  });
   res.json({ user: await pg.get("SELECT id, company_id, name, username, role, unit_id, position, ci, phone, is_active, is_protected FROM users WHERE id = ?", [existing.id]) });
 });
 
 app.patch("/api/users/:id/status", requireAuth, requireRole("admin"), async (req, res) => {
-  const user = await pg.get("SELECT id, is_protected FROM users WHERE id = ? AND company_id = ?", [req.params.id, req.user.company_id]);
+  const user = await pg.get("SELECT id, username, is_protected FROM users WHERE id = ? AND company_id = ?", [req.params.id, req.user.company_id]);
   if (!user) return res.status(404).json({ error: "Usuario no encontrado" });
   if (user.is_protected) return res.status(400).json({ error: "No se puede desactivar un usuario protegido" });
   await pg.run("UPDATE users SET is_active = ? WHERE id = ?", [Boolean(req.body.active), user.id]);
+  await recordAuditEvent({
+    req,
+    action: "user_status",
+    entityType: "user",
+    entityId: user.id,
+    description: `${Boolean(req.body.active) ? "Activo" : "Desactivo"} usuario ${user.username}`
+  });
   res.json({ ok: true });
 });
 
@@ -863,6 +887,14 @@ app.patch("/api/companies/:id/systems", requireAuth, requireRole("zow_owner"), a
       [company.id, system.id, enabledSystems.includes(system.id) ? "active" : "inactive", plan, now]
     );
   }
+  await recordAuditEvent({
+    req,
+    action: "company_systems_update",
+    entityType: "company",
+    entityId: company.id,
+    description: "Actualizo accesos SaaS de empresa",
+    metadata: { systems: enabledSystems, plan }
+  });
   res.json({ ok: true });
 });
 
@@ -872,6 +904,13 @@ app.patch("/api/companies/:id/status", requireAuth, requireRole("zow_owner"), as
   const company = await pg.get("SELECT id FROM companies WHERE id = ? AND id <> 'zow-internal'", [req.params.id]);
   if (!company) return res.status(404).json({ error: "Empresa no encontrada" });
   await pg.run("UPDATE companies SET status = ?::company_status, updated_at = now() WHERE id = ?", [status, company.id]);
+  await recordAuditEvent({
+    req,
+    action: "company_status",
+    entityType: "company",
+    entityId: company.id,
+    description: `Cambio estado de empresa a ${status}`
+  });
   res.json({ ok: true });
 });
 

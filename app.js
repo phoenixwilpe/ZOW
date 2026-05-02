@@ -408,6 +408,7 @@ let publicLookups = [];
 let publicLookupsLoaded = false;
 let auditEvents = [];
 let auditLoaded = false;
+let reportFilters = { unit: "", status: "all", from: "", to: "", deadline: "all" };
 
 const loginScreen = document.querySelector("#loginScreen");
 const loginForm = document.querySelector("#loginForm");
@@ -1816,7 +1817,7 @@ function renderList() {
 }
 
 function renderReportsPanel() {
-  const visible = documents.filter(canViewDocument);
+  const visible = getReportDocuments();
   const pending = visible.filter((item) => !["Archivado", "Atendido"].includes(item.status));
   const archived = visible.filter((item) => item.status === "Archivado");
   const overdue = visible.filter((item) => deadlineStatus(item).className === "overdue");
@@ -1836,6 +1837,42 @@ function renderReportsPanel() {
           <button class="primary-button" type="button" id="printReportPdf">PDF</button>
         </div>
       </div>
+      <form class="report-filter-grid" id="reportFilters">
+        <label>
+          Area
+          <select id="reportUnit">
+            <option value="">Todas</option>
+            ${units.map((unit) => `<option value="${unit.id}" ${reportFilters.unit === unit.id ? "selected" : ""}>${escapeHtml(unit.name)}</option>`).join("")}
+          </select>
+        </label>
+        <label>
+          Estado
+          <select id="reportStatus">
+            <option value="all" ${reportFilters.status === "all" ? "selected" : ""}>Todos</option>
+            ${["En recepcion", "Derivado", "En revision", "Atendido", "Archivado", "Vencido"]
+              .map((status) => `<option value="${escapeHtml(status)}" ${reportFilters.status === status ? "selected" : ""}>${escapeHtml(status)}</option>`)
+              .join("")}
+          </select>
+        </label>
+        <label>
+          Desde
+          <input id="reportFrom" type="date" value="${escapeHtml(reportFilters.from)}" />
+        </label>
+        <label>
+          Hasta
+          <input id="reportTo" type="date" value="${escapeHtml(reportFilters.to)}" />
+        </label>
+        <label>
+          Plazo
+          <select id="reportDeadline">
+            <option value="all" ${reportFilters.deadline === "all" ? "selected" : ""}>Todos</option>
+            <option value="overdue" ${reportFilters.deadline === "overdue" ? "selected" : ""}>Vencidos</option>
+            <option value="warning" ${reportFilters.deadline === "warning" ? "selected" : ""}>Por vencer</option>
+            <option value="ok" ${reportFilters.deadline === "ok" ? "selected" : ""}>En plazo</option>
+          </select>
+        </label>
+        <button class="ghost-button" type="button" id="clearReportFilters">Limpiar</button>
+      </form>
       <section class="setup-overview">
         <article><span>Total visible</span><strong>${visible.length}</strong></article>
         <article><span>Pendientes</span><strong>${pending.length}</strong></article>
@@ -1892,10 +1929,26 @@ function renderReportGroup(title, rows) {
 function bindReportActions() {
   document.querySelector("#exportReportCsv")?.addEventListener("click", exportReportCsv);
   document.querySelector("#printReportPdf")?.addEventListener("click", printReportPdf);
+  document.querySelector("#clearReportFilters")?.addEventListener("click", () => {
+    reportFilters = { unit: "", status: "all", from: "", to: "", deadline: "all" };
+    renderList();
+  });
+  ["#reportUnit", "#reportStatus", "#reportFrom", "#reportTo", "#reportDeadline"].forEach((selector) => {
+    document.querySelector(selector)?.addEventListener("change", () => {
+      reportFilters = {
+        unit: document.querySelector("#reportUnit")?.value || "",
+        status: document.querySelector("#reportStatus")?.value || "all",
+        from: document.querySelector("#reportFrom")?.value || "",
+        to: document.querySelector("#reportTo")?.value || "",
+        deadline: document.querySelector("#reportDeadline")?.value || "all"
+      };
+      renderList();
+    });
+  });
 }
 
 function exportReportCsv() {
-  const rows = documents.filter(canViewDocument).map((item) => [
+  const rows = getReportDocuments().map((item) => [
     item.code,
     item.applicantName,
     item.applicantCi,
@@ -1921,7 +1974,7 @@ function exportReportCsv() {
 function printReportPdf() {
   const printable = window.open("", "_blank", "width=1000,height=760");
   if (!printable) return;
-  const rows = documents.filter(canViewDocument);
+  const rows = getReportDocuments();
   printable.document.write(`
     <!doctype html>
     <html lang="es">
@@ -1965,6 +2018,20 @@ function groupCount(items, selector) {
     map.set(key, (map.get(key) || 0) + 1);
   });
   return [...map.entries()].sort((a, b) => b[1] - a[1]);
+}
+
+function getReportDocuments() {
+  return documents
+    .filter(canViewDocument)
+    .filter((item) => {
+      if (reportFilters.unit && item.currentUnitId !== reportFilters.unit && item.targetUnitId !== reportFilters.unit && item.createdByUnitId !== reportFilters.unit) return false;
+      if (reportFilters.status !== "all" && item.status !== reportFilters.status) return false;
+      if (reportFilters.deadline !== "all" && deadlineStatus(item).className !== reportFilters.deadline) return false;
+      const created = normalizeDateForInput(item.createdAt);
+      if (reportFilters.from && created && created < reportFilters.from) return false;
+      if (reportFilters.to && created && created > reportFilters.to) return false;
+      return true;
+    });
 }
 
 function csvCell(value) {
@@ -2952,13 +3019,17 @@ function auditActionLabel(action) {
     logo_update: "Logo/membrete",
     unit_create: "Area creada",
     user_create: "Usuario creado",
+    user_update: "Usuario actualizado",
+    user_status: "Estado de usuario",
     document_create: "Documento registrado",
     document_status: "Estado cambiado",
     physical_received: "Fisico recibido",
     document_derive: "Documento derivado",
     document_upload: "Adjunto digital",
     company_create: "Empresa creada",
-    company_update: "Empresa actualizada"
+    company_update: "Empresa actualizada",
+    company_status: "Estado de empresa",
+    company_systems_update: "Accesos SaaS"
   };
   return labels[action] || action || "Evento";
 }
