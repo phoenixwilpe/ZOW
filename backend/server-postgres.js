@@ -212,6 +212,7 @@ app.post("/api/users", requireAuth, requireRole("admin"), async (req, res) => {
   user.id = randomUUID();
   if (!user.name || !user.username || !password || !user.unitId) return res.status(400).json({ error: "Faltan datos obligatorios" });
   if (!USER_ROLES.has(user.role)) return res.status(400).json({ error: "Rol invalido" });
+  if (user.role === "admin") return res.status(403).json({ error: "Solo ZOW puede crear el encargado de sistema inicial" });
   const passwordError = validatePasswordStrength(password);
   if (passwordError) return res.status(400).json({ error: passwordError });
   const duplicate = await pg.get("SELECT id FROM users WHERE lower(username) = lower(?)", [user.username]);
@@ -233,6 +234,9 @@ app.patch("/api/users/:id", requireAuth, requireRole("admin"), async (req, res) 
   user.password = String(req.body.password || "").trim();
   if (!user.name || !user.username || !user.unitId) return res.status(400).json({ error: "Nombre, usuario y unidad son obligatorios" });
   if (!USER_ROLES.has(user.role)) return res.status(400).json({ error: "Rol invalido" });
+  if (!existing.is_protected && user.role === "admin") {
+    return res.status(403).json({ error: "No se puede asignar el rol Encargado de sistema desde usuarios" });
+  }
   const duplicate = await pg.get("SELECT id FROM users WHERE lower(username) = lower(?) AND id <> ?", [user.username, existing.id]);
   if (duplicate) return res.status(400).json({ error: "Ese usuario ya existe" });
   const unit = await pg.get("SELECT id FROM units WHERE id = ? AND company_id = ?", [user.unitId, req.user.company_id]);

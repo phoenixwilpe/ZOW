@@ -232,6 +232,7 @@ app.post("/api/users", requireAuth, requireRole("admin"), (req, res) => {
     return res.status(400).json({ error: "Faltan datos obligatorios" });
   }
   if (!USER_ROLES.has(user.role)) return res.status(400).json({ error: "Rol invalido" });
+  if (user.role === "admin") return res.status(403).json({ error: "Solo ZOW puede crear el encargado de sistema inicial" });
   const passwordError = validatePasswordStrength(password);
   if (passwordError) return res.status(400).json({ error: passwordError });
   const duplicate = db.prepare("SELECT id FROM users WHERE lower(username) = lower(?)").get(user.username);
@@ -267,6 +268,9 @@ app.patch("/api/users/:id", requireAuth, requireRole("admin"), (req, res) => {
     return res.status(400).json({ error: "Nombre, usuario y unidad son obligatorios" });
   }
   if (!USER_ROLES.has(user.role)) return res.status(400).json({ error: "Rol invalido" });
+  if (!existing.is_protected && user.role === "admin") {
+    return res.status(403).json({ error: "No se puede asignar el rol Encargado de sistema desde usuarios" });
+  }
 
   const duplicate = db.prepare("SELECT id FROM users WHERE lower(username) = lower(?) AND id <> ?").get(user.username, existing.id);
   if (duplicate) return res.status(400).json({ error: "Ese usuario ya existe" });

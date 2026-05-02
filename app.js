@@ -1482,7 +1482,7 @@ function syncUnitSelects() {
 function roleLabel(role) {
   const labels = {
     zow_owner: "Duenio SaaS ZOW",
-    admin: "Administrador",
+    admin: "Encargado de sistema",
     recepcion_principal: "Recepcion principal",
     recepcion_secundaria: "Recepcion secundaria",
     funcionario: "Funcionario",
@@ -2239,7 +2239,7 @@ function renderAdmin(mode = "overview") {
         <strong>${activeUsers}</strong>
       </article>
       <article>
-        <span>Administradores protegidos</span>
+        <span>Encargados protegidos</span>
         <strong>${protectedUsers}</strong>
       </article>
     </section>
@@ -2316,9 +2316,9 @@ function renderAdminOverview(operativeUnits, activeUsers) {
 
     <section class="admin-action-grid">
       <button class="admin-action-card" type="button" data-admin-tab="company">
-        <span>Empresa</span>
+        <span>Empresa y membrete</span>
         <strong>${escapeHtml(organizationSettings.companyName || "Sin configurar")}</strong>
-        <small>Nombre institucional visible en el sistema.</small>
+        <small>Solo el encargado de sistema puede editar estos datos.</small>
       </button>
       <button class="admin-action-card" type="button" data-admin-tab="unit">
         <span>Areas</span>
@@ -2341,6 +2341,7 @@ function renderCompanyPanel() {
         <div>
           <p class="eyebrow">Empresa</p>
           <h3>Datos de la organizacion y membrete</h3>
+          <span>Solo Encargado de sistema</span>
         </div>
       </div>
       <form class="admin-form" id="organizationForm">
@@ -2510,7 +2511,7 @@ function renderUserForm() {
             <option value="cajero" ${editingUser?.role === "cajero" ? "selected" : ""}>Cajero</option>
             <option value="almacen" ${editingUser?.role === "almacen" ? "selected" : ""}>Almacen</option>
             <option value="vendedor" ${editingUser?.role === "vendedor" ? "selected" : ""}>Vendedor</option>
-            <option value="admin" ${editingUser?.role === "admin" ? "selected" : ""}>Administrador</option>
+            ${editingUser?.role === "admin" ? `<option value="admin" selected>Encargado de sistema</option>` : ""}
           </select>
         </label>
         <label>
