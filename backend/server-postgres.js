@@ -59,6 +59,8 @@ app.get("/api/health", async (_req, res) => {
 });
 
 app.post("/api/auth/login", async (req, res) => {
+  await ensureCompaniesSchema();
+  await suspendExpiredCompanies();
   const normalizedUsername = normalizeUsername(req.body.username);
   const loginStatus = getLoginStatus(req, normalizedUsername);
   if (!loginStatus.allowed) {
@@ -75,13 +77,13 @@ app.post("/api/auth/login", async (req, res) => {
     recordLoginFailure(loginStatus.key);
     return res.status(401).json({ error: "Usuario o contrasena incorrectos" });
   }
-  const company = await pg.get("SELECT status FROM companies WHERE id = ?", [user.company_id]);
-  if (!company || company.status !== "active") return res.status(403).json({ error: "La empresa no esta activa. Contacte a ZOW." });
+  const company = await pg.get("SELECT status, billing_period, starts_at, ends_at FROM companies WHERE id = ?", [user.company_id]);
+  if (!company || company.status !== "active") return res.status(403).json({ error: "La empresa no esta activa o la membresia vencio. Contacte a ZOW." });
   clearLoginFailures(loginStatus.key);
 
   const publicData = await pg.get(
     `SELECT users.id, users.company_id, users.name, users.username, users.role, users.unit_id, users.position, users.ci, users.phone,
-            units.name AS unit_name, companies.name AS company_name
+            units.name AS unit_name, companies.name AS company_name, companies.plan, companies.billing_period, companies.starts_at, companies.ends_at, companies.status AS company_status
      FROM users
      JOIN units ON units.id = users.unit_id
      JOIN companies ON companies.id = users.company_id
@@ -540,6 +542,8 @@ app.patch("/api/documents/:id/seen", requireAuth, async (req, res) => {
 });
 
 app.get("/api/companies", requireAuth, requireRole("zow_owner"), async (_req, res) => {
+  await ensureCompaniesSchema();
+  await suspendExpiredCompanies();
   const companies = await pg.all(
     `SELECT companies.*,
             COALESCE((SELECT COUNT(*)::int FROM users WHERE users.company_id = companies.id), 0) AS user_count,
@@ -577,12 +581,15 @@ app.get("/api/companies", requireAuth, requireRole("zow_owner"), async (_req, re
 });
 
 app.post("/api/companies", requireAuth, requireRole("zow_owner"), async (req, res) => {
+  await ensureCompaniesSchema();
   const now = new Date().toISOString();
+  const membership = normalizeMembership(req.body);
   const company = {
     id: randomUUID(),
     name: String(req.body.name || "").trim(),
     slug: slugify(req.body.slug || req.body.name),
     plan: String(req.body.plan || "basico"),
+    billingPeriod: membership.billingPeriod,
     status: String(req.body.status || "active"),
     maxUsers: Number(req.body.maxUsers || 10),
     maxUnits: Number(req.body.maxUnits || 10),
@@ -590,8 +597,8 @@ app.post("/api/companies", requireAuth, requireRole("zow_owner"), async (req, re
     contactName: String(req.body.contactName || "").trim(),
     contactEmail: String(req.body.contactEmail || "").trim(),
     contactPhone: String(req.body.contactPhone || "").trim(),
-    startsAt: String(req.body.startsAt || ""),
-    endsAt: String(req.body.endsAt || ""),
+    startsAt: membership.startsAt,
+    endsAt: membership.endsAt,
     adminName: String(req.body.adminName || "Encargado de Sistema").trim(),
     adminUsername: normalizeUsername(req.body.adminUsername),
     adminPassword: String(req.body.adminPassword || "").trim(),
@@ -608,9 +615,9 @@ app.post("/api/companies", requireAuth, requireRole("zow_owner"), async (req, re
   const adminUserId = randomUUID();
   await pg.tx(async (client) => {
     await client.run(
-      `INSERT INTO companies (id, name, slug, plan, status, max_users, max_units, storage_mb, contact_name, contact_email, contact_phone, starts_at, ends_at, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?::company_status, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [company.id, company.name, company.slug, company.plan, company.status || "active", company.maxUsers, company.maxUnits, company.storageMb, company.contactName, company.contactEmail, company.contactPhone, company.startsAt, company.endsAt, now, now]
+      `INSERT INTO companies (id, name, slug, plan, billing_period, status, max_users, max_units, storage_mb, contact_name, contact_email, contact_phone, starts_at, ends_at, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?::company_status, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [company.id, company.name, company.slug, company.plan, company.billingPeriod, company.status || "active", company.maxUsers, company.maxUnits, company.storageMb, company.contactName, company.contactEmail, company.contactPhone, company.startsAt, company.endsAt, now, now]
     );
     await client.run("INSERT INTO organization_settings (id, company_id, company_name, updated_at) VALUES (?, ?, ?, ?)", [company.id, company.id, company.name, now]);
     await client.run("INSERT INTO units (id, company_id, name, code, parent_unit_id, level) VALUES (?, ?, ?, ?, ?, ?)", [adminUnitId, company.id, "Administracion del Sistema", "ADM", "", "principal"]);
@@ -636,13 +643,16 @@ app.post("/api/companies", requireAuth, requireRole("zow_owner"), async (req, re
 });
 
 app.patch("/api/companies/:id", requireAuth, requireRole("zow_owner"), async (req, res) => {
+  await ensureCompaniesSchema();
   const existing = await pg.get("SELECT id FROM companies WHERE id = ? AND id <> 'zow-internal'", [req.params.id]);
   if (!existing) return res.status(404).json({ error: "Empresa no encontrada" });
   const now = new Date().toISOString();
+  const membership = normalizeMembership(req.body);
   const company = {
     name: String(req.body.name || "").trim(),
     slug: slugify(req.body.slug || req.body.name),
     plan: String(req.body.plan || "basico"),
+    billingPeriod: membership.billingPeriod,
     status: String(req.body.status || "active"),
     maxUsers: Number(req.body.maxUsers || 10),
     maxUnits: Number(req.body.maxUnits || 10),
@@ -650,8 +660,8 @@ app.patch("/api/companies/:id", requireAuth, requireRole("zow_owner"), async (re
     contactName: String(req.body.contactName || "").trim(),
     contactEmail: String(req.body.contactEmail || "").trim(),
     contactPhone: String(req.body.contactPhone || "").trim(),
-    startsAt: String(req.body.startsAt || "").trim(),
-    endsAt: String(req.body.endsAt || "").trim(),
+    startsAt: membership.startsAt,
+    endsAt: membership.endsAt,
     adminUserId: String(req.body.adminUserId || "").trim(),
     adminName: String(req.body.adminName || "Encargado de Sistema").trim(),
     adminUsername: normalizeUsername(req.body.adminUsername),
@@ -675,13 +685,14 @@ app.patch("/api/companies/:id", requireAuth, requireRole("zow_owner"), async (re
   await pg.tx(async (client) => {
     await client.run(
       `UPDATE companies
-       SET name = ?, slug = ?, plan = ?, status = ?::company_status, max_users = ?, max_units = ?, storage_mb = ?,
+       SET name = ?, slug = ?, plan = ?, billing_period = ?, status = ?::company_status, max_users = ?, max_units = ?, storage_mb = ?,
            contact_name = ?, contact_email = ?, contact_phone = ?, starts_at = ?, ends_at = ?, updated_at = ?
        WHERE id = ?`,
       [
         company.name,
         company.slug,
         company.plan,
+        company.billingPeriod,
         company.status,
         company.maxUsers,
         company.maxUnits,
@@ -788,7 +799,12 @@ function publicUser(user) {
     unitName: user.unit_name,
     position: user.position,
     ci: user.ci || "",
-    phone: user.phone || ""
+    phone: user.phone || "",
+    companyPlan: user.plan || "",
+    billingPeriod: user.billing_period || "",
+    membershipStartsAt: user.starts_at || "",
+    membershipEndsAt: user.ends_at || "",
+    companyStatus: user.company_status || ""
   };
 }
 
@@ -890,6 +906,58 @@ async function ensureSettingsSchema() {
     ]);
   }
   await settingsSchemaReady;
+}
+
+let companiesSchemaReady;
+async function ensureCompaniesSchema() {
+  if (!companiesSchemaReady) {
+    companiesSchemaReady = pg.run("ALTER TABLE companies ADD COLUMN IF NOT EXISTS billing_period text not null default 'mensual'");
+  }
+  await companiesSchemaReady;
+}
+
+async function suspendExpiredCompanies() {
+  await pg.run(
+    `UPDATE companies
+     SET status = 'suspended', updated_at = now()
+     WHERE status = 'active'
+       AND COALESCE(NULLIF(ends_at, ''), '') <> ''
+       AND NULLIF(ends_at, '')::date < CURRENT_DATE`
+  );
+}
+
+function normalizeMembership(body = {}) {
+  const billingPeriod = normalizeBillingPeriod(body.billingPeriod || body.billing_period || "mensual");
+  const startsAt = normalizeDateInput(body.startsAt) || todayIsoDate();
+  const explicitEnd = normalizeDateInput(body.endsAt);
+  return {
+    billingPeriod,
+    startsAt,
+    endsAt: explicitEnd || addPeriod(startsAt, billingPeriod)
+  };
+}
+
+function normalizeBillingPeriod(value) {
+  const allowed = new Set(["mensual", "trimestral", "semestral", "anual"]);
+  const normalized = String(value || "mensual").trim().toLowerCase();
+  return allowed.has(normalized) ? normalized : "mensual";
+}
+
+function normalizeDateInput(value) {
+  const text = String(value || "").trim();
+  return /^\d{4}-\d{2}-\d{2}$/.test(text) ? text : "";
+}
+
+function todayIsoDate() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function addPeriod(startDate, billingPeriod) {
+  const date = new Date(`${startDate}T00:00:00`);
+  const monthsByPeriod = { mensual: 1, trimestral: 3, semestral: 6, anual: 12 };
+  date.setMonth(date.getMonth() + (monthsByPeriod[billingPeriod] || 1));
+  date.setDate(date.getDate() - 1);
+  return date.toISOString().slice(0, 10);
 }
 
 async function getDocumentById(id, companyId) {

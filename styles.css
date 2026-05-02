@@ -909,6 +909,36 @@ h3 {
   line-height: 1.45;
 }
 
+.membership-note {
+  border: 1px solid color-mix(in srgb, var(--info) 24%, var(--line));
+  border-radius: 8px;
+  padding: 14px 16px;
+  background:
+    linear-gradient(120deg, color-mix(in srgb, #dff4ff 82%, white), white),
+    var(--panel);
+  display: grid;
+  gap: 4px;
+  margin-bottom: 14px;
+  box-shadow: 0 14px 34px rgb(15 23 42 / 5%);
+}
+
+.membership-note.is-warning {
+  border-color: color-mix(in srgb, var(--warn) 34%, var(--line));
+  background:
+    linear-gradient(120deg, color-mix(in srgb, #fff2cc 82%, white), white),
+    var(--panel);
+}
+
+.membership-note strong {
+  color: var(--accent-dark);
+}
+
+.membership-note span {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
 .surface-enter {
   animation: surfaceEnter 360ms ease both;
   animation-delay: var(--stagger, 0ms);

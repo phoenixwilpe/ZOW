@@ -58,6 +58,7 @@ applySecurity(app, express);
 app.use(express.static(path.join(__dirname, "..")));
 
 app.post("/api/auth/login", (req, res) => {
+  suspendExpiredCompanies();
   const { username, password } = req.body;
   const normalizedUsername = normalizeUsername(username);
   const loginStatus = getLoginStatus(req, normalizedUsername);
@@ -75,9 +76,9 @@ app.post("/api/auth/login", (req, res) => {
     recordLoginFailure(loginStatus.key);
     return res.status(401).json({ error: "Usuario o contrasena incorrectos" });
   }
-  const company = db.prepare("SELECT status FROM companies WHERE id = ?").get(user.company_id);
+  const company = db.prepare("SELECT status, billing_period, starts_at, ends_at FROM companies WHERE id = ?").get(user.company_id);
   if (!company || company.status !== "active") {
-    return res.status(403).json({ error: "La empresa no esta activa. Contacte a ZOW." });
+    return res.status(403).json({ error: "La empresa no esta activa o la membresia vencio. Contacte a ZOW." });
   }
   clearLoginFailures(loginStatus.key);
 
@@ -86,7 +87,7 @@ app.post("/api/auth/login", (req, res) => {
     user: publicUser(db
       .prepare(
       `SELECT users.id, users.company_id, users.name, users.username, users.role, users.unit_id, users.position, users.ci, users.phone,
-                units.name AS unit_name, companies.name AS company_name
+                units.name AS unit_name, companies.name AS company_name, companies.plan, companies.billing_period, companies.starts_at, companies.ends_at, companies.status AS company_status
          FROM users
          JOIN units ON units.id = users.unit_id
          JOIN companies ON companies.id = users.company_id
@@ -675,6 +676,7 @@ app.patch("/api/documents/:id/seen", requireAuth, (req, res) => {
 });
 
 app.get("/api/companies", requireAuth, requireRole("zow_owner"), (req, res) => {
+  suspendExpiredCompanies();
   const companies = db
     .prepare(
       `SELECT companies.*,
@@ -717,11 +719,13 @@ app.get("/api/companies", requireAuth, requireRole("zow_owner"), (req, res) => {
 
 app.post("/api/companies", requireAuth, requireRole("zow_owner"), (req, res) => {
   const now = new Date().toISOString();
+  const membership = normalizeMembership(req.body);
   const company = {
     id: randomUUID(),
     name: String(req.body.name || "").trim(),
     slug: slugify(req.body.slug || req.body.name || ""),
     plan: String(req.body.plan || "basico").trim(),
+    billingPeriod: membership.billingPeriod,
     status: String(req.body.status || "active").trim(),
     maxUsers: Number(req.body.maxUsers || 10),
     maxUnits: Number(req.body.maxUnits || 10),
@@ -729,8 +733,8 @@ app.post("/api/companies", requireAuth, requireRole("zow_owner"), (req, res) => 
     contactName: String(req.body.contactName || "").trim(),
     contactEmail: String(req.body.contactEmail || "").trim(),
     contactPhone: String(req.body.contactPhone || "").trim(),
-    startsAt: String(req.body.startsAt || "").trim(),
-    endsAt: String(req.body.endsAt || "").trim(),
+    startsAt: membership.startsAt,
+    endsAt: membership.endsAt,
     adminName: String(req.body.adminName || "Encargado de Sistema").trim(),
     adminUsername: normalizeUsername(req.body.adminUsername),
     adminPassword: String(req.body.adminPassword || "").trim()
@@ -756,14 +760,15 @@ app.post("/api/companies", requireAuth, requireRole("zow_owner"), (req, res) => 
   try {
     db.prepare(
       `INSERT INTO companies (
-        id, name, slug, plan, status, max_users, max_units, storage_mb, contact_name, contact_email,
+        id, name, slug, plan, billing_period, status, max_users, max_units, storage_mb, contact_name, contact_email,
         contact_phone, starts_at, ends_at, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     ).run(
       company.id,
       company.name,
       company.slug,
       company.plan,
+      company.billingPeriod,
       company.status,
       company.maxUsers,
       company.maxUnits,
@@ -839,10 +844,12 @@ app.patch("/api/companies/:id", requireAuth, requireRole("zow_owner"), (req, res
   if (!existing) return res.status(404).json({ error: "Empresa no encontrada" });
 
   const now = new Date().toISOString();
+  const membership = normalizeMembership(req.body);
   const company = {
     name: String(req.body.name || "").trim(),
     slug: slugify(req.body.slug || req.body.name || ""),
     plan: String(req.body.plan || "basico").trim(),
+    billingPeriod: membership.billingPeriod,
     status: String(req.body.status || "active").trim(),
     maxUsers: Number(req.body.maxUsers || 10),
     maxUnits: Number(req.body.maxUnits || 10),
@@ -850,8 +857,8 @@ app.patch("/api/companies/:id", requireAuth, requireRole("zow_owner"), (req, res
     contactName: String(req.body.contactName || "").trim(),
     contactEmail: String(req.body.contactEmail || "").trim(),
     contactPhone: String(req.body.contactPhone || "").trim(),
-    startsAt: String(req.body.startsAt || "").trim(),
-    endsAt: String(req.body.endsAt || "").trim(),
+    startsAt: membership.startsAt,
+    endsAt: membership.endsAt,
     adminUserId: String(req.body.adminUserId || "").trim(),
     adminName: String(req.body.adminName || "Encargado de Sistema").trim(),
     adminUsername: normalizeUsername(req.body.adminUsername),
@@ -876,13 +883,14 @@ app.patch("/api/companies/:id", requireAuth, requireRole("zow_owner"), (req, res
   try {
     db.prepare(
       `UPDATE companies
-       SET name = ?, slug = ?, plan = ?, status = ?, max_users = ?, max_units = ?, storage_mb = ?,
+       SET name = ?, slug = ?, plan = ?, billing_period = ?, status = ?, max_users = ?, max_units = ?, storage_mb = ?,
            contact_name = ?, contact_email = ?, contact_phone = ?, starts_at = ?, ends_at = ?, updated_at = ?
        WHERE id = ?`
     ).run(
       company.name,
       company.slug,
       company.plan,
+      company.billingPeriod,
       company.status,
       company.maxUsers,
       company.maxUnits,
@@ -1312,7 +1320,12 @@ function publicUser(user) {
     unitName: user.unit_name,
     position: user.position,
     ci: user.ci || "",
-    phone: user.phone || ""
+    phone: user.phone || "",
+    companyPlan: user.plan || "",
+    billingPeriod: user.billing_period || "",
+    membershipStartsAt: user.starts_at || "",
+    membershipEndsAt: user.ends_at || "",
+    companyStatus: user.company_status || ""
   };
 }
 
@@ -1460,4 +1473,48 @@ function buildNextCashCode(companyId, date = new Date().toISOString()) {
     return match ? Math.max(max, Number(match[1])) : max;
   }, 0) + 1;
   return `${prefix}-${String(next).padStart(5, "0")}`;
+}
+
+function suspendExpiredCompanies() {
+  db.prepare(
+    `UPDATE companies
+     SET status = ?, updated_at = ?
+     WHERE status = ?
+       AND COALESCE(NULLIF(ends_at, ''), '') <> ''
+       AND date(ends_at) < date('now')`
+  ).run("suspended", new Date().toISOString(), "active");
+}
+
+function normalizeMembership(body = {}) {
+  const billingPeriod = normalizeBillingPeriod(body.billingPeriod || body.billing_period || "mensual");
+  const startsAt = normalizeDateInput(body.startsAt) || todayIsoDate();
+  const explicitEnd = normalizeDateInput(body.endsAt);
+  return {
+    billingPeriod,
+    startsAt,
+    endsAt: explicitEnd || addPeriod(startsAt, billingPeriod)
+  };
+}
+
+function normalizeBillingPeriod(value) {
+  const allowed = new Set(["mensual", "trimestral", "semestral", "anual"]);
+  const normalized = String(value || "mensual").trim().toLowerCase();
+  return allowed.has(normalized) ? normalized : "mensual";
+}
+
+function normalizeDateInput(value) {
+  const text = String(value || "").trim();
+  return /^\d{4}-\d{2}-\d{2}$/.test(text) ? text : "";
+}
+
+function todayIsoDate() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function addPeriod(startDate, billingPeriod) {
+  const date = new Date(`${startDate}T00:00:00`);
+  const monthsByPeriod = { mensual: 1, trimestral: 3, semestral: 6, anual: 12 };
+  date.setMonth(date.getMonth() + (monthsByPeriod[billingPeriod] || 1));
+  date.setDate(date.getDate() - 1);
+  return date.toISOString().slice(0, 10);
 }

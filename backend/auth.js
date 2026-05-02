@@ -25,15 +25,29 @@ function requireAuth(req, res, next) {
     const payload = jwt.verify(token, JWT_SECRET, { issuer: JWT_ISSUER, audience: JWT_AUDIENCE });
     const user = db
       .prepare(
-        `SELECT users.id, users.company_id, users.name, users.username, users.role, users.unit_id, users.position, units.name AS unit_name
+        `SELECT users.id, users.company_id, users.name, users.username, users.role, users.unit_id, users.position, units.name AS unit_name,
+                companies.status AS company_status, companies.billing_period, companies.starts_at, companies.ends_at
          FROM users
          JOIN units ON units.id = users.unit_id
+         JOIN companies ON companies.id = users.company_id
          WHERE users.id = ? AND users.is_active = 1`
       )
       .get(payload.sub);
 
     if (!user) {
       return res.status(401).json({ error: "Sesion invalida" });
+    }
+    if (isCompanyExpired(user)) {
+      db.prepare("UPDATE companies SET status = ?, updated_at = ? WHERE id = ? AND status = ?").run(
+        "suspended",
+        new Date().toISOString(),
+        user.company_id,
+        "active"
+      );
+      return res.status(403).json({ error: "La membresia de la empresa vencio. Contacte a ZOW." });
+    }
+    if (user.company_status !== "active") {
+      return res.status(403).json({ error: "La empresa no esta activa. Contacte a ZOW." });
     }
 
     req.user = user;
@@ -62,6 +76,12 @@ function canSeeDocument(user, document) {
     .prepare("SELECT 1 FROM document_recipients WHERE document_id = ? AND unit_id = ?")
     .get(document.id, user.unit_id);
   return Boolean(recipient);
+}
+
+function isCompanyExpired(user) {
+  if (!user?.ends_at) return false;
+  const end = new Date(`${String(user.ends_at).slice(0, 10)}T23:59:59`);
+  return Number.isFinite(end.getTime()) && end < new Date();
 }
 
 module.exports = { signToken, requireAuth, requireRole, canSeeDocument };

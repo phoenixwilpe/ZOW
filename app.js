@@ -1007,6 +1007,11 @@ function normalizeApiUser(user) {
     role: user.role,
     companyId: user.companyId ?? user.company_id ?? "",
     companyName: user.companyName ?? user.company_name ?? "",
+    companyPlan: user.companyPlan ?? user.plan ?? "",
+    billingPeriod: user.billingPeriod ?? user.billing_period ?? "",
+    membershipStartsAt: user.membershipStartsAt ?? user.starts_at ?? "",
+    membershipEndsAt: user.membershipEndsAt ?? user.ends_at ?? "",
+    companyStatus: user.companyStatus ?? user.company_status ?? "",
     unitId: user.unitId ?? user.unit_id,
     unitName: user.unitName ?? user.unit_name,
     position: user.position || "",
@@ -1940,12 +1945,14 @@ function renderCompanyListPanel() {
                 <div>
                   <strong>${escapeHtml(company.name)}</strong>
                   <span>${escapeHtml(company.contact_name || "Sin contacto")} / ${escapeHtml(company.contact_email || "Sin email")}</span>
-                  <span>Plan ${escapeHtml(company.plan)} / Usuarios ${company.user_count || 0}/${company.max_users} / Areas ${company.unit_count || 0}/${company.max_units}</span>
+                  <span>Plan ${escapeHtml(planLabel(company.plan))} / ${escapeHtml(billingPeriodLabel(company.billing_period))} / ${escapeHtml(membershipRemainingLabel(company.ends_at))}</span>
+                  <span>Usuarios ${company.user_count || 0}/${company.max_users} / Areas ${company.unit_count || 0}/${company.max_units}</span>
                   <span>Sistemas: ${escapeHtml(company.systems || "Sin sistemas activos")}</span>
                 </div>
                 <div class="admin-row-meta">
                   <span>${escapeHtml(company.slug)}</span>
                   <span class="${company.status === "active" ? "ok-text" : "danger-text"}">${companyStatusLabel(company.status)}</span>
+                  <span>Vence: ${escapeHtml(formatDateOnly(company.ends_at))}</span>
                   <span>${company.document_count || 0} documentos</span>
                 </div>
                 <button class="ghost-button" type="button" data-company-id="${company.id}" data-company-status="${company.status === "active" ? "suspended" : "active"}">
@@ -1997,6 +2004,12 @@ function renderCompanyEditPanel(companyId) {
             </select>
           </label>
           <label>
+            Periodo de membresia
+            <select id="zowEditBillingPeriod">
+              ${renderBillingPeriodOptions(company.billing_period)}
+            </select>
+          </label>
+          <label>
             Estado
             <select id="zowEditCompanyStatus">
               <option value="active" ${company.status === "active" ? "selected" : ""}>Activo</option>
@@ -2015,6 +2028,14 @@ function renderCompanyEditPanel(companyId) {
           <label>
             Almacenamiento MB
             <input id="zowEditStorageMb" type="number" min="100" value="${Number(company.storage_mb || 1024)}" required />
+          </label>
+          <label>
+            Inicio membresia
+            <input id="zowEditStartsAt" type="date" value="${escapeHtml(normalizeDateForInput(company.starts_at) || todayInputDate())}" />
+          </label>
+          <label>
+            Fin membresia
+            <input id="zowEditEndsAt" type="date" value="${escapeHtml(normalizeDateForInput(company.ends_at))}" />
           </label>
           <label>
             Contacto comercial
@@ -2081,6 +2102,12 @@ function renderCompanyCreatePanel() {
             </select>
           </label>
           <label>
+            Periodo de membresia
+            <select id="zowBillingPeriod">
+              ${renderBillingPeriodOptions("mensual")}
+            </select>
+          </label>
+          <label>
             Estado
             <select id="zowCompanyStatus">
               <option value="active">Activo</option>
@@ -2098,6 +2125,14 @@ function renderCompanyCreatePanel() {
           <label>
             Almacenamiento MB
             <input id="zowStorageMb" type="number" min="100" value="1024" required />
+          </label>
+          <label>
+            Inicio membresia
+            <input id="zowStartsAt" type="date" value="${todayInputDate()}" />
+          </label>
+          <label>
+            Fin membresia
+            <input id="zowEndsAt" type="date" placeholder="Automatico por periodo" />
           </label>
           <label>
             Contacto comercial
@@ -2142,10 +2177,13 @@ async function handleZowCompanySubmit(event) {
     name: documentWindowValue("#zowCompanyName").trim(),
     slug: documentWindowValue("#zowCompanySlug").trim(),
     plan: documentWindowValue("#zowCompanyPlan"),
+    billingPeriod: documentWindowValue("#zowBillingPeriod"),
     status: documentWindowValue("#zowCompanyStatus"),
     maxUsers: Number(documentWindowValue("#zowMaxUsers")),
     maxUnits: Number(documentWindowValue("#zowMaxUnits")),
     storageMb: Number(documentWindowValue("#zowStorageMb")),
+    startsAt: documentWindowValue("#zowStartsAt"),
+    endsAt: documentWindowValue("#zowEndsAt"),
     contactName: documentWindowValue("#zowContactName").trim(),
     contactEmail: documentWindowValue("#zowContactEmail").trim(),
     contactPhone: documentWindowValue("#zowContactPhone").trim(),
@@ -2169,10 +2207,13 @@ async function handleZowCompanyEditSubmit(event) {
     name: documentWindowValue("#zowEditCompanyName").trim(),
     slug: documentWindowValue("#zowEditCompanySlug").trim(),
     plan: documentWindowValue("#zowEditCompanyPlan"),
+    billingPeriod: documentWindowValue("#zowEditBillingPeriod"),
     status: documentWindowValue("#zowEditCompanyStatus"),
     maxUsers: Number(documentWindowValue("#zowEditMaxUsers")),
     maxUnits: Number(documentWindowValue("#zowEditMaxUnits")),
     storageMb: Number(documentWindowValue("#zowEditStorageMb")),
+    startsAt: documentWindowValue("#zowEditStartsAt"),
+    endsAt: documentWindowValue("#zowEditEndsAt"),
     contactName: documentWindowValue("#zowEditContactName").trim(),
     contactEmail: documentWindowValue("#zowEditContactEmail").trim(),
     contactPhone: documentWindowValue("#zowEditContactPhone").trim(),
@@ -2194,6 +2235,63 @@ function companyStatusLabel(status) {
     cancelled: "Cancelado"
   };
   return labels[status] || status;
+}
+
+function planLabel(plan) {
+  const labels = {
+    basico: "Basico",
+    profesional: "Profesional",
+    institucional: "Institucional"
+  };
+  return labels[plan] || plan || "Sin plan";
+}
+
+function billingPeriodLabel(period) {
+  const labels = {
+    mensual: "Mensual",
+    trimestral: "Trimestral",
+    semestral: "Semestral",
+    anual: "Anual"
+  };
+  return labels[period] || "Mensual";
+}
+
+function renderBillingPeriodOptions(selected = "mensual") {
+  return ["mensual", "trimestral", "semestral", "anual"]
+    .map((period) => `<option value="${period}" ${period === selected ? "selected" : ""}>${billingPeriodLabel(period)}</option>`)
+    .join("");
+}
+
+function membershipRemainingLabel(endDate) {
+  const days = daysUntil(endDate);
+  if (days === null) return "Sin vencimiento";
+  if (days < 0) return `Vencido hace ${Math.abs(days)} dia(s)`;
+  if (days === 0) return "Vence hoy";
+  return `Faltan ${days} dia(s)`;
+}
+
+function formatDateOnly(value) {
+  const normalized = normalizeDateForInput(value);
+  if (!normalized) return "Sin fecha";
+  return new Intl.DateTimeFormat("es-BO", { day: "2-digit", month: "short", year: "numeric" }).format(new Date(`${normalized}T00:00:00`));
+}
+
+function normalizeDateForInput(value) {
+  const text = String(value || "").trim();
+  const match = text.match(/^\d{4}-\d{2}-\d{2}/);
+  return match ? match[0] : "";
+}
+
+function todayInputDate() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function daysUntil(value) {
+  const normalized = normalizeDateForInput(value);
+  if (!normalized) return null;
+  const today = new Date(`${todayInputDate()}T00:00:00`);
+  const end = new Date(`${normalized}T00:00:00`);
+  return Math.ceil((end - today) / 86400000);
 }
 
 function renderSystemCheckboxes(selected = []) {
@@ -2301,6 +2399,7 @@ function renderAdmin(mode = "overview") {
 
 function renderAdminOverview(operativeUnits, activeUsers) {
   return `
+    ${renderMembershipNotice()}
     <section class="setup-guide admin-start">
       <div>
         <p class="eyebrow">Sistema</p>
@@ -2330,6 +2429,20 @@ function renderAdminOverview(operativeUnits, activeUsers) {
         <strong>${activeUsers}</strong>
         <small>Credenciales, roles y areas asignadas.</small>
       </button>
+    </section>
+  `;
+}
+
+function renderMembershipNotice() {
+  if (!isAdmin() || !currentUser?.membershipEndsAt) return "";
+  const days = daysUntil(currentUser.membershipEndsAt);
+  const tone = days !== null && days <= 7 ? "is-warning" : "";
+  return `
+    <section class="membership-note ${tone}">
+      <div>
+        <strong>Membresia ${escapeHtml(billingPeriodLabel(currentUser.billingPeriod))}</strong>
+        <span>Plan ${escapeHtml(planLabel(currentUser.companyPlan))}. ${escapeHtml(membershipRemainingLabel(currentUser.membershipEndsAt))}. Vence: ${escapeHtml(formatDateOnly(currentUser.membershipEndsAt))}.</span>
+      </div>
     </section>
   `;
 }
@@ -2975,7 +3088,7 @@ function createButtonRipple(event) {
 }
 
 function animatePanels() {
-  document.querySelectorAll(".admin-panel, .doc-card, .setup-overview article, .cloud-safe-note").forEach((item, index) => {
+  document.querySelectorAll(".admin-panel, .doc-card, .setup-overview article, .cloud-safe-note, .membership-note").forEach((item, index) => {
     item.style.setProperty("--stagger", `${Math.min(index, 8) * 28}ms`);
     item.classList.add("surface-enter");
   });

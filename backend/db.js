@@ -136,6 +136,7 @@ function initDb() {
       name TEXT NOT NULL,
       slug TEXT NOT NULL UNIQUE,
       plan TEXT NOT NULL DEFAULT 'basico',
+      billing_period TEXT NOT NULL DEFAULT 'mensual',
       status TEXT NOT NULL DEFAULT 'active',
       max_users INTEGER NOT NULL DEFAULT 10,
       max_units INTEGER NOT NULL DEFAULT 10,
@@ -297,6 +298,7 @@ function migrateSchema() {
   ensureColumn("companies", "contact_name", "TEXT NOT NULL DEFAULT ''");
   ensureColumn("companies", "contact_email", "TEXT NOT NULL DEFAULT ''");
   ensureColumn("companies", "contact_phone", "TEXT NOT NULL DEFAULT ''");
+  ensureColumn("companies", "billing_period", "TEXT NOT NULL DEFAULT 'mensual'");
   ensureColumn("companies", "starts_at", "TEXT NOT NULL DEFAULT ''");
   ensureColumn("companies", "ends_at", "TEXT NOT NULL DEFAULT ''");
   ensureColumn("units", "parent_unit_id", "TEXT");

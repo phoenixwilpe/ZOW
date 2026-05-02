@@ -31,6 +31,7 @@ create table if not exists companies (
   name text not null,
   slug text not null unique,
   plan text not null default 'basico',
+  billing_period text not null default 'mensual',
   status company_status not null default 'active',
   max_users integer not null default 10,
   max_units integer not null default 10,
