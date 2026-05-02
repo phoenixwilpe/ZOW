@@ -8,6 +8,8 @@ const files = [
   "index.html",
   "app.js",
   "styles.css",
+  "consulta.html",
+  "consulta.js",
   "ventas-almacen.html",
   "ventas-almacen.js"
 ];

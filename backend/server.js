@@ -4,6 +4,7 @@ const express = require("express");
 const cors = require("cors");
 const multer = require("multer");
 const bcrypt = require("bcryptjs");
+const QRCode = require("qrcode");
 const path = require("node:path");
 const fs = require("node:fs");
 const { randomUUID } = require("node:crypto");
@@ -56,6 +57,55 @@ const logoUpload = multer({
 app.use(cors(corsOptions()));
 applySecurity(app, express);
 app.use(express.static(path.join(__dirname, "..")));
+
+app.get("/api/public/qr", async (req, res) => {
+  const text = String(req.query.text || "").trim();
+  if (!text || text.length > 500) return res.status(400).json({ error: "Texto QR invalido" });
+  const buffer = await QRCode.toBuffer(text, { type: "png", width: 220, margin: 1 });
+  res.setHeader("Content-Type", "image/png");
+  res.setHeader("Cache-Control", "no-store");
+  res.send(buffer);
+});
+
+app.post("/api/public/documents/lookup", (req, res) => {
+  suspendExpiredCompanies();
+  const code = String(req.body.code || "").trim();
+  const ci = String(req.body.ci || "").trim();
+  if (!code || !ci || code.length > 40 || ci.length > 40) {
+    return res.status(400).json({ error: "Ingresa codigo de control y CI" });
+  }
+
+  const documentItem = db
+    .prepare(
+      `SELECT documents.code, documents.applicant_name, documents.reference, documents.subject,
+              documents.status, documents.received_at, documents.updated_at,
+              units.name AS current_unit_name, companies.name AS company_name
+       FROM documents
+       JOIN companies ON companies.id = documents.company_id
+       LEFT JOIN units ON units.id = documents.current_unit_id AND units.company_id = documents.company_id
+       WHERE lower(documents.code) = lower(?)
+         AND lower(documents.applicant_ci) = lower(?)
+         AND companies.status = 'active'
+         AND (companies.ends_at = '' OR companies.ends_at >= ?)
+       LIMIT 1`
+    )
+    .get(code, ci, todayIsoDate());
+  if (!documentItem) return res.status(404).json({ error: "No se encontro una carpeta con esos datos" });
+
+  res.json({
+    document: {
+      code: documentItem.code,
+      applicantName: documentItem.applicant_name,
+      reference: documentItem.reference,
+      subject: documentItem.subject,
+      status: documentItem.status,
+      receivedAt: documentItem.received_at,
+      updatedAt: documentItem.updated_at,
+      currentArea: documentItem.current_unit_name || "En proceso",
+      companyName: documentItem.company_name
+    }
+  });
+});
 
 app.post("/api/auth/login", (req, res) => {
   suspendExpiredCompanies();

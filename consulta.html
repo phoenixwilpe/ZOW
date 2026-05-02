@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Consulta documental | Correspondencia ZOW</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body class="public-consult-page">
+    <main class="public-consult-shell">
+      <section class="public-consult-card">
+        <div class="public-consult-brand">
+          <img src="assets/brand/zow-correspondencia-login-logo.png" alt="Correspondencia ZOW" />
+          <div>
+            <span>Consulta segura</span>
+            <h1>Estado de documentación</h1>
+          </div>
+        </div>
+
+        <form class="public-consult-form" id="publicConsultForm">
+          <label>
+            Código de control
+            <input id="lookupCode" name="code" type="text" autocomplete="off" placeholder="05-2026-0001" required />
+          </label>
+          <label>
+            CI del solicitante
+            <input id="lookupCi" name="ci" type="text" autocomplete="off" placeholder="Documento de identidad" required />
+          </label>
+          <button type="submit">Consultar estado</button>
+        </form>
+
+        <div class="public-consult-message" id="publicConsultMessage" aria-live="polite"></div>
+        <section class="public-consult-result" id="publicConsultResult" hidden></section>
+
+        <p class="public-consult-note">
+          Por seguridad, esta consulta solo muestra el estado general del trámite. Los archivos digitales y el historial interno
+          se mantienen privados para la empresa.
+        </p>
+      </section>
+    </main>
+    <footer class="public-copyright">© Correspondencia ZOW. Derecho de autor: Wilmar Peinado B.</footer>
+    <script src="consulta.js"></script>
+  </body>
+</html>

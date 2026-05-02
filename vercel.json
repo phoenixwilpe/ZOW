@@ -14,6 +14,10 @@
     {
       "source": "/panel",
       "destination": "/index.html"
+    },
+    {
+      "source": "/consulta",
+      "destination": "/consulta.html"
     }
   ]
 }

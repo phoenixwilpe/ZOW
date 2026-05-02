@@ -2890,6 +2890,8 @@ function printControlSheet(item) {
   const unit = units.find((unitItem) => unitItem.id === item.currentUnitId);
   const printable = window.open("", "_blank", "width=900,height=720");
   if (!printable) return;
+  const consultationUrl = `${window.location.origin}/consulta?codigo=${encodeURIComponent(item.code)}`;
+  const qrUrl = `${API_BASE_URL}/public/qr?text=${encodeURIComponent(consultationUrl)}`;
   const companyDetails = [
     organizationSettings.taxId ? `NIT/ID: ${organizationSettings.taxId}` : "",
     organizationSettings.phone ? `Tel.: ${organizationSettings.phone}` : "",
@@ -2914,8 +2916,10 @@ function printControlSheet(item) {
           .logo-placeholder { width: 84px; height: 84px; display: grid; place-items: center; border: 1px dashed #8aa0a6; color: #6b7f85; font-size: 12px; }
           .company-meta { display: grid; gap: 3px; color: #52676d; font-size: 12px; line-height: 1.35; }
           .system-label { margin-top: 6px; color: #17262b; font-weight: 700; }
-          .code { border: 2px solid #17262b; padding: 12px 18px; font-size: 20px; font-weight: 800; text-align: center; }
+          .code { border: 2px solid #17262b; padding: 10px 14px; font-size: 18px; font-weight: 800; text-align: center; display: grid; gap: 6px; justify-items: center; }
           .code span { display: block; margin-bottom: 4px; font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; color: #52676d; }
+          .qr-code { width: 86px; height: 86px; object-fit: contain; }
+          .qr-caption { font-size: 10px; line-height: 1.25; color: #52676d; font-weight: 600; max-width: 118px; }
           table { width: 100%; border-collapse: collapse; margin-top: 14px; }
           th, td { border: 1px solid #8aa0a6; padding: 10px; text-align: left; vertical-align: top; }
           th { width: 190px; background: #eef4f5; }
@@ -2936,7 +2940,12 @@ function printControlSheet(item) {
               <span class="system-label">Correspondencia ZOW / Hoja de control documental</span>
             </div>
           </div>
-          <div class="code"><span>Codigo de control</span>${escapeHtml(item.code)}</div>
+          <div class="code">
+            <span>Codigo de control</span>
+            ${escapeHtml(item.code)}
+            <img class="qr-code" src="${escapeHtml(qrUrl)}" alt="QR de consulta" />
+            <div class="qr-caption">Escanear para consultar estado con CI</div>
+          </div>
         </section>
 
         <h2>Datos de recepcion</h2>
