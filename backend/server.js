@@ -9,6 +9,15 @@ const fs = require("node:fs");
 const { randomUUID } = require("node:crypto");
 const { db, initDb } = require("./db");
 const { signToken, requireAuth, requireRole, canSeeDocument } = require("./auth");
+const {
+  applySecurity,
+  corsOptions,
+  getLoginStatus,
+  recordLoginFailure,
+  clearLoginFailures,
+  safePasswordCompare,
+  validatePasswordStrength
+} = require("./security");
 
 initDb();
 
@@ -33,29 +42,37 @@ fs.mkdirSync(uploadsDir, { recursive: true });
 
 const upload = multer({
   dest: uploadsDir,
-  limits: { fileSize: 20 * 1024 * 1024 }
+  limits: { fileSize: 20 * 1024 * 1024, files: 20 },
+  fileFilter: fileFilterForDocuments
 });
 
-app.use(cors());
-app.use(express.json());
+app.use(cors(corsOptions()));
+applySecurity(app, express);
 app.use(express.static(path.join(__dirname, "..")));
 
 app.post("/api/auth/login", (req, res) => {
   const { username, password } = req.body;
   const normalizedUsername = normalizeUsername(username);
+  const loginStatus = getLoginStatus(req, normalizedUsername);
+  if (!loginStatus.allowed) {
+    res.setHeader("Retry-After", String(loginStatus.retryAfterSeconds));
+    return res.status(429).json({ error: "Demasiados intentos fallidos. Intenta nuevamente en unos minutos." });
+  }
   const user =
     db.prepare("SELECT * FROM users WHERE lower(username) = lower(?) AND is_active = 1").get(normalizedUsername) ||
     (!normalizedUsername.includes("@")
       ? db.prepare("SELECT * FROM users WHERE lower(username) = lower(?) AND is_active = 1").get(`${normalizedUsername}@zow.com`)
       : null);
 
-  if (!user || !bcrypt.compareSync(password || "", user.password_hash)) {
+  if (!safePasswordCompare(password, user?.password_hash)) {
+    recordLoginFailure(loginStatus.key);
     return res.status(401).json({ error: "Usuario o contrasena incorrectos" });
   }
   const company = db.prepare("SELECT status FROM companies WHERE id = ?").get(user.company_id);
   if (!company || company.status !== "active") {
     return res.status(403).json({ error: "La empresa no esta activa. Contacte a ZOW." });
   }
+  clearLoginFailures(loginStatus.key);
 
   res.json({
     token: signToken(user),
@@ -180,6 +197,8 @@ app.post("/api/users", requireAuth, requireRole("admin"), (req, res) => {
     return res.status(400).json({ error: "Faltan datos obligatorios" });
   }
   if (!USER_ROLES.has(user.role)) return res.status(400).json({ error: "Rol invalido" });
+  const passwordError = validatePasswordStrength(password);
+  if (passwordError) return res.status(400).json({ error: passwordError });
   const duplicate = db.prepare("SELECT id FROM users WHERE lower(username) = lower(?)").get(user.username);
   if (duplicate) return res.status(400).json({ error: "Ese usuario ya existe" });
   const unit = db.prepare("SELECT id FROM units WHERE id = ? AND company_id = ?").get(user.unitId, req.user.company_id);
@@ -229,6 +248,8 @@ app.patch("/api/users/:id", requireAuth, requireRole("admin"), (req, res) => {
   ).run(user.name, user.username, finalRole, finalUnit, user.position, user.ci, user.phone, existing.id);
 
   if (user.password) {
+    const passwordError = validatePasswordStrength(user.password);
+    if (passwordError) return res.status(400).json({ error: passwordError });
     db.prepare("UPDATE users SET password_hash = ? WHERE id = ?").run(bcrypt.hashSync(user.password, 12), existing.id);
   }
 
@@ -680,6 +701,8 @@ app.post("/api/companies", requireAuth, requireRole("zow_owner"), (req, res) => 
   if (!company.name || !company.slug || !company.adminUsername || !company.adminPassword) {
     return res.status(400).json({ error: "Empresa, usuario y contrasena inicial son obligatorios" });
   }
+  const passwordError = validatePasswordStrength(company.adminPassword);
+  if (passwordError) return res.status(400).json({ error: passwordError });
 
   const duplicateCompany = db.prepare("SELECT id FROM companies WHERE slug = ?").get(company.slug);
   if (duplicateCompany) return res.status(400).json({ error: "Ese identificador de empresa ya existe" });
@@ -796,6 +819,10 @@ app.patch("/api/companies/:id", requireAuth, requireRole("zow_owner"), (req, res
     adminPassword: String(req.body.adminPassword || "").trim()
   };
   if (!company.name || !company.slug || !company.adminUsername) return res.status(400).json({ error: "Empresa y usuario encargado son obligatorios" });
+  if (company.adminPassword) {
+    const passwordError = validatePasswordStrength(company.adminPassword);
+    if (passwordError) return res.status(400).json({ error: passwordError });
+  }
   if (!["active", "suspended", "cancelled"].includes(company.status)) return res.status(400).json({ error: "Estado invalido" });
   const duplicateCompany = db.prepare("SELECT id FROM companies WHERE slug = ? AND id <> ?").get(company.slug, existing.id);
   if (duplicateCompany) return res.status(400).json({ error: "Ese identificador de empresa ya existe" });
@@ -1213,6 +1240,19 @@ app.patch("/api/companies/:id/status", requireAuth, requireRole("zow_owner"), (r
   res.json({ ok: true });
 });
 
+app.use((error, _req, res, _next) => {
+  if (error instanceof multer.MulterError) {
+    return res.status(400).json({ error: "El archivo excede los limites permitidos." });
+  }
+  if (error?.message === "Origen no permitido por ZOW") {
+    return res.status(403).json({ error: "Origen no permitido" });
+  }
+  if (error?.message?.startsWith("Solo se permiten")) {
+    return res.status(400).json({ error: error.message });
+  }
+  return res.status(500).json({ error: "Error de servidor" });
+});
+
 if (require.main === module) {
   app.listen(port, () => {
     console.log(`Correspondencia ZOW backend listo en http://localhost:${port}`);
@@ -1271,6 +1311,12 @@ function getUploadedFiles(req) {
   if (!req.files) return [];
   if (Array.isArray(req.files)) return req.files;
   return [...(req.files.digitalFile || []), ...(req.files.digitalFiles || [])];
+}
+
+function fileFilterForDocuments(_req, file, callback) {
+  const allowedMimeTypes = new Set(["application/pdf", "image/jpeg", "image/png", "image/webp"]);
+  if (allowedMimeTypes.has(file.mimetype)) return callback(null, true);
+  return callback(new Error("Solo se permiten archivos PDF o imagenes JPG, PNG y WEBP."));
 }
 
 function attachUploadedFiles({ files, companyId, documentId, userId, uploadedAt }) {

@@ -21,7 +21,6 @@ const defaultUsers = [
     id: "user-system-owner",
     name: "Encargado de Sistema",
     username: "sistema@zow.com",
-    password: "ZowAdmin2026",
     role: "admin",
     unitId: "unit-admin",
     position: "Encargado de sistema",
@@ -32,7 +31,6 @@ const defaultUsers = [
     id: "user-admin",
     name: "Administrador General",
     username: "admin@zow.com",
-    password: "admin123",
     role: "admin",
     unitId: "unit-admin",
     position: "Administrador del sistema",
@@ -42,7 +40,6 @@ const defaultUsers = [
     id: "user-window",
     name: "Recepcion Principal ZOW",
     username: "recepcion@zow.com",
-    password: "ventanilla123",
     role: "recepcion_principal",
     unitId: "unit-window",
     position: "Recepcion documental principal",
@@ -52,7 +49,6 @@ const defaultUsers = [
     id: "user-reception-legal",
     name: "Recepcion Legal",
     username: "recepcion.legal@zow.com",
-    password: "recepcion456",
     role: "recepcion_secundaria",
     unitId: "unit-legal",
     position: "Recepcion interna de area",
@@ -62,7 +58,6 @@ const defaultUsers = [
     id: "user-legal",
     name: "Responsable Legal",
     username: "legal@zow.com",
-    password: "legal123",
     role: "funcionario",
     unitId: "unit-legal",
     position: "Encargado de area",
@@ -72,7 +67,6 @@ const defaultUsers = [
     id: "user-secretary-legal",
     name: "Secretario Legal",
     username: "secretario@zow.com",
-    password: "secretario123",
     role: "supervisor",
     unitId: "unit-legal",
     position: "Jefe de area secundaria",
@@ -82,7 +76,6 @@ const defaultUsers = [
     id: "user-finance",
     name: "Responsable Finanzas",
     username: "finanzas@zow.com",
-    password: "finanzas123",
     role: "funcionario",
     unitId: "unit-finance",
     position: "Encargado de area",
@@ -92,7 +85,6 @@ const defaultUsers = [
     id: "user-purchases",
     name: "Responsable Compras",
     username: "compras@zow.com",
-    password: "compras123",
     role: "funcionario",
     unitId: "unit-purchases",
     position: "Encargado de area",
@@ -102,7 +94,6 @@ const defaultUsers = [
     id: "user-tech",
     name: "Responsable Tecnologia",
     username: "tecnologia@zow.com",
-    password: "tecnologia123",
     role: "funcionario",
     unitId: "unit-tech",
     position: "Encargado de area",
@@ -112,7 +103,6 @@ const defaultUsers = [
     id: "user-director-tech",
     name: "Director Tecnologia",
     username: "director@zow.com",
-    password: "director123",
     role: "supervisor",
     unitId: "unit-tech",
     position: "Jefe de sub area",
@@ -122,7 +112,6 @@ const defaultUsers = [
     id: "user-supervisor",
     name: "Supervisor Institucional",
     username: "supervisor@zow.com",
-    password: "super123",
     role: "supervisor",
     unitId: "unit-admin",
     position: "Supervisor",
@@ -2045,7 +2034,7 @@ function renderCompanyEditPanel(companyId) {
           </label>
           <label>
             Nueva contrasena opcional
-            <input id="zowEditAdminPassword" type="text" placeholder="Dejar vacio para mantenerla" />
+            <input id="zowEditAdminPassword" type="password" autocomplete="new-password" placeholder="Dejar vacio para mantenerla" />
           </label>
           <label class="span-2">
             Nombre del encargado
@@ -2128,7 +2117,7 @@ function renderCompanyCreatePanel() {
           </label>
           <label>
             Contrasena inicial
-            <input id="zowAdminPassword" type="text" required />
+            <input id="zowAdminPassword" type="password" autocomplete="new-password" required />
           </label>
           <label class="span-2">
             Nombre del encargado
@@ -2481,7 +2470,7 @@ function renderUserForm() {
         </label>
         <label>
           ${editingUser ? "Nueva contrasena opcional" : "Contrasena temporal"}
-          <input id="adminPassword" type="text" ${editingUser ? "" : "required"} />
+          <input id="adminPassword" type="password" autocomplete="new-password" ${editingUser ? "" : "required"} />
         </label>
         <label>
           Cargo

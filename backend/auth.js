@@ -2,9 +2,15 @@ const jwt = require("jsonwebtoken");
 const { db } = require("./db");
 
 const JWT_SECRET = process.env.JWT_SECRET || "change-this-secret-in-production";
+const JWT_ISSUER = "zow-saas";
+const JWT_AUDIENCE = "zow-correspondencia";
 
 function signToken(user) {
-  return jwt.sign({ sub: user.id, role: user.role, unitId: user.unit_id, companyId: user.company_id }, JWT_SECRET, { expiresIn: "8h" });
+  return jwt.sign({ sub: user.id, role: user.role, unitId: user.unit_id, companyId: user.company_id }, JWT_SECRET, {
+    expiresIn: "8h",
+    issuer: JWT_ISSUER,
+    audience: JWT_AUDIENCE
+  });
 }
 
 function requireAuth(req, res, next) {
@@ -16,7 +22,7 @@ function requireAuth(req, res, next) {
   }
 
   try {
-    const payload = jwt.verify(token, JWT_SECRET);
+    const payload = jwt.verify(token, JWT_SECRET, { issuer: JWT_ISSUER, audience: JWT_AUDIENCE });
     const user = db
       .prepare(
         `SELECT users.id, users.company_id, users.name, users.username, users.role, users.unit_id, users.position, units.name AS unit_name

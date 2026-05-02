@@ -2,6 +2,7 @@ const { DatabaseSync } = require("node:sqlite");
 const bcrypt = require("bcryptjs");
 const path = require("node:path");
 const fs = require("node:fs");
+const { randomUUID } = require("node:crypto");
 
 const dataDir = process.env.SQLITE_DIR || (process.env.VERCEL ? "/tmp/zow-data" : path.join(__dirname, "..", "data"));
 fs.mkdirSync(dataDir, { recursive: true });
@@ -484,7 +485,7 @@ function seedBaseConfiguration() {
       companyId: "zow-internal",
       name: "Ramliw ZOW",
       username: "ramliw@zow.com",
-      password: process.env.ZOW_OWNER_PASSWORD || "2501Ramliw##",
+      password: seedPassword("ZOW_OWNER_PASSWORD"),
       role: "zow_owner",
       unitId: "unit-zow-admin",
       position: "Duenio del SaaS",
@@ -495,7 +496,7 @@ function seedBaseConfiguration() {
       companyId: "company-default",
       name: "Encargado de Sistema",
       username: "sistema@zow.com",
-      password: process.env.SYSTEM_PASSWORD || "ZowAdmin2026",
+      password: seedPassword("SYSTEM_PASSWORD"),
       role: "admin",
       unitId: "unit-admin",
       position: "Encargado de sistema",
@@ -506,7 +507,7 @@ function seedBaseConfiguration() {
       companyId: "company-default",
       name: "Recepcion Principal ZOW",
       username: "recepcion@zow.com",
-      password: "ventanilla123",
+      password: seedPassword("SEED_RECEPCION_PASSWORD"),
       role: "recepcion_principal",
       unitId: "unit-window",
       position: "Recepcion documental principal",
@@ -517,7 +518,7 @@ function seedBaseConfiguration() {
       companyId: "company-default",
       name: "Recepcion Legal",
       username: "recepcion.legal@zow.com",
-      password: "recepcion456",
+      password: seedPassword("SEED_RECEPCION_LEGAL_PASSWORD"),
       role: "recepcion_secundaria",
       unitId: "unit-legal",
       position: "Recepcion interna de area",
@@ -528,7 +529,7 @@ function seedBaseConfiguration() {
       companyId: "company-default",
       name: "Responsable Legal",
       username: "legal@zow.com",
-      password: "legal123",
+      password: seedPassword("SEED_LEGAL_PASSWORD"),
       role: "funcionario",
       unitId: "unit-legal",
       position: "Encargado de area",
@@ -539,7 +540,7 @@ function seedBaseConfiguration() {
       companyId: "company-default",
       name: "Secretario Legal",
       username: "secretario@zow.com",
-      password: "secretario123",
+      password: seedPassword("SEED_SECRETARIO_PASSWORD"),
       role: "supervisor",
       unitId: "unit-legal",
       position: "Jefe de area secundaria",
@@ -550,7 +551,7 @@ function seedBaseConfiguration() {
       companyId: "company-default",
       name: "Responsable Finanzas",
       username: "finanzas@zow.com",
-      password: "finanzas123",
+      password: seedPassword("SEED_FINANZAS_PASSWORD"),
       role: "funcionario",
       unitId: "unit-finance",
       position: "Encargado de area",
@@ -561,7 +562,7 @@ function seedBaseConfiguration() {
       companyId: "company-default",
       name: "Responsable Compras",
       username: "compras@zow.com",
-      password: "compras123",
+      password: seedPassword("SEED_COMPRAS_PASSWORD"),
       role: "funcionario",
       unitId: "unit-purchases",
       position: "Encargado de area",
@@ -572,7 +573,7 @@ function seedBaseConfiguration() {
       companyId: "company-default",
       name: "Responsable Tecnologia",
       username: "tecnologia@zow.com",
-      password: "tecnologia123",
+      password: seedPassword("SEED_TECNOLOGIA_PASSWORD"),
       role: "funcionario",
       unitId: "unit-tech",
       position: "Encargado de area",
@@ -583,7 +584,7 @@ function seedBaseConfiguration() {
       companyId: "company-default",
       name: "Director Tecnologia",
       username: "director@zow.com",
-      password: "director123",
+      password: seedPassword("SEED_DIRECTOR_PASSWORD"),
       role: "supervisor",
       unitId: "unit-tech",
       position: "Jefe de sub area",
@@ -594,7 +595,7 @@ function seedBaseConfiguration() {
       companyId: "company-default",
       name: "Administrador Ventas",
       username: "ventas.admin@zow.com",
-      password: "ventasadmin123",
+      password: seedPassword("SEED_VENTAS_ADMIN_PASSWORD"),
       role: "ventas_admin",
       unitId: "unit-finance",
       position: "Administrador de tienda",
@@ -605,7 +606,7 @@ function seedBaseConfiguration() {
       companyId: "company-default",
       name: "Cajero Principal",
       username: "cajero@zow.com",
-      password: "cajero123",
+      password: seedPassword("SEED_CAJERO_PASSWORD"),
       role: "cajero",
       unitId: "unit-finance",
       position: "Caja y ventas",
@@ -616,7 +617,7 @@ function seedBaseConfiguration() {
       companyId: "company-default",
       name: "Responsable Almacen",
       username: "almacen@zow.com",
-      password: "almacen123",
+      password: seedPassword("SEED_ALMACEN_PASSWORD"),
       role: "almacen",
       unitId: "unit-purchases",
       position: "Control de stock",
@@ -627,7 +628,7 @@ function seedBaseConfiguration() {
       companyId: "company-default",
       name: "Vendedor Mostrador",
       username: "vendedor@zow.com",
-      password: "vendedor123",
+      password: seedPassword("SEED_VENDEDOR_PASSWORD"),
       role: "vendedor",
       unitId: "unit-finance",
       position: "Ventas de mostrador",
@@ -717,6 +718,10 @@ function seedSaasSystems() {
      FROM companies
      WHERE id <> 'zow-internal'`
   ).run();
+}
+
+function seedPassword(envKey) {
+  return process.env[envKey] || `Local-${randomUUID()}#`;
 }
 
 module.exports = { db, initDb };

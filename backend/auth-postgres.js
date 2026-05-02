@@ -2,9 +2,15 @@ const jwt = require("jsonwebtoken");
 const pg = require("./pg");
 
 const JWT_SECRET = process.env.JWT_SECRET || "change-this-secret-in-production";
+const JWT_ISSUER = "zow-saas";
+const JWT_AUDIENCE = "zow-correspondencia";
 
 function signToken(user) {
-  return jwt.sign({ sub: user.id, role: user.role, unitId: user.unit_id, companyId: user.company_id }, JWT_SECRET, { expiresIn: "8h" });
+  return jwt.sign({ sub: user.id, role: user.role, unitId: user.unit_id, companyId: user.company_id }, JWT_SECRET, {
+    expiresIn: "8h",
+    issuer: JWT_ISSUER,
+    audience: JWT_AUDIENCE
+  });
 }
 
 function requireAuth(req, res, next) {
@@ -12,7 +18,7 @@ function requireAuth(req, res, next) {
   const token = header.startsWith("Bearer ") ? header.slice(7) : "";
   if (!token) return res.status(401).json({ error: "No autenticado" });
 
-  jwt.verify(token, JWT_SECRET, async (error, payload) => {
+  jwt.verify(token, JWT_SECRET, { issuer: JWT_ISSUER, audience: JWT_AUDIENCE }, async (error, payload) => {
     if (error) return res.status(401).json({ error: "Token invalido" });
     try {
       const user = await pg.get(

@@ -8,6 +8,15 @@ const { randomUUID } = require("node:crypto");
 const { createClient } = require("@supabase/supabase-js");
 const pg = require("./pg");
 const { signToken, requireAuth, requireRole, canSeeDocument } = require("./auth-postgres");
+const {
+  applySecurity,
+  corsOptions,
+  getLoginStatus,
+  recordLoginFailure,
+  clearLoginFailures,
+  safePasswordCompare,
+  validatePasswordStrength
+} = require("./security");
 
 const USER_ROLES = new Set([
   "admin",
@@ -22,7 +31,11 @@ const USER_ROLES = new Set([
 ]);
 
 const app = express();
-const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 20 * 1024 * 1024 } });
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 20 * 1024 * 1024, files: 20 },
+  fileFilter: fileFilterForDocuments
+});
 const supabase =
   process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY
     ? createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY)
@@ -31,8 +44,8 @@ const storageBucket = process.env.SUPABASE_STORAGE_BUCKET || "documentos";
 const enabledPanelSystemIds = process.env.ENABLE_VENTAS_SAAS === "true" ? ["correspondencia", "ventas_almacen"] : ["correspondencia"];
 const showVentasSaas = process.env.ENABLE_VENTAS_SAAS === "true";
 
-app.use(cors());
-app.use(express.json());
+app.use(cors(corsOptions()));
+applySecurity(app, express);
 app.use(express.static(require("node:path").join(__dirname, "..")));
 
 app.get("/api/health", async (_req, res) => {
@@ -42,17 +55,24 @@ app.get("/api/health", async (_req, res) => {
 
 app.post("/api/auth/login", async (req, res) => {
   const normalizedUsername = normalizeUsername(req.body.username);
+  const loginStatus = getLoginStatus(req, normalizedUsername);
+  if (!loginStatus.allowed) {
+    res.setHeader("Retry-After", String(loginStatus.retryAfterSeconds));
+    return res.status(429).json({ error: "Demasiados intentos fallidos. Intenta nuevamente en unos minutos." });
+  }
   const user =
     (await pg.get("SELECT * FROM users WHERE lower(username) = lower(?) AND is_active = true", [normalizedUsername])) ||
     (!normalizedUsername.includes("@")
       ? await pg.get("SELECT * FROM users WHERE lower(username) = lower(?) AND is_active = true", [`${normalizedUsername}@zow.com`])
       : null);
 
-  if (!user || !bcrypt.compareSync(req.body.password || "", user.password_hash)) {
+  if (!safePasswordCompare(req.body.password, user?.password_hash)) {
+    recordLoginFailure(loginStatus.key);
     return res.status(401).json({ error: "Usuario o contrasena incorrectos" });
   }
   const company = await pg.get("SELECT status FROM companies WHERE id = ?", [user.company_id]);
   if (!company || company.status !== "active") return res.status(403).json({ error: "La empresa no esta activa. Contacte a ZOW." });
+  clearLoginFailures(loginStatus.key);
 
   const publicData = await pg.get(
     `SELECT users.id, users.company_id, users.name, users.username, users.role, users.unit_id, users.position, users.ci, users.phone,
@@ -150,6 +170,8 @@ app.post("/api/users", requireAuth, requireRole("admin"), async (req, res) => {
   user.id = randomUUID();
   if (!user.name || !user.username || !password || !user.unitId) return res.status(400).json({ error: "Faltan datos obligatorios" });
   if (!USER_ROLES.has(user.role)) return res.status(400).json({ error: "Rol invalido" });
+  const passwordError = validatePasswordStrength(password);
+  if (passwordError) return res.status(400).json({ error: passwordError });
   const duplicate = await pg.get("SELECT id FROM users WHERE lower(username) = lower(?)", [user.username]);
   if (duplicate) return res.status(400).json({ error: "Ese usuario ya existe" });
   const unit = await pg.get("SELECT id FROM units WHERE id = ? AND company_id = ?", [user.unitId, req.user.company_id]);
@@ -179,7 +201,11 @@ app.patch("/api/users/:id", requireAuth, requireRole("admin"), async (req, res) 
     `UPDATE users SET name = ?, username = ?, role = ?::user_role, unit_id = ?, position = ?, ci = ?, phone = ? WHERE id = ?`,
     [user.name, user.username, finalRole, finalUnit, user.position, user.ci, user.phone, existing.id]
   );
-  if (user.password) await pg.run("UPDATE users SET password_hash = ? WHERE id = ?", [bcrypt.hashSync(user.password, 12), existing.id]);
+  if (user.password) {
+    const passwordError = validatePasswordStrength(user.password);
+    if (passwordError) return res.status(400).json({ error: passwordError });
+    await pg.run("UPDATE users SET password_hash = ? WHERE id = ?", [bcrypt.hashSync(user.password, 12), existing.id]);
+  }
   res.json({ user: await pg.get("SELECT id, company_id, name, username, role, unit_id, position, ci, phone, is_active, is_protected FROM users WHERE id = ?", [existing.id]) });
 });
 
@@ -526,6 +552,8 @@ app.post("/api/companies", requireAuth, requireRole("zow_owner"), async (req, re
     systems: Array.isArray(req.body.systems) ? req.body.systems.map(String) : ["correspondencia"]
   };
   if (!company.name || !company.slug || !company.adminUsername || !company.adminPassword) return res.status(400).json({ error: "Faltan datos obligatorios" });
+  const passwordError = validatePasswordStrength(company.adminPassword);
+  if (passwordError) return res.status(400).json({ error: passwordError });
   if (!["active", "suspended", "cancelled"].includes(company.status)) return res.status(400).json({ error: "Estado invalido" });
   if (await pg.get("SELECT id FROM companies WHERE slug = ?", [company.slug])) return res.status(400).json({ error: "Ese identificador de empresa ya existe" });
   if (await pg.get("SELECT id FROM users WHERE lower(username) = lower(?)", [company.adminUsername])) return res.status(400).json({ error: "Ese usuario administrador ya existe" });
@@ -584,6 +612,10 @@ app.patch("/api/companies/:id", requireAuth, requireRole("zow_owner"), async (re
     adminPassword: String(req.body.adminPassword || "").trim()
   };
   if (!company.name || !company.slug || !company.adminUsername) return res.status(400).json({ error: "Empresa y usuario encargado son obligatorios" });
+  if (company.adminPassword) {
+    const passwordError = validatePasswordStrength(company.adminPassword);
+    if (passwordError) return res.status(400).json({ error: passwordError });
+  }
   if (!["active", "suspended", "cancelled"].includes(company.status)) return res.status(400).json({ error: "Estado invalido" });
   const duplicateCompany = await pg.get("SELECT id FROM companies WHERE slug = ? AND id <> ?", [company.slug, existing.id]);
   if (duplicateCompany) return res.status(400).json({ error: "Ese identificador de empresa ya existe" });
@@ -680,6 +712,19 @@ app.patch("/api/companies/:id/status", requireAuth, requireRole("zow_owner"), as
   res.json({ ok: true });
 });
 
+app.use((error, _req, res, _next) => {
+  if (error instanceof multer.MulterError) {
+    return res.status(400).json({ error: "El archivo excede los limites permitidos." });
+  }
+  if (error?.message === "Origen no permitido por ZOW") {
+    return res.status(403).json({ error: "Origen no permitido" });
+  }
+  if (error?.message?.startsWith("Solo se permiten")) {
+    return res.status(400).json({ error: error.message });
+  }
+  return res.status(500).json({ error: "Error de servidor" });
+});
+
 const port = Number(process.env.PORT || 4174);
 if (require.main === module) app.listen(port, () => console.log(`ZOW PostgreSQL backend listo en http://localhost:${port}`));
 
@@ -721,6 +766,12 @@ function getUploadedFiles(req) {
   if (!req.files) return [];
   if (Array.isArray(req.files)) return req.files;
   return [...(req.files.digitalFile || []), ...(req.files.digitalFiles || [])];
+}
+
+function fileFilterForDocuments(_req, file, callback) {
+  const allowedMimeTypes = new Set(["application/pdf", "image/jpeg", "image/png", "image/webp"]);
+  if (allowedMimeTypes.has(file.mimetype)) return callback(null, true);
+  return callback(new Error("Solo se permiten archivos PDF o imagenes JPG, PNG y WEBP."));
 }
 
 async function attachUploadedFiles({ files, companyId, documentId, userId, uploadedAt }) {
