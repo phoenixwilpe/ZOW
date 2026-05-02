@@ -198,6 +198,20 @@ create table if not exists public_lookup_audit (
   created_at timestamptz not null default now()
 );
 
+create table if not exists audit_events (
+  id text primary key,
+  company_id text,
+  actor_user_id text,
+  actor_name text not null default '',
+  action text not null,
+  entity_type text not null default '',
+  entity_id text not null default '',
+  description text not null default '',
+  metadata text not null default '',
+  ip_address text not null default '',
+  created_at timestamptz not null default now()
+);
+
 create index if not exists idx_users_company on users(company_id);
 create index if not exists idx_units_company on units(company_id);
 create index if not exists idx_documents_company on documents(company_id);
@@ -206,6 +220,8 @@ create index if not exists idx_movements_document on movements(document_id);
 create index if not exists idx_document_recipients_unit on document_recipients(company_id, unit_id);
 create index if not exists idx_public_lookup_audit_created on public_lookup_audit(created_at);
 create index if not exists idx_public_lookup_audit_company on public_lookup_audit(company_id);
+create index if not exists idx_audit_events_company on audit_events(company_id, created_at desc);
+create index if not exists idx_audit_events_action on audit_events(action);
 
 alter table companies enable row level security;
 alter table units enable row level security;

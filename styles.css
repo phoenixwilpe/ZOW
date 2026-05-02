@@ -1133,6 +1133,77 @@ h3 {
   grid-template-columns: minmax(0, 1fr) minmax(180px, auto);
 }
 
+.deadline-pill {
+  border-radius: 999px;
+  padding: 5px 9px;
+  background: rgb(82 103 109 / 12%);
+  color: #52676d;
+  font-size: 0.76rem;
+  font-weight: 850;
+}
+
+.deadline-pill.ok,
+.deadline-pill.done {
+  background: rgb(36 117 109 / 12%);
+  color: #17695f;
+}
+
+.deadline-pill.warning {
+  background: rgb(255 186 73 / 18%);
+  color: #8a5300;
+}
+
+.deadline-pill.overdue {
+  background: rgb(198 61 61 / 14%);
+  color: #9d2f2f;
+}
+
+.permission-grid,
+.report-columns {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+}
+
+.permission-grid article,
+.report-box {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 14px;
+  background: var(--panel);
+  box-shadow: 0 12px 28px rgb(15 23 42 / 5%);
+}
+
+.permission-grid strong,
+.permission-grid span,
+.report-box h4,
+.report-box div {
+  display: block;
+}
+
+.permission-grid span {
+  margin-top: 6px;
+  color: var(--muted);
+  font-size: 0.88rem;
+  line-height: 1.4;
+}
+
+.reports-panel {
+  gap: 16px;
+}
+
+.report-box h4 {
+  margin: 0 0 10px;
+}
+
+.report-box div {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  border-top: 1px solid var(--line);
+  padding: 9px 0;
+}
+
 @media (max-width: 560px) {
   .public-consult-brand {
     align-items: flex-start;
@@ -1878,7 +1949,14 @@ dialog::backdrop {
   .detail-grid,
   .form-grid,
   .institutional-block,
-  .report-form {
+  .report-form,
+  .permission-grid,
+  .report-columns {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-row,
+  .compact-audit-list .admin-row {
     grid-template-columns: 1fr;
   }
 

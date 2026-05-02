@@ -406,6 +406,8 @@ let companies = [];
 let saasSystems = [];
 let publicLookups = [];
 let publicLookupsLoaded = false;
+let auditEvents = [];
+let auditLoaded = false;
 
 const loginScreen = document.querySelector("#loginScreen");
 const loginForm = document.querySelector("#loginForm");
@@ -1011,6 +1013,7 @@ function normalizeApiUser(user) {
     role: user.role,
     companyId: user.companyId ?? user.company_id ?? "",
     companyName: user.companyName ?? user.company_name ?? "",
+    companySlug: user.companySlug ?? user.company_slug ?? "",
     companyPlan: user.companyPlan ?? user.plan ?? "",
     billingPeriod: user.billingPeriod ?? user.billing_period ?? "",
     membershipStartsAt: user.membershipStartsAt ?? user.starts_at ?? "",
@@ -1687,20 +1690,8 @@ function renderWorkflowPanel() {
     reports: `
       <div>
         <strong>Generador de reportes</strong>
-        <span>Filtra por area y rango de fechas para exportar PDF o Excel en la version productiva.</span>
+        <span>Resumen por area, estado y vencimiento con exportacion CSV o impresion a PDF.</span>
       </div>
-      <form class="report-form">
-        <select aria-label="Tipo de reporte">
-          <option>Recibidas por area</option>
-          <option>Derivadas por area</option>
-          <option>Archivadas por area</option>
-        </select>
-        <input type="text" placeholder="Area" />
-        <input type="date" />
-        <input type="date" />
-        <button class="ghost-button" type="button">PDF</button>
-        <button class="ghost-button" type="button">Excel</button>
-      </form>
     `,
     admin: `
       <div>
@@ -1767,6 +1758,13 @@ function renderList() {
     return;
   }
 
+  if (activeView === "reports") {
+    resultCount.textContent = "Reportes";
+    listEl.innerHTML = renderReportsPanel();
+    bindReportActions();
+    return;
+  }
+
   const filtered = getFilteredDocuments();
   if (selectedId && !filtered.some((item) => item.id === selectedId)) {
     selectedId = filtered[0]?.id ?? null;
@@ -1794,6 +1792,7 @@ function renderList() {
             <span>${escapeHtml(item.reference)}</span>
             <span>${escapeHtml(item.area)}</span>
             <span>${formatDate(item.dueDate)}</span>
+            <span class="deadline-pill ${deadlineStatus(item).className}">${deadlineStatus(item).label}</span>
             <span class="priority-pill ${item.priority.toLowerCase()}">${item.priority}</span>
             <span class="file-pill ${item.hasDigitalFile ? "ready" : "pending"}">
               ${item.hasDigitalFile ? "Digital subido" : "Sin digital"}
@@ -1814,6 +1813,162 @@ function renderList() {
       render();
     });
   });
+}
+
+function renderReportsPanel() {
+  const visible = documents.filter(canViewDocument);
+  const pending = visible.filter((item) => !["Archivado", "Atendido"].includes(item.status));
+  const archived = visible.filter((item) => item.status === "Archivado");
+  const overdue = visible.filter((item) => deadlineStatus(item).className === "overdue");
+  const byUnit = groupCount(visible, (item) => item.area || "Sin area");
+  const byStatus = groupCount(visible, (item) => item.status || "Sin estado");
+
+  return `
+    <section class="admin-panel reports-panel">
+      <div class="admin-panel-head">
+        <div>
+          <p class="eyebrow">Reportes operativos</p>
+          <h3>Resumen documental</h3>
+          <span>Exporta la informacion visible segun tu rol y area.</span>
+        </div>
+        <div class="admin-actions">
+          <button class="ghost-button" type="button" id="exportReportCsv">CSV</button>
+          <button class="primary-button" type="button" id="printReportPdf">PDF</button>
+        </div>
+      </div>
+      <section class="setup-overview">
+        <article><span>Total visible</span><strong>${visible.length}</strong></article>
+        <article><span>Pendientes</span><strong>${pending.length}</strong></article>
+        <article><span>Archivados</span><strong>${archived.length}</strong></article>
+        <article><span>Vencidos</span><strong>${overdue.length}</strong></article>
+      </section>
+      <div class="report-columns">
+        ${renderReportGroup("Por area", byUnit)}
+        ${renderReportGroup("Por estado", byStatus)}
+      </div>
+      <div class="admin-list compact-audit-list">
+        ${visible
+          .slice(0, 80)
+          .map(
+            (item) => `
+              <article class="admin-row">
+                <div>
+                  <strong>${escapeHtml(item.code)}</strong>
+                  <span>${escapeHtml(item.applicantName || item.sender || "Sin solicitante")} / ${escapeHtml(item.reference || item.subject)}</span>
+                  <span>${escapeHtml(item.area)} / ${escapeHtml(item.status)}</span>
+                </div>
+                <div class="admin-row-meta">
+                  <span>${formatDate(item.dueDate)}</span>
+                  <span class="deadline-pill ${deadlineStatus(item).className}">${deadlineStatus(item).label}</span>
+                  <span>${escapeHtml(item.priority)}</span>
+                </div>
+              </article>
+            `
+          )
+          .join("")}
+      </div>
+    </section>
+  `;
+}
+
+function renderReportGroup(title, rows) {
+  return `
+    <section class="report-box">
+      <h4>${escapeHtml(title)}</h4>
+      ${rows
+        .map(
+          ([label, count]) => `
+            <div>
+              <span>${escapeHtml(label)}</span>
+              <strong>${count}</strong>
+            </div>
+          `
+        )
+        .join("")}
+    </section>
+  `;
+}
+
+function bindReportActions() {
+  document.querySelector("#exportReportCsv")?.addEventListener("click", exportReportCsv);
+  document.querySelector("#printReportPdf")?.addEventListener("click", printReportPdf);
+}
+
+function exportReportCsv() {
+  const rows = documents.filter(canViewDocument).map((item) => [
+    item.code,
+    item.applicantName,
+    item.applicantCi,
+    item.reference,
+    item.area,
+    item.status,
+    item.priority,
+    item.dueDate
+  ]);
+  const header = ["Codigo", "Solicitante", "CI", "Referencia", "Area", "Estado", "Prioridad", "Vencimiento"];
+  const csv = [header, ...rows].map((row) => row.map(csvCell).join(",")).join("\n");
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `reporte-correspondencia-${new Date().toISOString().slice(0, 10)}.csv`;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
+
+function printReportPdf() {
+  const printable = window.open("", "_blank", "width=1000,height=760");
+  if (!printable) return;
+  const rows = documents.filter(canViewDocument);
+  printable.document.write(`
+    <!doctype html>
+    <html lang="es">
+      <head>
+        <meta charset="UTF-8" />
+        <title>Reporte Correspondencia ZOW</title>
+        <style>
+          body { font-family: Arial, sans-serif; color: #17262b; padding: 24px; }
+          h1 { margin: 0 0 6px; }
+          table { width: 100%; border-collapse: collapse; margin-top: 18px; font-size: 12px; }
+          th, td { border: 1px solid #b8c7cb; padding: 8px; text-align: left; }
+          th { background: #eef4f5; }
+          @media print { button { display: none; } body { padding: 8px; } }
+        </style>
+      </head>
+      <body>
+        <button onclick="window.print()">Imprimir / guardar PDF</button>
+        <h1>${escapeHtml(organizationSettings.companyName || currentUser.companyName || "Correspondencia ZOW")}</h1>
+        <p>Reporte generado el ${formatDateTime(new Date().toISOString())}</p>
+        <table>
+          <thead><tr><th>Codigo</th><th>Solicitante</th><th>Referencia</th><th>Area</th><th>Estado</th><th>Vencimiento</th></tr></thead>
+          <tbody>
+            ${rows
+              .map(
+                (item) => `<tr><td>${escapeHtml(item.code)}</td><td>${escapeHtml(item.applicantName)}</td><td>${escapeHtml(item.reference || item.subject)}</td><td>${escapeHtml(item.area)}</td><td>${escapeHtml(item.status)}</td><td>${formatDate(item.dueDate)}</td></tr>`
+              )
+              .join("")}
+          </tbody>
+        </table>
+      </body>
+    </html>
+  `);
+  printable.document.close();
+  printable.focus();
+}
+
+function groupCount(items, selector) {
+  const map = new Map();
+  items.forEach((item) => {
+    const key = selector(item);
+    map.set(key, (map.get(key) || 0) + 1);
+  });
+  return [...map.entries()].sort((a, b) => b[1] - a[1]);
+}
+
+function csvCell(value) {
+  return `"${String(value ?? "").replace(/"/g, '""')}"`;
 }
 
 function renderZowAdmin(mode = "overview") {
@@ -2376,6 +2531,15 @@ function daysUntil(value) {
   return Math.ceil((end - today) / 86400000);
 }
 
+function deadlineStatus(item) {
+  if (!item?.dueDate || ["Archivado", "Atendido"].includes(item.status)) return { className: "done", label: "Cerrado" };
+  const days = daysUntil(item.dueDate);
+  if (days === null) return { className: "neutral", label: "Sin plazo" };
+  if (days < 0) return { className: "overdue", label: `Vencido ${Math.abs(days)}d` };
+  if (days <= 2) return { className: "warning", label: `Vence ${days}d` };
+  return { className: "ok", label: `${days}d restantes` };
+}
+
 function renderSystemCheckboxes(selected = []) {
   return saasSystems
     .map(
@@ -2403,7 +2567,9 @@ function renderAdmin(mode = "overview") {
     overview: "Panel de sistema",
     company: "Empresa",
     unit: "Areas",
-    user: "Usuarios"
+    user: "Usuarios",
+    permissions: "Permisos",
+    audit: "Auditoria"
   };
 
   resultCount.textContent = modeLabels[mode] || modeLabels.overview;
@@ -2429,12 +2595,16 @@ function renderAdmin(mode = "overview") {
       <button class="${mode === "company" ? "is-active" : ""}" type="button" data-admin-tab="company">Empresa</button>
       <button class="${mode === "unit" ? "is-active" : ""}" type="button" data-admin-tab="unit">Areas</button>
       <button class="${mode === "user" ? "is-active" : ""}" type="button" data-admin-tab="user">Usuarios</button>
+      <button class="${mode === "permissions" ? "is-active" : ""}" type="button" data-admin-tab="permissions">Permisos</button>
+      <button class="${mode === "audit" ? "is-active" : ""}" type="button" data-admin-tab="audit">Auditoria</button>
     </div>
 
     ${mode === "overview" ? renderAdminOverview(operativeUnits, activeUsers) : ""}
     ${mode === "company" ? renderCompanyPanel() : ""}
     ${mode === "unit" ? renderUnitsPanel() : ""}
     ${mode === "user" ? renderUsersPanel() : ""}
+    ${mode === "permissions" ? renderPermissionsPanel() : ""}
+    ${mode === "audit" ? renderAuditPanel() : ""}
   `;
 
   emptyDetail.classList.add("hidden");
@@ -2476,6 +2646,10 @@ function renderAdmin(mode = "overview") {
   document.querySelector("#cancelUserEdit")?.addEventListener("click", () => {
     editingUserId = null;
     renderAdmin("user");
+  });
+  document.querySelector("#refreshAudit")?.addEventListener("click", () => {
+    auditLoaded = false;
+    renderAdmin("audit");
   });
 }
 
@@ -2664,6 +2838,129 @@ function renderUnitRow(unit) {
       </div>
     </article>
   `;
+}
+
+function renderPermissionsPanel() {
+  const rows = [
+    ["admin", "Configurar empresa, areas, usuarios, membrete y auditoria interna."],
+    ["recepcion_principal", "Registrar documentos entrantes, adjuntar digitales, imprimir hoja de control, derivar y consultar todo."],
+    ["recepcion_secundaria", "Recibir documentos derivados a su area, confirmar fisico y derivar internamente."],
+    ["supervisor", "Revisar, atender, archivar, derivar y consultar documentos de su area."],
+    ["funcionario", "Trabajar documentos asignados y derivar segun permisos operativos."],
+    ["zow_owner", "Administrar empresas SaaS, planes, accesos y auditoria global."]
+  ];
+  return `
+    <section class="admin-panel">
+      <div class="admin-panel-head">
+        <div>
+          <p class="eyebrow">Control de permisos</p>
+          <h3>Matriz base de roles</h3>
+          <span>Esta matriz ayuda a validar la configuracion antes de entregar credenciales.</span>
+        </div>
+      </div>
+      <div class="permission-grid">
+        ${rows
+          .map(
+            ([role, description]) => `
+              <article>
+                <strong>${roleLabel(role)}</strong>
+                <span>${escapeHtml(description)}</span>
+              </article>
+            `
+          )
+          .join("")}
+      </div>
+    </section>
+  `;
+}
+
+function renderAuditPanel() {
+  if (!auditLoaded) {
+    loadAuditEvents();
+    return `
+      <section class="admin-panel">
+        <div class="admin-panel-head">
+          <div>
+            <p class="eyebrow">Auditoria</p>
+            <h3>Eventos internos</h3>
+          </div>
+        </div>
+        <div class="empty-state"><strong>Cargando auditoria</strong><span>Revisando acciones recientes de usuarios y documentos.</span></div>
+      </section>
+    `;
+  }
+
+  return `
+    <section class="admin-panel">
+      <div class="admin-panel-head">
+        <div>
+          <p class="eyebrow">Auditoria</p>
+          <h3>Eventos internos recientes</h3>
+        </div>
+        <button class="ghost-button" type="button" id="refreshAudit">Actualizar</button>
+      </div>
+      ${auditEvents.length ? renderAuditRows() : `<div class="empty-state"><strong>Sin eventos</strong><span>Las acciones importantes apareceran aqui.</span></div>`}
+    </section>
+  `;
+}
+
+function renderAuditRows() {
+  return `
+    <div class="admin-list compact-audit-list">
+      ${auditEvents
+        .map(
+          (event) => `
+            <article class="admin-row">
+              <div>
+                <strong>${escapeHtml(auditActionLabel(event.action))}</strong>
+                <span>${escapeHtml(event.description || "Sin descripcion")}</span>
+                <span>${escapeHtml(event.company_name || currentUser.companyName || "Empresa actual")} / ${escapeHtml(event.actor_name || "Sistema")}</span>
+              </div>
+              <div class="admin-row-meta">
+                <span>${escapeHtml(event.entity_type || "evento")}</span>
+                <span>${escapeHtml(event.ip_address || "Sin IP")}</span>
+                <span>${formatDateTime(event.created_at)}</span>
+              </div>
+            </article>
+          `
+        )
+        .join("")}
+    </div>
+  `;
+}
+
+async function loadAuditEvents() {
+  try {
+    const response = await apiRequest("/audit");
+    auditEvents = response.events || [];
+    auditLoaded = true;
+    if (isZowOwner()) renderZowAdmin("security");
+    else renderAdmin("audit");
+  } catch (error) {
+    auditLoaded = true;
+    auditEvents = [];
+    alert(error.message || "No se pudo cargar la auditoria");
+    if (isZowOwner()) renderZowAdmin("security");
+    else renderAdmin("audit");
+  }
+}
+
+function auditActionLabel(action) {
+  const labels = {
+    login_success: "Inicio de sesion",
+    settings_update: "Datos de empresa",
+    logo_update: "Logo/membrete",
+    unit_create: "Area creada",
+    user_create: "Usuario creado",
+    document_create: "Documento registrado",
+    document_status: "Estado cambiado",
+    physical_received: "Fisico recibido",
+    document_derive: "Documento derivado",
+    document_upload: "Adjunto digital",
+    company_create: "Empresa creada",
+    company_update: "Empresa actualizada"
+  };
+  return labels[action] || action || "Evento";
 }
 
 function renderUserForm() {
@@ -2972,7 +3269,8 @@ function printControlSheet(item) {
   const unit = units.find((unitItem) => unitItem.id === item.currentUnitId);
   const printable = window.open("", "_blank", "width=900,height=720");
   if (!printable) return;
-  const consultationUrl = `${window.location.origin}/consulta?codigo=${encodeURIComponent(item.code)}`;
+  const companyPath = currentUser?.companySlug ? `/consulta/${encodeURIComponent(currentUser.companySlug)}` : "/consulta";
+  const consultationUrl = `${window.location.origin}${companyPath}?codigo=${encodeURIComponent(item.code)}`;
   const qrUrl = `${API_BASE_URL}/public/qr?text=${encodeURIComponent(consultationUrl)}`;
   const companyDetails = [
     organizationSettings.taxId ? `NIT/ID: ${organizationSettings.taxId}` : "",

@@ -81,6 +81,7 @@ app.post("/api/public/documents/lookup", (req, res) => {
     return res.status(400).json({ error: "Ingresa codigo de control y CI" });
   }
 
+  const companySlug = String(req.body.companySlug || req.query.companySlug || "").trim();
   const documentItem = db
     .prepare(
       `SELECT documents.id, documents.company_id, documents.code, documents.applicant_name, documents.reference, documents.subject,
@@ -93,9 +94,10 @@ app.post("/api/public/documents/lookup", (req, res) => {
          AND lower(documents.applicant_ci) = lower(?)
          AND companies.status = 'active'
          AND (companies.ends_at = '' OR companies.ends_at >= ?)
+         AND (? = '' OR lower(companies.slug) = lower(?))
        LIMIT 1`
     )
-    .get(code, ci, todayIsoDate());
+    .get(code, ci, todayIsoDate(), companySlug, companySlug);
   recordPublicLookup(req, code, ci, documentItem);
   if (!documentItem) return res.status(404).json({ error: "No se encontro una carpeta con esos datos" });
 
@@ -139,18 +141,22 @@ app.post("/api/auth/login", (req, res) => {
   }
   clearLoginFailures(loginStatus.key);
 
-  res.json({
-    token: signToken(user),
-    user: publicUser(db
-      .prepare(
+  const publicData = db
+    .prepare(
       `SELECT users.id, users.company_id, users.name, users.username, users.role, users.unit_id, users.position, users.ci, users.phone,
-                units.name AS unit_name, companies.name AS company_name, companies.plan, companies.billing_period, companies.starts_at, companies.ends_at, companies.status AS company_status
+                units.name AS unit_name, companies.name AS company_name, companies.slug AS company_slug, companies.plan, companies.billing_period, companies.starts_at, companies.ends_at, companies.status AS company_status
          FROM users
          JOIN units ON units.id = users.unit_id
          JOIN companies ON companies.id = users.company_id
          WHERE users.id = ?`
-      )
-      .get(user.id))
+    )
+    .get(user.id);
+  req.user = publicData;
+  recordAuditEvent({ req, action: "login_success", entityType: "user", entityId: user.id, description: "Inicio de sesion correcto" });
+
+  res.json({
+    token: signToken(user),
+    user: publicUser(publicData)
   });
 });
 
@@ -208,6 +214,7 @@ app.patch("/api/settings", requireAuth, requireRole("admin"), (req, res) => {
      ON CONFLICT(id) DO UPDATE SET company_name = excluded.company_name, tax_id = excluded.tax_id, phone = excluded.phone, address = excluded.address, updated_at = excluded.updated_at`
   ).run(req.user.company_id, req.user.company_id, settings.companyName, settings.taxId, settings.phone, settings.address, new Date().toISOString());
 
+  recordAuditEvent({ req, action: "settings_update", entityType: "settings", entityId: req.user.company_id, description: "Actualizo datos de empresa y membrete" });
   res.json({ settings: mapSettings(loadSettings(req.user.company_id)) });
 });
 
@@ -230,6 +237,7 @@ app.post("/api/settings/logo", requireAuth, requireRole("admin"), logoUpload.sin
     now,
     now
   );
+  recordAuditEvent({ req, action: "logo_update", entityType: "settings", entityId: req.user.company_id, description: "Actualizo logo institucional" });
   res.json({ settings: mapSettings(loadSettings(req.user.company_id)) });
 });
 
@@ -256,6 +264,7 @@ app.post("/api/units", requireAuth, requireRole("admin"), (req, res) => {
     unit.parentUnitId,
     unit.level
   );
+  recordAuditEvent({ req, action: "unit_create", entityType: "unit", entityId: unit.id, description: `Creo area ${unit.name}` });
   res.status(201).json({ unit });
 });
 
@@ -304,6 +313,7 @@ app.post("/api/users", requireAuth, requireRole("admin"), (req, res) => {
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   ).run(user.id, req.user.company_id, user.name, user.username, passwordHash, user.role, user.unitId, user.position, user.ci, user.phone);
 
+  recordAuditEvent({ req, action: "user_create", entityType: "user", entityId: user.id, description: `Creo usuario ${user.username}`, metadata: { role: user.role } });
   res.status(201).json({ user });
 });
 
@@ -516,6 +526,7 @@ app.post("/api/documents", requireAuth, requireRole("recepcion_principal", "func
      VALUES (?, ?, ?, ?, ?)`
   ).run(req.user.company_id, doc.id, doc.currentUnitId, doc.status, now);
 
+  recordAuditEvent({ req, action: "document_create", entityType: "document", entityId: doc.id, description: `Registro ${doc.code}`, metadata: { direction: doc.direction } });
   res.status(201).json({ document: getDocumentById(id, req.user.company_id) });
 });
 
@@ -551,6 +562,7 @@ app.patch("/api/documents/:id/status", requireAuth, (req, res) => {
     now
   );
 
+  recordAuditEvent({ req, action: "document_status", entityType: "document", entityId: doc.id, description: `Cambio estado a ${status}` });
   res.json({ document: db.prepare("SELECT * FROM documents WHERE id = ? AND company_id = ?").get(doc.id, req.user.company_id) });
 });
 
@@ -579,6 +591,7 @@ app.patch("/api/documents/:id/physical-received", requireAuth, (req, res) => {
     now
   );
 
+  recordAuditEvent({ req, action: "physical_received", entityType: "document", entityId: doc.id, description: "Marco recepcion fisica" });
   res.json({ document: db.prepare("SELECT * FROM documents WHERE id = ? AND company_id = ?").get(doc.id, req.user.company_id) });
 });
 
@@ -629,6 +642,7 @@ app.post("/api/documents/:id/derive", requireAuth, requireRole("recepcion_princi
      WHERE id = ?`
   ).run(units[0].id, units[0].id, units.length === 1 ? units[0].name : `${units.length} unidades derivadas`, "Derivado", now, doc.id);
 
+  recordAuditEvent({ req, action: "document_derive", entityType: "document", entityId: doc.id, description: `Derivo a ${units.length} unidad(es)`, metadata: { units: units.map((unit) => unit.name) } });
   res.json({ document: getDocumentById(doc.id, req.user.company_id) });
 });
 
@@ -696,6 +710,7 @@ app.post("/api/documents/:id/digital-file", requireAuth, documentUpload, (req, r
     now
   );
 
+  recordAuditEvent({ req, action: "document_upload", entityType: "document", entityId: doc.id, description: `Adjunto ${uploadedFiles.length} archivo(s)` });
   res.json({ document: getDocumentById(doc.id, req.user.company_id) });
 });
 
@@ -788,6 +803,23 @@ app.get("/api/public-lookups", requireAuth, requireRole("zow_owner"), (req, res)
     )
     .all();
   res.json({ lookups });
+});
+
+app.get("/api/audit", requireAuth, requireRole("admin", "zow_owner"), (req, res) => {
+  const params = [];
+  const companyFilter = req.user.role === "zow_owner" ? "" : "WHERE audit_events.company_id = ?";
+  if (companyFilter) params.push(req.user.company_id);
+  const events = db
+    .prepare(
+      `SELECT audit_events.*, companies.name AS company_name
+       FROM audit_events
+       LEFT JOIN companies ON companies.id = audit_events.company_id
+       ${companyFilter}
+       ORDER BY audit_events.created_at DESC
+       LIMIT 120`
+    )
+    .all(...params);
+  res.json({ events });
 });
 
 app.post("/api/companies", requireAuth, requireRole("zow_owner"), (req, res) => {
@@ -906,6 +938,7 @@ app.post("/api/companies", requireAuth, requireRole("zow_owner"), (req, res) => 
     return res.status(400).json({ error: error.message || "No se pudo crear la empresa" });
   }
 
+  recordAuditEvent({ req, action: "company_create", entityType: "company", entityId: company.id, description: `Creo empresa ${company.name}` });
   res.status(201).json({
     company: db.prepare("SELECT * FROM companies WHERE id = ?").get(company.id),
     adminUser: { id: adminUserId, username: company.adminUsername, name: company.adminName }
@@ -994,6 +1027,7 @@ app.patch("/api/companies/:id", requireAuth, requireRole("zow_owner"), (req, res
     return res.status(400).json({ error: error.message || "No se pudo actualizar la empresa" });
   }
 
+  recordAuditEvent({ req, action: "company_update", entityType: "company", entityId: existing.id, description: `Actualizo empresa ${company.name}`, metadata: { status: company.status, plan: company.plan } });
   res.json({ ok: true });
 });
 
@@ -1386,6 +1420,7 @@ function publicUser(user) {
     id: user.id,
     companyId: user.company_id,
     companyName: user.company_name || "",
+    companySlug: user.company_slug || "",
     name: user.name,
     username: user.username,
     role: user.role,
@@ -1571,6 +1606,24 @@ function recordPublicLookup(req, code, ci, documentItem) {
     getRequestIp(req),
     String(req.headers["user-agent"] || "").slice(0, 260),
     documentItem ? 1 : 0
+  );
+}
+
+function recordAuditEvent({ req, action, entityType = "", entityId = "", description = "", metadata = {} }) {
+  db.prepare(
+    `INSERT INTO audit_events (id, company_id, actor_user_id, actor_name, action, entity_type, entity_id, description, metadata, ip_address, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)`
+  ).run(
+    randomUUID(),
+    req.user?.company_id || null,
+    req.user?.id || null,
+    req.user?.name || "",
+    action,
+    entityType,
+    entityId,
+    description,
+    JSON.stringify(metadata || {}),
+    getRequestIp(req)
   );
 }
 

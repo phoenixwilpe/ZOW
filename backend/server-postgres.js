@@ -84,6 +84,7 @@ app.post("/api/public/documents/lookup", async (req, res) => {
     return res.status(400).json({ error: "Ingresa codigo de control y CI" });
   }
 
+  const companySlug = String(req.body.companySlug || req.query.companySlug || "").trim();
   const documentItem = await pg.get(
     `SELECT documents.id, documents.company_id, documents.code, documents.applicant_name, documents.reference, documents.subject,
             documents.status, documents.received_at, documents.updated_at,
@@ -95,8 +96,9 @@ app.post("/api/public/documents/lookup", async (req, res) => {
        AND lower(documents.applicant_ci) = lower(?)
        AND companies.status = 'active'
        AND (companies.ends_at = '' OR companies.ends_at >= ?)
+       AND (? = '' OR lower(companies.slug) = lower(?))
      LIMIT 1`,
-    [code, ci, todayIsoDate()]
+    [code, ci, todayIsoDate(), companySlug, companySlug]
   );
   await recordPublicLookup(req, code, ci, documentItem);
   if (!documentItem) return res.status(404).json({ error: "No se encontro una carpeta con esos datos" });
@@ -141,13 +143,16 @@ app.post("/api/auth/login", async (req, res) => {
 
   const publicData = await pg.get(
     `SELECT users.id, users.company_id, users.name, users.username, users.role, users.unit_id, users.position, users.ci, users.phone,
-            units.name AS unit_name, companies.name AS company_name, companies.plan, companies.billing_period, companies.starts_at, companies.ends_at, companies.status AS company_status
+            units.name AS unit_name, companies.name AS company_name, companies.slug AS company_slug, companies.plan, companies.billing_period, companies.starts_at, companies.ends_at, companies.status AS company_status
      FROM users
      JOIN units ON units.id = users.unit_id
      JOIN companies ON companies.id = users.company_id
      WHERE users.id = ?`,
     [user.id]
   );
+  req.user = publicData;
+  await ensureAuditSchema();
+  await recordAuditEvent({ req, action: "login_success", entityType: "user", entityId: user.id, description: "Inicio de sesion correcto" });
   res.json({ token: signToken(user), user: publicUser(publicData) });
 });
 
@@ -199,6 +204,7 @@ app.patch("/api/settings", requireAuth, requireRole("admin"), async (req, res) =
      ON CONFLICT(id) DO UPDATE SET company_name = excluded.company_name, tax_id = excluded.tax_id, phone = excluded.phone, address = excluded.address, updated_at = excluded.updated_at`,
     [req.user.company_id, req.user.company_id, settings.companyName, settings.taxId, settings.phone, settings.address]
   );
+  await recordAuditEvent({ req, action: "settings_update", entityType: "settings", entityId: req.user.company_id, description: "Actualizo datos de empresa y membrete" });
   res.json({ settings: await mapSettings(await loadSettings(req.user.company_id)) });
 });
 
@@ -228,6 +234,7 @@ app.post("/api/settings/logo", requireAuth, requireRole("admin"), logoUpload.sin
       now
     ]
   );
+  await recordAuditEvent({ req, action: "logo_update", entityType: "settings", entityId: req.user.company_id, description: "Actualizo logo institucional" });
   res.json({ settings: await mapSettings(await loadSettings(req.user.company_id)) });
 });
 
@@ -250,6 +257,7 @@ app.post("/api/units", requireAuth, requireRole("admin"), async (req, res) => {
     unit.parentUnitId,
     unit.level
   ]);
+  await recordAuditEvent({ req, action: "unit_create", entityType: "unit", entityId: unit.id, description: `Creo area ${unit.name}` });
   res.status(201).json({ unit });
 });
 
@@ -284,6 +292,7 @@ app.post("/api/users", requireAuth, requireRole("admin"), async (req, res) => {
      VALUES (?, ?, ?, ?, ?, ?::user_role, ?, ?, ?, ?)`,
     [user.id, req.user.company_id, user.name, user.username, bcrypt.hashSync(password, 12), user.role, user.unitId, user.position, user.ci, user.phone]
   );
+  await recordAuditEvent({ req, action: "user_create", entityType: "user", entityId: user.id, description: `Creo usuario ${user.username}`, metadata: { role: user.role } });
   res.status(201).json({ user });
 });
 
@@ -466,6 +475,7 @@ app.post("/api/documents", requireAuth, requireRole("recepcion_principal", "func
   });
 
   await attachUploadedFiles({ files, companyId: req.user.company_id, documentId: doc.id, userId: req.user.id, uploadedAt: now });
+  await recordAuditEvent({ req, action: "document_create", entityType: "document", entityId: doc.id, description: `Registro ${doc.code}`, metadata: { direction: doc.direction } });
   res.status(201).json({ document: await getDocumentById(id, req.user.company_id) });
 });
 
@@ -486,6 +496,7 @@ app.patch("/api/documents/:id/status", requireAuth, async (req, res) => {
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [randomUUID(), req.user.company_id, doc.id, doc.current_unit_id, doc.current_unit_id, "Cambio de estado", 0, String(req.body.comment || `Estado actualizado a ${status}.`), status, req.user.id, now]
   );
+  await recordAuditEvent({ req, action: "document_status", entityType: "document", entityId: doc.id, description: `Cambio estado a ${status}` });
   res.json({ document: await getDocumentById(doc.id, req.user.company_id) });
 });
 
@@ -496,6 +507,7 @@ app.patch("/api/documents/:id/physical-received", requireAuth, async (req, res) 
   const now = new Date().toISOString();
   const status = doc.status === "Reservado" ? "Recibido" : doc.status;
   await pg.run("UPDATE documents SET physical_received = true, status = ?, updated_at = ? WHERE id = ?", [status, now, doc.id]);
+  await recordAuditEvent({ req, action: "physical_received", entityType: "document", entityId: doc.id, description: "Marco recepcion fisica" });
   res.json({ document: await getDocumentById(doc.id, req.user.company_id) });
 });
 
@@ -532,6 +544,7 @@ app.post("/api/documents/:id/derive", requireAuth, requireRole("recepcion_princi
       [units[0].id, units[0].id, units.length === 1 ? units[0].name : `${units.length} unidades derivadas`, "Derivado", now, doc.id]
     );
   });
+  await recordAuditEvent({ req, action: "document_derive", entityType: "document", entityId: doc.id, description: `Derivo a ${units.length} unidad(es)`, metadata: { units: units.map((unit) => unit.name) } });
   res.json({ document: await getDocumentById(doc.id, req.user.company_id) });
 });
 
@@ -559,6 +572,7 @@ app.post("/api/documents/:id/digital-file", requireAuth, documentUpload, async (
     "UPDATE documents SET has_digital_file = true, digital_file_name = ?, digital_file_size = ?, digital_attached_at = ?, updated_at = ? WHERE id = ?",
     [primaryFile.originalname, primaryFile.size || 0, now, now, doc.id]
   );
+  await recordAuditEvent({ req, action: "document_upload", entityType: "document", entityId: doc.id, description: `Adjunto ${files.length} archivo(s)` });
   res.json({ document: await getDocumentById(doc.id, req.user.company_id) });
 });
 
@@ -653,6 +667,23 @@ app.get("/api/public-lookups", requireAuth, requireRole("zow_owner"), async (_re
   res.json({ lookups });
 });
 
+app.get("/api/audit", requireAuth, requireRole("admin", "zow_owner"), async (req, res) => {
+  await ensureAuditSchema();
+  const params = [];
+  const companyFilter = req.user.role === "zow_owner" ? "" : "WHERE audit_events.company_id = ?";
+  if (companyFilter) params.push(req.user.company_id);
+  const events = await pg.all(
+    `SELECT audit_events.*, companies.name AS company_name
+     FROM audit_events
+     LEFT JOIN companies ON companies.id = audit_events.company_id
+     ${companyFilter}
+     ORDER BY audit_events.created_at DESC
+     LIMIT 120`,
+    params
+  );
+  res.json({ events });
+});
+
 app.post("/api/companies", requireAuth, requireRole("zow_owner"), async (req, res) => {
   await ensureCompaniesSchema();
   const now = new Date().toISOString();
@@ -712,6 +743,7 @@ app.post("/api/companies", requireAuth, requireRole("zow_owner"), async (req, re
       }
     }
   });
+  await recordAuditEvent({ req, action: "company_create", entityType: "company", entityId: company.id, description: `Creo empresa ${company.name}` });
   res.status(201).json({ company: await pg.get("SELECT * FROM companies WHERE id = ?", [company.id]), adminUser: { id: adminUserId, username: company.adminUsername, name: company.adminName } });
 });
 
@@ -793,6 +825,7 @@ app.patch("/api/companies/:id", requireAuth, requireRole("zow_owner"), async (re
     ]);
     if (company.adminPassword) await client.run("UPDATE users SET password_hash = ? WHERE id = ?", [bcrypt.hashSync(company.adminPassword, 12), adminUser.id]);
   });
+  await recordAuditEvent({ req, action: "company_update", entityType: "company", entityId: existing.id, description: `Actualizo empresa ${company.name}`, metadata: { status: company.status, plan: company.plan } });
   res.json({ ok: true });
 });
 
@@ -865,6 +898,7 @@ function publicUser(user) {
     id: user.id,
     companyId: user.company_id,
     companyName: user.company_name || "",
+    companySlug: user.company_slug || "",
     name: user.name,
     username: user.username,
     role: user.role,
@@ -1031,6 +1065,53 @@ async function recordPublicLookup(req, code, ci, documentItem) {
       getRequestIp(req),
       String(req.headers["user-agent"] || "").slice(0, 260),
       Boolean(documentItem)
+    ]
+  );
+}
+
+let auditSchemaReady = null;
+
+async function ensureAuditSchema() {
+  if (!auditSchemaReady) {
+    auditSchemaReady = (async () => {
+      await pg.run(`
+        CREATE TABLE IF NOT EXISTS audit_events (
+          id text primary key,
+          company_id text,
+          actor_user_id text,
+          actor_name text not null default '',
+          action text not null,
+          entity_type text not null default '',
+          entity_id text not null default '',
+          description text not null default '',
+          metadata text not null default '',
+          ip_address text not null default '',
+          created_at timestamptz not null default now()
+        )
+      `);
+      await pg.run("CREATE INDEX IF NOT EXISTS idx_audit_events_company ON audit_events(company_id, created_at DESC)");
+      await pg.run("CREATE INDEX IF NOT EXISTS idx_audit_events_action ON audit_events(action)");
+    })();
+  }
+  await auditSchemaReady;
+}
+
+async function recordAuditEvent({ req, action, entityType = "", entityId = "", description = "", metadata = {} }) {
+  await ensureAuditSchema();
+  await pg.run(
+    `INSERT INTO audit_events (id, company_id, actor_user_id, actor_name, action, entity_type, entity_id, description, metadata, ip_address, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, now())`,
+    [
+      randomUUID(),
+      req.user?.company_id || null,
+      req.user?.id || null,
+      req.user?.name || "",
+      action,
+      entityType,
+      entityId,
+      description,
+      JSON.stringify(metadata || {}),
+      getRequestIp(req)
     ]
   );
 }

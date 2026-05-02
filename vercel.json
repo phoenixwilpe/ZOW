@@ -18,6 +18,10 @@
     {
       "source": "/consulta",
       "destination": "/consulta.html"
+    },
+    {
+      "source": "/consulta/:slug",
+      "destination": "/consulta.html"
     }
   ]
 }

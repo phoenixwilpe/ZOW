@@ -9,6 +9,7 @@ const codeInput = document.querySelector("#lookupCode");
 
 const params = new URLSearchParams(window.location.search);
 const codeFromUrl = params.get("codigo") || params.get("code") || "";
+const companySlug = decodeURIComponent(window.location.pathname.replace(/^\/consulta\/?/, "").split("/")[0] || "");
 if (codeFromUrl) codeInput.value = codeFromUrl;
 
 form.addEventListener("submit", async (event) => {
@@ -20,7 +21,8 @@ form.addEventListener("submit", async (event) => {
 
   const payload = {
     code: form.code.value.trim(),
-    ci: form.ci.value.trim()
+    ci: form.ci.value.trim(),
+    companySlug
   };
 
   try {
