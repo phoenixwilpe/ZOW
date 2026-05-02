@@ -452,11 +452,18 @@ h3 {
 .secondary-button,
 .ghost-button,
 .icon-button {
+  position: relative;
+  overflow: hidden;
   min-height: 40px;
   border-radius: 8px;
   border: 1px solid transparent;
   padding: 0 14px;
   font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  isolation: isolate;
 }
 
 .primary-button {
@@ -469,6 +476,7 @@ h3 {
 .primary-button:hover {
   background: var(--accent-dark);
   transform: translateY(-1px);
+  box-shadow: 0 16px 30px color-mix(in srgb, var(--accent) 28%, transparent);
 }
 
 .secondary-button {
@@ -481,6 +489,45 @@ h3 {
   background: linear-gradient(180deg, white, #fbfcfc);
   border-color: var(--line);
   color: var(--ink);
+  transition: transform 150ms ease, border-color 150ms ease, box-shadow 150ms ease, background 150ms ease;
+}
+
+.ghost-button:hover,
+.secondary-button:hover {
+  transform: translateY(-1px);
+  border-color: color-mix(in srgb, var(--accent) 28%, var(--line));
+  box-shadow: 0 10px 22px rgb(15 23 42 / 8%);
+}
+
+.button-icon {
+  width: 17px;
+  height: 17px;
+  display: inline-grid;
+  place-items: center;
+  flex: 0 0 auto;
+}
+
+.button-icon svg {
+  width: 17px;
+  height: 17px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.button-ripple {
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  background: currentColor;
+  opacity: 0.18;
+  transform: translate(-50%, -50%) scale(0);
+  pointer-events: none;
+  z-index: -1;
+  animation: buttonRipple 520ms ease-out;
 }
 
 .icon-button {
@@ -789,6 +836,51 @@ h3 {
 .admin-action-card:hover {
   border-color: color-mix(in srgb, var(--accent) 38%, white);
   background: var(--accent-tint);
+}
+
+.cloud-safe-note {
+  border: 1px solid color-mix(in srgb, var(--accent) 24%, var(--line));
+  border-radius: 8px;
+  padding: 14px 16px;
+  background:
+    linear-gradient(120deg, color-mix(in srgb, var(--accent-tint) 82%, white), white),
+    var(--panel);
+  display: grid;
+  gap: 4px;
+  box-shadow: 0 14px 34px rgb(15 23 42 / 5%);
+}
+
+.cloud-safe-note strong {
+  color: var(--accent-dark);
+}
+
+.cloud-safe-note span {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.surface-enter {
+  animation: surfaceEnter 360ms ease both;
+  animation-delay: var(--stagger, 0ms);
+}
+
+@keyframes surfaceEnter {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes buttonRipple {
+  to {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(18);
+  }
 }
 
 @keyframes logoSettle {

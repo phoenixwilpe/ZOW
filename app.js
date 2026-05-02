@@ -1379,6 +1379,7 @@ function render() {
         renderViewHeading();
         renderList();
         renderDetail();
+        enhanceInterface();
       })
       .catch(() => {
         renderMetrics();
@@ -1386,6 +1387,7 @@ function render() {
         renderViewHeading();
         renderList();
         renderDetail();
+        enhanceInterface();
       });
     return;
   }
@@ -1394,6 +1396,7 @@ function render() {
   renderViewHeading();
   renderList();
   renderDetail();
+  enhanceInterface();
 }
 
 async function renderWithRemoteData() {
@@ -1405,6 +1408,7 @@ async function renderWithRemoteData() {
   renderViewHeading();
   renderList();
   renderDetail();
+  enhanceInterface();
 }
 
 function renderSession() {
@@ -1846,6 +1850,11 @@ function renderZowAdmin(mode = "overview") {
       </article>
     </section>
 
+    <section class="cloud-safe-note">
+      <strong>Datos protegidos en la nube</strong>
+      <span>Empresas, usuarios, areas y documentos se leen desde PostgreSQL/Supabase. Un deploy de Vercel no debe borrar estos registros.</span>
+    </section>
+
     <div class="admin-tabs" role="tablist" aria-label="ZOW SaaS">
       <button class="${mode === "overview" ? "is-active" : ""}" type="button" data-zow-tab="overview">Empresas</button>
       <button class="${mode === "new" ? "is-active" : ""}" type="button" data-zow-tab="new">Nueva empresa</button>
@@ -2063,6 +2072,7 @@ function renderCompanyEditPanel(companyId) {
   `;
   document.querySelector("#cancelCompanyEdit")?.addEventListener("click", () => renderZowAdmin());
   document.querySelector("#zowCompanyEditForm")?.addEventListener("submit", handleZowCompanyEditSubmit);
+  enhanceInterface();
 }
 
 function renderCompanyCreatePanel() {
@@ -2840,6 +2850,98 @@ function escapeHtml(value) {
   return String(value ?? "").replace(/[&<>"']/g, (char) => {
     const entities = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#039;" };
     return entities[char];
+  });
+}
+
+const buttonIcons = {
+  ingresar: "login",
+  salir: "logout",
+  guardar: "save",
+  crear: "plus",
+  nueva: "plus",
+  nuevo: "plus",
+  editar: "edit",
+  sistemas: "grid",
+  suspender: "pause",
+  activar: "check",
+  volver: "back",
+  cancelar: "close",
+  imprimir: "print",
+  registrar: "send",
+  derivar: "send",
+  adjuntar: "clip",
+  descargar: "download",
+  buscar: "search"
+};
+
+const iconPaths = {
+  login: '<path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><path d="M10 17l5-5-5-5"/><path d="M15 12H3"/>',
+  logout: '<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="M16 17l5-5-5-5"/><path d="M21 12H9"/>',
+  save: '<path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2Z"/><path d="M17 21v-8H7v8"/><path d="M7 3v5h8"/>',
+  plus: '<path d="M12 5v14"/><path d="M5 12h14"/>',
+  edit: '<path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/>',
+  grid: '<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/>',
+  pause: '<path d="M8 5v14"/><path d="M16 5v14"/>',
+  check: '<path d="M20 6 9 17l-5-5"/>',
+  back: '<path d="M19 12H5"/><path d="M12 19l-7-7 7-7"/>',
+  close: '<path d="M18 6 6 18"/><path d="m6 6 12 12"/>',
+  print: '<path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><path d="M6 14h12v8H6z"/>',
+  send: '<path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/>',
+  clip: '<path d="m21.4 11.6-8.5 8.5a6 6 0 0 1-8.5-8.5l9.2-9.2a4 4 0 0 1 5.7 5.7l-9.2 9.2a2 2 0 1 1-2.8-2.8l8.5-8.5"/>',
+  download: '<path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/>',
+  search: '<circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>'
+};
+
+function enhanceInterface() {
+  decorateButtons();
+  animatePanels();
+}
+
+function decorateButtons() {
+  document.querySelectorAll("button").forEach((button) => {
+    if (!button.dataset.iconified) {
+      const iconName = resolveButtonIcon(button);
+      if (iconName && iconPaths[iconName]) {
+        button.insertAdjacentHTML("afterbegin", `<span class="button-icon" aria-hidden="true"><svg viewBox="0 0 24 24">${iconPaths[iconName]}</svg></span>`);
+      }
+      button.dataset.iconified = "true";
+    }
+    if (!button.dataset.fxBound) {
+      button.addEventListener("pointerdown", createButtonRipple);
+      button.dataset.fxBound = "true";
+    }
+  });
+}
+
+function resolveButtonIcon(button) {
+  if (button.classList.contains("icon-button")) return "";
+  const action = `${button.dataset.specialAction || ""} ${button.dataset.action || ""} ${button.dataset.companyStatus || ""}`.toLowerCase();
+  if (action.includes("download")) return "download";
+  if (action.includes("digital")) return "clip";
+  if (action.includes("control")) return "print";
+  if (action.includes("archivado") || action.includes("atendido") || action.includes("active")) return "check";
+  if (action.includes("suspended")) return "pause";
+  const text = button.textContent.trim().toLowerCase();
+  const key = Object.keys(buttonIcons).find((item) => text.includes(item));
+  return key ? buttonIcons[key] : "";
+}
+
+function createButtonRipple(event) {
+  const button = event.currentTarget;
+  if (button.disabled || button.classList.contains("icon-button")) return;
+  const rect = button.getBoundingClientRect();
+  const ripple = document.createElement("span");
+  ripple.className = "button-ripple";
+  ripple.style.left = `${event.clientX - rect.left}px`;
+  ripple.style.top = `${event.clientY - rect.top}px`;
+  button.appendChild(ripple);
+  ripple.addEventListener("animationend", () => ripple.remove(), { once: true });
+}
+
+function animatePanels() {
+  document.querySelectorAll(".admin-panel, .doc-card, .setup-overview article, .cloud-safe-note").forEach((item, index) => {
+    item.style.setProperty("--stagger", `${Math.min(index, 8) * 28}ms`);
+    item.classList.add("surface-enter");
   });
 }
 

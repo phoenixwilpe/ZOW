@@ -145,6 +145,22 @@ npm run check
 npm run dev
 ```
 
+## Cuidado con datos reales
+
+Los despliegues de Vercel no deben borrar datos de Supabase/PostgreSQL. Aun asi, no ejecutes seeds o migraciones destructivas sobre produccion.
+
+El script `scripts/migrate-sqlite-to-postgres.js` trabaja en modo seguro por defecto:
+
+```powershell
+node scripts\migrate-sqlite-to-postgres.js
+```
+
+En ese modo solo inserta registros que falten y no sobrescribe empresas, usuarios ni configuraciones existentes en la nube. Solo usa esta opcion si realmente quieres pisar datos de Supabase con la copia local:
+
+```powershell
+node scripts\migrate-sqlite-to-postgres.js --allow-updates
+```
+
 URLs locales:
 
 ```text
