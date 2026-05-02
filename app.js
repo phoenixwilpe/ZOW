@@ -414,6 +414,8 @@ let systemHealth = null;
 let systemHealthLoaded = false;
 let commercialLeads = [];
 let commercialLeadsLoaded = false;
+let leadFilters = { status: "all", system: "all", plan: "all", term: "" };
+let leadConversionDraft = null;
 
 const loginScreen = document.querySelector("#loginScreen");
 const loginForm = document.querySelector("#loginForm");
@@ -2090,6 +2092,10 @@ function renderZowAdmin(mode = "overview") {
     button.addEventListener("click", () => renderZowAdmin(button.dataset.zowTab));
   });
   document.querySelector("#zowCompanyForm")?.addEventListener("submit", handleZowCompanySubmit);
+  document.querySelector("#clearLeadConversion")?.addEventListener("click", () => {
+    leadConversionDraft = null;
+    renderZowAdmin("new");
+  });
   document.querySelector("#zowCompanyEditForm")?.addEventListener("submit", handleZowCompanyEditSubmit);
   document.querySelector("#refreshPublicLookups")?.addEventListener("click", async () => {
     publicLookupsLoaded = false;
@@ -2103,6 +2109,20 @@ function renderZowAdmin(mode = "overview") {
   document.querySelector("#refreshLeads")?.addEventListener("click", () => {
     commercialLeadsLoaded = false;
     renderZowAdmin("leads");
+  });
+  document.querySelector("#exportLeadsCsv")?.addEventListener("click", exportLeadsCsv);
+  document.querySelector("#clearLeadFilters")?.addEventListener("click", () => {
+    leadFilters = { status: "all", system: "all", plan: "all", term: "" };
+    renderZowAdmin("leads");
+  });
+  if (mode === "leads" && commercialLeadsLoaded) bindLeadFilters();
+  document.querySelectorAll("[data-lead-convert]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const lead = commercialLeads.find((item) => item.id === button.dataset.leadConvert);
+      if (!lead) return;
+      leadConversionDraft = lead;
+      renderZowAdmin("new");
+    });
   });
   document.querySelectorAll("[data-lead-status]").forEach((button) => {
     button.addEventListener("click", async () => {
@@ -2250,6 +2270,7 @@ function renderLeadsPanel() {
     `;
   }
 
+  const visibleLeads = getFilteredLeads();
   const newCount = commercialLeads.filter((lead) => lead.status === "nuevo").length;
   return `
     <section class="admin-panel">
@@ -2259,17 +2280,53 @@ function renderLeadsPanel() {
           <h3>Leads y solicitudes</h3>
           <span>${newCount} solicitud(es) nueva(s)</span>
         </div>
-        <button class="ghost-button" type="button" id="refreshLeads">Actualizar</button>
+        <div class="panel-actions">
+          <button class="ghost-button" type="button" id="exportLeadsCsv">Exportar CSV</button>
+          <button class="ghost-button" type="button" id="refreshLeads">Actualizar</button>
+        </div>
       </div>
-      ${commercialLeads.length ? renderLeadRows() : `<div class="empty-state"><strong>Sin solicitudes</strong><span>Las solicitudes del formulario comercial apareceran aqui.</span></div>`}
+      <form class="report-filter-grid lead-filter-grid" aria-label="Filtros de leads">
+        <label>
+          Estado
+          <select id="leadStatusFilter">
+            <option value="all" ${leadFilters.status === "all" ? "selected" : ""}>Todos</option>
+            ${leadStatusOptions(leadFilters.status)}
+          </select>
+        </label>
+        <label>
+          Sistema
+          <select id="leadSystemFilter">
+            <option value="all" ${leadFilters.system === "all" ? "selected" : ""}>Todos</option>
+            <option value="correspondencia" ${leadFilters.system === "correspondencia" ? "selected" : ""}>Correspondencia ZOW</option>
+            <option value="ventas_almacen" ${leadFilters.system === "ventas_almacen" ? "selected" : ""}>Zow Ventas-Almacen</option>
+            <option value="varios" ${leadFilters.system === "varios" ? "selected" : ""}>Varios sistemas</option>
+          </select>
+        </label>
+        <label>
+          Periodo
+          <select id="leadPlanFilter">
+            <option value="all" ${leadFilters.plan === "all" ? "selected" : ""}>Todos</option>
+            ${renderBillingPeriodOptions(leadFilters.plan)}
+          </select>
+        </label>
+        <label class="span-2">
+          Buscar
+          <input id="leadTermFilter" type="search" value="${escapeHtml(leadFilters.term)}" placeholder="empresa, contacto, telefono o correo" />
+        </label>
+        <button class="ghost-button" type="button" id="clearLeadFilters">Limpiar</button>
+      </form>
+      ${commercialLeads.length ? renderLeadRows(visibleLeads) : `<div class="empty-state"><strong>Sin solicitudes</strong><span>Las solicitudes del formulario comercial apareceran aqui.</span></div>`}
     </section>
   `;
 }
 
-function renderLeadRows() {
+function renderLeadRows(leads = getFilteredLeads()) {
+  if (!leads.length) {
+    return `<div class="empty-state"><strong>Sin resultados</strong><span>Ajusta los filtros para ver mas solicitudes comerciales.</span></div>`;
+  }
   return `
     <div class="admin-list compact-audit-list">
-      ${commercialLeads
+      ${leads
         .map(
           (lead) => `
             <article class="admin-row">
@@ -2282,7 +2339,10 @@ function renderLeadRows() {
               <div class="admin-row-meta">
                 <span class="status-pill ${lead.status === "nuevo" ? "derivado" : "recibido"}">${escapeHtml(leadStatusLabel(lead.status))}</span>
                 <span>${formatDateTime(lead.created_at)}</span>
+                ${lead.status !== "convertido" ? `<button class="primary-button small-action" type="button" data-lead-convert="${lead.id}">Crear empresa</button>` : ""}
                 <button class="ghost-button" type="button" data-lead-id="${lead.id}" data-lead-status="contactado">Contactado</button>
+                <button class="ghost-button" type="button" data-lead-id="${lead.id}" data-lead-status="demo_agendada">Demo</button>
+                <button class="ghost-button" type="button" data-lead-id="${lead.id}" data-lead-status="propuesta_enviada">Propuesta</button>
                 <button class="ghost-button" type="button" data-lead-id="${lead.id}" data-lead-status="convertido">Convertido</button>
                 <button class="ghost-button" type="button" data-lead-id="${lead.id}" data-lead-status="descartado">Descartar</button>
               </div>
@@ -2292,6 +2352,36 @@ function renderLeadRows() {
         .join("")}
     </div>
   `;
+}
+
+function bindLeadFilters() {
+  ["#leadStatusFilter", "#leadSystemFilter", "#leadPlanFilter", "#leadTermFilter"].forEach((selector) => {
+    const eventName = selector === "#leadTermFilter" ? "input" : "change";
+    document.querySelector(selector)?.addEventListener(eventName, () => {
+      leadFilters = {
+        status: document.querySelector("#leadStatusFilter")?.value || "all",
+        system: document.querySelector("#leadSystemFilter")?.value || "all",
+        plan: document.querySelector("#leadPlanFilter")?.value || "all",
+        term: document.querySelector("#leadTermFilter")?.value.trim().toLowerCase() || ""
+      };
+      renderZowAdmin("leads");
+    });
+  });
+}
+
+function getFilteredLeads() {
+  return commercialLeads.filter((lead) => {
+    if (leadFilters.status !== "all" && lead.status !== leadFilters.status) return false;
+    if (leadFilters.system !== "all" && lead.system_id !== leadFilters.system) return false;
+    if (leadFilters.plan !== "all" && lead.plan !== leadFilters.plan) return false;
+    if (leadFilters.term) {
+      const haystack = [lead.name, lead.company, lead.phone, lead.email, lead.message, lead.system_id, lead.plan, lead.status]
+        .join(" ")
+        .toLowerCase();
+      if (!haystack.includes(leadFilters.term)) return false;
+    }
+    return true;
+  });
 }
 
 async function loadCommercialLeads() {
@@ -2317,14 +2407,51 @@ function systemLeadLabel(systemId) {
   return labels[systemId] || systemId || "Sin sistema";
 }
 
+function leadStatuses() {
+  return ["nuevo", "contactado", "demo_agendada", "propuesta_enviada", "convertido", "descartado"];
+}
+
+function leadStatusOptions(selected = "nuevo") {
+  return leadStatuses()
+    .map((status) => `<option value="${status}" ${status === selected ? "selected" : ""}>${escapeHtml(leadStatusLabel(status))}</option>`)
+    .join("");
+}
+
 function leadStatusLabel(status) {
   const labels = {
     nuevo: "Nuevo",
     contactado: "Contactado",
+    demo_agendada: "Demo agendada",
+    propuesta_enviada: "Propuesta enviada",
     convertido: "Convertido",
     descartado: "Descartado"
   };
   return labels[status] || status || "Nuevo";
+}
+
+function exportLeadsCsv() {
+  const rows = getFilteredLeads().map((lead) => [
+    lead.created_at,
+    leadStatusLabel(lead.status),
+    lead.company,
+    lead.name,
+    lead.phone,
+    lead.email,
+    systemLeadLabel(lead.system_id),
+    billingPeriodLabel(lead.plan),
+    lead.message
+  ]);
+  const header = ["Fecha", "Estado", "Empresa", "Contacto", "Telefono", "Correo", "Sistema", "Periodo", "Mensaje"];
+  const csv = [header, ...rows].map((row) => row.map(csvCell).join(",")).join("\n");
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `leads-zow-${new Date().toISOString().slice(0, 10)}.csv`;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
 }
 
 function renderPublicLookupPanel() {
@@ -2573,6 +2700,14 @@ function renderCompanyEditPanel(companyId) {
 }
 
 function renderCompanyCreatePanel() {
+  const lead = leadConversionDraft;
+  const companyName = lead?.company || "";
+  const selectedSystems = lead ? leadSelectedSystems(lead) : ["correspondencia"];
+  const selectedBillingPeriod = lead?.plan || "mensual";
+  const contactName = lead?.name || "";
+  const contactEmail = lead?.email || "";
+  const contactPhone = lead?.phone || "";
+  const companySlug = companyName ? slugifyText(companyName) : "";
   return `
     <section class="admin-panel">
       <div class="admin-panel-head">
@@ -2581,15 +2716,20 @@ function renderCompanyCreatePanel() {
           <h3>Nueva empresa SaaS</h3>
         </div>
       </div>
+      ${
+        lead
+          ? `<div class="cloud-safe-note lead-conversion-note"><strong>Convirtiendo lead comercial</strong><span>${escapeHtml(companyName || "Solicitud sin empresa")} quedara marcado como convertido cuando se cree la empresa.</span><button class="ghost-button" type="button" id="clearLeadConversion">Usar formulario limpio</button></div>`
+          : ""
+      }
       <form class="admin-form" id="zowCompanyForm">
         <div class="form-grid">
           <label>
             Nombre de empresa
-            <input id="zowCompanyName" type="text" required />
+            <input id="zowCompanyName" type="text" value="${escapeHtml(companyName)}" required />
           </label>
           <label>
             Identificador
-            <input id="zowCompanySlug" type="text" placeholder="empresa-cliente" />
+            <input id="zowCompanySlug" type="text" value="${escapeHtml(companySlug)}" placeholder="empresa-cliente" />
           </label>
           <label>
             Plan
@@ -2602,7 +2742,7 @@ function renderCompanyCreatePanel() {
           <label>
             Periodo de membresia
             <select id="zowBillingPeriod">
-              ${renderBillingPeriodOptions("mensual")}
+              ${renderBillingPeriodOptions(selectedBillingPeriod)}
             </select>
           </label>
           <label>
@@ -2634,19 +2774,19 @@ function renderCompanyCreatePanel() {
           </label>
           <label>
             Contacto comercial
-            <input id="zowContactName" type="text" />
+            <input id="zowContactName" type="text" value="${escapeHtml(contactName)}" />
           </label>
           <label>
             Email contacto
-            <input id="zowContactEmail" type="email" />
+            <input id="zowContactEmail" type="email" value="${escapeHtml(contactEmail)}" />
           </label>
           <label>
             Celular contacto
-            <input id="zowContactPhone" type="tel" />
+            <input id="zowContactPhone" type="tel" value="${escapeHtml(contactPhone)}" />
           </label>
           <label>
             Usuario encargado
-            <input id="zowAdminUsername" type="email" required placeholder="sistema@empresa.com" />
+            <input id="zowAdminUsername" type="email" value="${escapeHtml(contactEmail)}" required placeholder="sistema@empresa.com" />
           </label>
           <label>
             Contrasena inicial
@@ -2654,11 +2794,11 @@ function renderCompanyCreatePanel() {
           </label>
           <label class="span-2">
             Nombre del encargado
-            <input id="zowAdminName" type="text" value="Encargado de Sistema" required />
+            <input id="zowAdminName" type="text" value="${escapeHtml(contactName || "Encargado de Sistema")}" required />
           </label>
           <fieldset class="span-2 system-checks">
             <legend>Sistemas contratados</legend>
-            ${renderSystemCheckboxes(["correspondencia"])}
+            ${renderSystemCheckboxes(selectedSystems)}
           </fieldset>
         </div>
         <div class="modal-actions">
@@ -2688,9 +2828,12 @@ async function handleZowCompanySubmit(event) {
     adminUsername: normalizeUsernameInput("#zowAdminUsername"),
     adminPassword: documentWindowValue("#zowAdminPassword").trim(),
     adminName: documentWindowValue("#zowAdminName").trim(),
-    systems: getCheckedValues("[data-system-check]")
+    systems: getCheckedValues("[data-system-check]"),
+    sourceLeadId: leadConversionDraft?.id || ""
   };
   await apiRequest("/companies", { method: "POST", body: payload });
+  leadConversionDraft = null;
+  commercialLeadsLoaded = false;
   await loadRemoteConfig();
   renderMetrics();
   renderZowAdmin();
@@ -2758,6 +2901,22 @@ function renderBillingPeriodOptions(selected = "mensual") {
   return ["mensual", "trimestral", "semestral", "anual"]
     .map((period) => `<option value="${period}" ${period === selected ? "selected" : ""}>${billingPeriodLabel(period)}</option>`)
     .join("");
+}
+
+function leadSelectedSystems(lead) {
+  if (lead?.system_id === "varios") return ["correspondencia", "ventas_almacen"].filter((systemId) => saasSystems.some((system) => system.id === systemId));
+  if (lead?.system_id && saasSystems.some((system) => system.id === lead.system_id)) return [lead.system_id];
+  return ["correspondencia"].filter((systemId) => saasSystems.some((system) => system.id === systemId));
+}
+
+function slugifyText(value) {
+  return String(value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 42);
 }
 
 function membershipRemainingLabel(endDate) {
@@ -3314,7 +3473,8 @@ function auditActionLabel(action) {
     company_update: "Empresa actualizada",
     company_status: "Estado de empresa",
     company_systems_update: "Accesos SaaS",
-    lead_status: "Estado de lead"
+    lead_status: "Estado de lead",
+    lead_convert: "Lead convertido"
   };
   return labels[action] || action || "Evento";
 }

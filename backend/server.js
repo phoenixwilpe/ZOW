@@ -864,7 +864,7 @@ app.get("/api/leads", requireAuth, requireRole("zow_owner"), (req, res) => {
 
 app.patch("/api/leads/:id/status", requireAuth, requireRole("zow_owner"), (req, res) => {
   const status = String(req.body.status || "").trim();
-  if (!["nuevo", "contactado", "convertido", "descartado"].includes(status)) return res.status(400).json({ error: "Estado invalido" });
+  if (!["nuevo", "contactado", "demo_agendada", "propuesta_enviada", "convertido", "descartado"].includes(status)) return res.status(400).json({ error: "Estado invalido" });
   const lead = db.prepare("SELECT id, company FROM leads WHERE id = ?").get(req.params.id);
   if (!lead) return res.status(404).json({ error: "Lead no encontrado" });
   db.prepare("UPDATE leads SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?").run(status, lead.id);
@@ -909,7 +909,8 @@ app.post("/api/companies", requireAuth, requireRole("zow_owner"), (req, res) => 
     endsAt: membership.endsAt,
     adminName: String(req.body.adminName || "Encargado de Sistema").trim(),
     adminUsername: normalizeUsername(req.body.adminUsername),
-    adminPassword: String(req.body.adminPassword || "").trim()
+    adminPassword: String(req.body.adminPassword || "").trim(),
+    sourceLeadId: String(req.body.sourceLeadId || "").trim()
   };
   const requestedSystems = Array.isArray(req.body.systems) && req.body.systems.length ? req.body.systems : ["correspondencia"];
 
@@ -999,6 +1000,9 @@ app.post("/api/companies", requireAuth, requireRole("zow_owner"), (req, res) => 
       const system = db.prepare("SELECT id FROM saas_systems WHERE id = ?").get(systemId);
       if (system) insertAccess.run(company.id, system.id, company.plan, company.startsAt, company.endsAt, now);
     });
+    if (company.sourceLeadId) {
+      db.prepare("UPDATE leads SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?").run("convertido", company.sourceLeadId);
+    }
     db.exec("COMMIT");
   } catch (error) {
     db.exec("ROLLBACK");
@@ -1006,6 +1010,9 @@ app.post("/api/companies", requireAuth, requireRole("zow_owner"), (req, res) => 
   }
 
   recordAuditEvent({ req, action: "company_create", entityType: "company", entityId: company.id, description: `Creo empresa ${company.name}` });
+  if (company.sourceLeadId) {
+    recordAuditEvent({ req, action: "lead_convert", entityType: "lead", entityId: company.sourceLeadId, description: `Convirtio lead en empresa ${company.name}` });
+  }
   res.status(201).json({
     company: db.prepare("SELECT * FROM companies WHERE id = ?").get(company.id),
     adminUser: { id: adminUserId, username: company.adminUsername, name: company.adminName }

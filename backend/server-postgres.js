@@ -736,7 +736,7 @@ app.get("/api/leads", requireAuth, requireRole("zow_owner"), async (_req, res) =
 app.patch("/api/leads/:id/status", requireAuth, requireRole("zow_owner"), async (req, res) => {
   await ensureLeadsSchema();
   const status = String(req.body.status || "").trim();
-  if (!["nuevo", "contactado", "convertido", "descartado"].includes(status)) return res.status(400).json({ error: "Estado invalido" });
+  if (!["nuevo", "contactado", "demo_agendada", "propuesta_enviada", "convertido", "descartado"].includes(status)) return res.status(400).json({ error: "Estado invalido" });
   const lead = await pg.get("SELECT id, company FROM leads WHERE id = ?", [req.params.id]);
   if (!lead) return res.status(404).json({ error: "Lead no encontrado" });
   await pg.run("UPDATE leads SET status = ?, updated_at = now() WHERE id = ?", [status, lead.id]);
@@ -783,6 +783,7 @@ app.post("/api/companies", requireAuth, requireRole("zow_owner"), async (req, re
     adminName: String(req.body.adminName || "Encargado de Sistema").trim(),
     adminUsername: normalizeUsername(req.body.adminUsername),
     adminPassword: String(req.body.adminPassword || "").trim(),
+    sourceLeadId: String(req.body.sourceLeadId || "").trim(),
     systems: Array.isArray(req.body.systems) ? req.body.systems.map(String) : ["correspondencia"]
   };
   if (!company.name || !company.slug || !company.adminUsername || !company.adminPassword) return res.status(400).json({ error: "Faltan datos obligatorios" });
@@ -819,8 +820,14 @@ app.post("/api/companies", requireAuth, requireRole("zow_owner"), async (req, re
         );
       }
     }
+    if (company.sourceLeadId) {
+      await client.run("UPDATE leads SET status = 'convertido', updated_at = now() WHERE id = ?", [company.sourceLeadId]);
+    }
   });
   await recordAuditEvent({ req, action: "company_create", entityType: "company", entityId: company.id, description: `Creo empresa ${company.name}` });
+  if (company.sourceLeadId) {
+    await recordAuditEvent({ req, action: "lead_convert", entityType: "lead", entityId: company.sourceLeadId, description: `Convirtio lead en empresa ${company.name}` });
+  }
   res.status(201).json({ company: await pg.get("SELECT * FROM companies WHERE id = ?", [company.id]), adminUser: { id: adminUserId, username: company.adminUsername, name: company.adminName } });
 });
 
