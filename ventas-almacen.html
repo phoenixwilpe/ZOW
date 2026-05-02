@@ -37,6 +37,13 @@
             <p class="eyebrow">Acceso seguro</p>
             <h2>Ingresar al sistema</h2>
           </div>
+          <div class="login-notice" role="note">
+            <strong>¡Bienvenido!</strong>
+            <p>
+              NOTA: Este sistema puede integrarse al control del Directorio Activo de funcionarios de la empresa. En ese caso,
+              el usuario y la contrasena seran los mismos asignados para acceder al equipo y correo institucional.
+            </p>
+          </div>
           <label>
             Usuario
             <input id="loginUsername" type="text" autocomplete="username" required placeholder="usuario@empresa.com" />
@@ -47,6 +54,7 @@
           </label>
           <button class="primary-button" type="submit">Ingresar</button>
           <p id="loginError" class="form-error"></p>
+          <p class="copyright-line">© 2026 Wilmar Peiando B. Todos los derechos reservados.</p>
         </form>
       </div>
     </section>
@@ -59,6 +67,7 @@
         </div>
         <div class="topbar-actions">
           <span class="user-badge" id="currentUserBadge"></span>
+          <span class="copyright-line is-inline">© 2026 Wilmar Peiando B.</span>
           <button class="ghost-button" id="logoutBtn" type="button">Salir</button>
         </div>
       </header>
