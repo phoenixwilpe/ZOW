@@ -3,7 +3,10 @@ const bcrypt = require("bcryptjs");
 const LOGIN_WINDOW_MS = 15 * 60 * 1000;
 const LOGIN_LOCK_MS = 15 * 60 * 1000;
 const LOGIN_MAX_ATTEMPTS = 6;
+const PUBLIC_LOOKUP_WINDOW_MS = 10 * 60 * 1000;
+const PUBLIC_LOOKUP_MAX_ATTEMPTS = 20;
 const loginAttempts = new Map();
+const publicLookupAttempts = new Map();
 const dummyPasswordHash = bcrypt.hashSync("zow-invalid-password-placeholder", 12);
 
 function applySecurity(app, express) {
@@ -99,6 +102,26 @@ function clearLoginFailures(key) {
   loginAttempts.delete(key);
 }
 
+function getPublicLookupStatus(req) {
+  const key = ipKey(req);
+  const now = Date.now();
+  const entry = publicLookupAttempts.get(key);
+  if (!entry || entry.firstAttemptAt + PUBLIC_LOOKUP_WINDOW_MS < now) {
+    publicLookupAttempts.set(key, { count: 1, firstAttemptAt: now });
+    return { allowed: true, key, remaining: PUBLIC_LOOKUP_MAX_ATTEMPTS - 1 };
+  }
+
+  entry.count += 1;
+  publicLookupAttempts.set(key, entry);
+  const retryAfterSeconds = Math.ceil((entry.firstAttemptAt + PUBLIC_LOOKUP_WINDOW_MS - now) / 1000);
+  return {
+    allowed: entry.count <= PUBLIC_LOOKUP_MAX_ATTEMPTS,
+    key,
+    remaining: Math.max(PUBLIC_LOOKUP_MAX_ATTEMPTS - entry.count, 0),
+    retryAfterSeconds
+  };
+}
+
 function safePasswordCompare(password, hash) {
   return bcrypt.compareSync(String(password || ""), hash || dummyPasswordHash);
 }
@@ -113,10 +136,13 @@ function validatePasswordStrength(password) {
 }
 
 function loginKey(req, username) {
-  const ip = String(req.ip || req.headers["x-forwarded-for"] || req.socket?.remoteAddress || "unknown")
+  return `${ipKey(req)}:${String(username || "").toLowerCase()}`;
+}
+
+function ipKey(req) {
+  return String(req.ip || req.headers["x-forwarded-for"] || req.socket?.remoteAddress || "unknown")
     .split(",")[0]
     .trim();
-  return `${ip}:${String(username || "").toLowerCase()}`;
 }
 
 module.exports = {
@@ -125,6 +151,7 @@ module.exports = {
   getLoginStatus,
   recordLoginFailure,
   clearLoginFailures,
+  getPublicLookupStatus,
   safePasswordCompare,
   validatePasswordStrength
 };

@@ -404,6 +404,8 @@ let notifications = [];
 let editingUserId = null;
 let companies = [];
 let saasSystems = [];
+let publicLookups = [];
+let publicLookupsLoaded = false;
 
 const loginScreen = document.querySelector("#loginScreen");
 const loginForm = document.querySelector("#loginForm");
@@ -962,6 +964,8 @@ async function loadRemoteConfig() {
     saasSystems = systemsResponse.systems || [];
     const companiesResponse = await apiRequest("/companies");
     companies = companiesResponse.companies || [];
+    publicLookups = [];
+    publicLookupsLoaded = false;
     units = [];
     users = [];
     documents = [];
@@ -1841,9 +1845,10 @@ function renderZowAdmin(mode = "overview") {
     <div class="admin-tabs" role="tablist" aria-label="ZOW SaaS">
       <button class="${mode === "overview" ? "is-active" : ""}" type="button" data-zow-tab="overview">Empresas</button>
       <button class="${mode === "new" ? "is-active" : ""}" type="button" data-zow-tab="new">Nueva empresa</button>
+      <button class="${mode === "security" ? "is-active" : ""}" type="button" data-zow-tab="security">Seguridad</button>
     </div>
 
-    ${mode === "new" ? renderCompanyCreatePanel() : renderCompanyListPanel()}
+    ${mode === "new" ? renderCompanyCreatePanel() : mode === "security" ? renderPublicLookupPanel() : renderCompanyListPanel()}
   `;
 
   emptyDetail.classList.add("hidden");
@@ -1853,6 +1858,10 @@ function renderZowAdmin(mode = "overview") {
   });
   document.querySelector("#zowCompanyForm")?.addEventListener("submit", handleZowCompanySubmit);
   document.querySelector("#zowCompanyEditForm")?.addEventListener("submit", handleZowCompanyEditSubmit);
+  document.querySelector("#refreshPublicLookups")?.addEventListener("click", async () => {
+    publicLookupsLoaded = false;
+    renderZowAdmin("security");
+  });
   document.querySelectorAll("[data-company-systems]").forEach((button) => {
     button.addEventListener("click", () => renderCompanySystemsPanel(button.dataset.companySystems));
   });
@@ -1971,6 +1980,79 @@ function renderCompanyListPanel() {
       </div>
     </section>
   `;
+}
+
+function renderPublicLookupPanel() {
+  if (!publicLookupsLoaded) {
+    loadPublicLookups();
+    return `
+      <section class="admin-panel">
+        <div class="admin-panel-head">
+          <div>
+            <p class="eyebrow">Seguridad</p>
+            <h3>Consultas publicas</h3>
+          </div>
+        </div>
+        <div class="empty-state"><strong>Cargando auditoria</strong><span>Revisando las consultas realizadas desde QR y pagina publica.</span></div>
+      </section>
+    `;
+  }
+
+  return `
+    <section class="admin-panel">
+      <div class="admin-panel-head">
+        <div>
+          <p class="eyebrow">Seguridad</p>
+          <h3>Consultas publicas recientes</h3>
+        </div>
+        <button class="ghost-button" type="button" id="refreshPublicLookups">Actualizar</button>
+      </div>
+      <section class="cloud-safe-note">
+        <strong>Auditoria de consulta externa</strong>
+        <span>El CI no se guarda visible: se registra como huella SHA-256 para validar abuso sin exponer datos personales.</span>
+      </section>
+      ${publicLookups.length ? renderPublicLookupRows() : `<div class="empty-state"><strong>Sin consultas publicas</strong><span>Aun no hay busquedas desde QR o desde /consulta.</span></div>`}
+    </section>
+  `;
+}
+
+function renderPublicLookupRows() {
+  return `
+    <div class="admin-list compact-audit-list">
+      ${publicLookups
+        .map(
+          (lookup) => `
+            <article class="admin-row">
+              <div>
+                <strong>${escapeHtml(lookup.code || "Sin codigo")}</strong>
+                <span>${escapeHtml(lookup.company_name || "Sin empresa asociada")} / ${escapeHtml(lookup.applicant_name || "No encontrado")}</span>
+                <span>${escapeHtml(lookup.user_agent || "Sin navegador").slice(0, 120)}</span>
+              </div>
+              <div class="admin-row-meta">
+                <span class="${lookup.found ? "ok-text" : "danger-text"}">${lookup.found ? "Encontrado" : "Fallido"}</span>
+                <span>IP: ${escapeHtml(lookup.ip_address || "Sin IP")}</span>
+                <span>${formatDateTime(lookup.created_at)}</span>
+              </div>
+            </article>
+          `
+        )
+        .join("")}
+    </div>
+  `;
+}
+
+async function loadPublicLookups() {
+  try {
+    const response = await apiRequest("/public-lookups");
+    publicLookups = response.lookups || [];
+    publicLookupsLoaded = true;
+    renderZowAdmin("security");
+  } catch (error) {
+    publicLookupsLoaded = true;
+    publicLookups = [];
+    alert(error.message || "No se pudo cargar auditoria publica");
+    renderZowAdmin("security");
+  }
 }
 
 function renderCompanyEditPanel(companyId) {

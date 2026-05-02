@@ -113,6 +113,18 @@ function initDb() {
       FOREIGN KEY (uploaded_by) REFERENCES users(id)
     );
 
+    CREATE TABLE IF NOT EXISTS public_lookup_audit (
+      id TEXT PRIMARY KEY,
+      company_id TEXT,
+      document_id TEXT,
+      code TEXT NOT NULL DEFAULT '',
+      ci_hash TEXT NOT NULL DEFAULT '',
+      ip_address TEXT NOT NULL DEFAULT '',
+      user_agent TEXT NOT NULL DEFAULT '',
+      found INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    );
+
     CREATE TABLE IF NOT EXISTS organization_settings (
       id TEXT PRIMARY KEY,
       company_id TEXT NOT NULL DEFAULT 'company-default',
@@ -310,6 +322,7 @@ function migrateSchema() {
   ensureColumn("documents", "applicant_phone", "TEXT NOT NULL DEFAULT ''");
   ensureColumn("documents", "sheet_count", "INTEGER NOT NULL DEFAULT 0");
   ensureColumn("documents", "received_at", "TEXT NOT NULL DEFAULT ''");
+  ensureColumn("public_lookup_audit", "user_agent", "TEXT NOT NULL DEFAULT ''");
   migrateTenantTables();
   db.prepare("UPDATE units SET company_id = COALESCE(NULLIF(company_id, ''), 'company-default')").run();
   db.prepare("UPDATE users SET company_id = COALESCE(NULLIF(company_id, ''), 'company-default')").run();

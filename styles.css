@@ -1113,11 +1113,24 @@ h3 {
   line-height: 1.5;
 }
 
+.public-consult-legal {
+  margin: 12px 0 0;
+  border-top: 1px solid rgb(23 38 43 / 10%);
+  padding-top: 12px;
+  color: #697d82;
+  font-size: 0.78rem;
+  line-height: 1.45;
+}
+
 .public-copyright {
   padding: 0 18px 22px;
   color: #61787d;
   font-size: 0.82rem;
   text-align: center;
+}
+
+.compact-audit-list .admin-row {
+  grid-template-columns: minmax(0, 1fr) minmax(180px, auto);
 }
 
 @media (max-width: 560px) {

@@ -186,12 +186,26 @@ create table if not exists document_files (
   uploaded_at timestamptz not null default now()
 );
 
+create table if not exists public_lookup_audit (
+  id text primary key,
+  company_id text,
+  document_id text,
+  code text not null default '',
+  ci_hash text not null default '',
+  ip_address text not null default '',
+  user_agent text not null default '',
+  found boolean not null default false,
+  created_at timestamptz not null default now()
+);
+
 create index if not exists idx_users_company on users(company_id);
 create index if not exists idx_units_company on units(company_id);
 create index if not exists idx_documents_company on documents(company_id);
 create index if not exists idx_documents_current_unit on documents(current_unit_id);
 create index if not exists idx_movements_document on movements(document_id);
 create index if not exists idx_document_recipients_unit on document_recipients(company_id, unit_id);
+create index if not exists idx_public_lookup_audit_created on public_lookup_audit(created_at);
+create index if not exists idx_public_lookup_audit_company on public_lookup_audit(company_id);
 
 alter table companies enable row level security;
 alter table units enable row level security;

@@ -46,12 +46,12 @@ function renderResult(documentItem) {
     <div class="public-result-status">${escapeHtml(documentItem.status)}</div>
     <dl>
       <div><dt>Empresa</dt><dd>${escapeHtml(documentItem.companyName)}</dd></div>
-      <div><dt>Código</dt><dd>${escapeHtml(documentItem.code)}</dd></div>
+      <div><dt>Codigo</dt><dd>${escapeHtml(documentItem.code)}</dd></div>
       <div><dt>Solicitante</dt><dd>${escapeHtml(documentItem.applicantName || "Registrado")}</dd></div>
       <div><dt>Referencia</dt><dd>${escapeHtml(documentItem.reference || documentItem.subject || "Sin referencia")}</dd></div>
-      <div><dt>Área actual</dt><dd>${escapeHtml(documentItem.currentArea)}</dd></div>
-      <div><dt>Recepción</dt><dd>${formatPublicDate(documentItem.receivedAt)}</dd></div>
-      <div><dt>Última actualización</dt><dd>${formatPublicDate(documentItem.updatedAt)}</dd></div>
+      <div><dt>Area actual</dt><dd>${escapeHtml(documentItem.currentArea)}</dd></div>
+      <div><dt>Recepcion</dt><dd>${formatPublicDate(documentItem.receivedAt)}</dd></div>
+      <div><dt>Ultima actualizacion</dt><dd>${formatPublicDate(documentItem.updatedAt)}</dd></div>
     </dl>
   `;
 }

@@ -5,7 +5,7 @@ const cors = require("cors");
 const multer = require("multer");
 const bcrypt = require("bcryptjs");
 const QRCode = require("qrcode");
-const { randomUUID } = require("node:crypto");
+const { createHash, randomUUID } = require("node:crypto");
 const { createClient } = require("@supabase/supabase-js");
 const pg = require("./pg");
 const { signToken, requireAuth, requireRole, canSeeDocument } = require("./auth-postgres");
@@ -15,6 +15,7 @@ const {
   getLoginStatus,
   recordLoginFailure,
   clearLoginFailures,
+  getPublicLookupStatus,
   safePasswordCompare,
   validatePasswordStrength
 } = require("./security");
@@ -70,7 +71,13 @@ app.get("/api/public/qr", async (req, res) => {
 
 app.post("/api/public/documents/lookup", async (req, res) => {
   await ensureCompaniesSchema();
+  await ensurePublicLookupAuditSchema();
   await suspendExpiredCompanies();
+  const lookupStatus = getPublicLookupStatus(req);
+  if (!lookupStatus.allowed) {
+    res.setHeader("Retry-After", String(lookupStatus.retryAfterSeconds));
+    return res.status(429).json({ error: "Demasiadas consultas. Intenta nuevamente en unos minutos." });
+  }
   const code = String(req.body.code || "").trim();
   const ci = String(req.body.ci || "").trim();
   if (!code || !ci || code.length > 40 || ci.length > 40) {
@@ -78,7 +85,7 @@ app.post("/api/public/documents/lookup", async (req, res) => {
   }
 
   const documentItem = await pg.get(
-    `SELECT documents.code, documents.applicant_name, documents.reference, documents.subject,
+    `SELECT documents.id, documents.company_id, documents.code, documents.applicant_name, documents.reference, documents.subject,
             documents.status, documents.received_at, documents.updated_at,
             units.name AS current_unit_name, companies.name AS company_name
      FROM documents
@@ -91,6 +98,7 @@ app.post("/api/public/documents/lookup", async (req, res) => {
      LIMIT 1`,
     [code, ci, todayIsoDate()]
   );
+  await recordPublicLookup(req, code, ci, documentItem);
   if (!documentItem) return res.status(404).json({ error: "No se encontro una carpeta con esos datos" });
 
   res.json({
@@ -630,6 +638,21 @@ app.get("/api/companies", requireAuth, requireRole("zow_owner"), async (_req, re
   res.json({ companies });
 });
 
+app.get("/api/public-lookups", requireAuth, requireRole("zow_owner"), async (_req, res) => {
+  await ensurePublicLookupAuditSchema();
+  const lookups = await pg.all(
+    `SELECT public_lookup_audit.id, public_lookup_audit.code, public_lookup_audit.ip_address,
+            public_lookup_audit.user_agent, public_lookup_audit.found, public_lookup_audit.created_at,
+            companies.name AS company_name, documents.applicant_name
+     FROM public_lookup_audit
+     LEFT JOIN companies ON companies.id = public_lookup_audit.company_id
+     LEFT JOIN documents ON documents.id = public_lookup_audit.document_id
+     ORDER BY public_lookup_audit.created_at DESC
+     LIMIT 80`
+  );
+  res.json({ lookups });
+});
+
 app.post("/api/companies", requireAuth, requireRole("zow_owner"), async (req, res) => {
   await ensureCompaniesSchema();
   const now = new Date().toISOString();
@@ -961,9 +984,55 @@ async function ensureSettingsSchema() {
 let companiesSchemaReady;
 async function ensureCompaniesSchema() {
   if (!companiesSchemaReady) {
-    companiesSchemaReady = pg.run("ALTER TABLE companies ADD COLUMN IF NOT EXISTS billing_period text not null default 'mensual'");
+    companiesSchemaReady = (async () => {
+      await pg.run("ALTER TABLE companies ADD COLUMN IF NOT EXISTS billing_period text not null default 'mensual'");
+      await pg.run("ALTER TABLE companies ADD COLUMN IF NOT EXISTS starts_at text not null default ''");
+      await pg.run("ALTER TABLE companies ADD COLUMN IF NOT EXISTS ends_at text not null default ''");
+    })();
   }
   await companiesSchemaReady;
+}
+
+let publicLookupAuditSchemaReady = null;
+
+async function ensurePublicLookupAuditSchema() {
+  if (!publicLookupAuditSchemaReady) {
+    publicLookupAuditSchemaReady = (async () => {
+      await pg.run(`
+        CREATE TABLE IF NOT EXISTS public_lookup_audit (
+          id text primary key,
+          company_id text,
+          document_id text,
+          code text not null default '',
+          ci_hash text not null default '',
+          ip_address text not null default '',
+          user_agent text not null default '',
+          found boolean not null default false,
+          created_at timestamptz not null default now()
+        )
+      `);
+      await pg.run("CREATE INDEX IF NOT EXISTS idx_public_lookup_audit_created ON public_lookup_audit(created_at)");
+      await pg.run("CREATE INDEX IF NOT EXISTS idx_public_lookup_audit_company ON public_lookup_audit(company_id)");
+    })();
+  }
+  await publicLookupAuditSchemaReady;
+}
+
+async function recordPublicLookup(req, code, ci, documentItem) {
+  await pg.run(
+    `INSERT INTO public_lookup_audit (id, company_id, document_id, code, ci_hash, ip_address, user_agent, found, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, now())`,
+    [
+      randomUUID(),
+      documentItem?.company_id || null,
+      documentItem?.id || null,
+      code,
+      hashLookupValue(ci),
+      getRequestIp(req),
+      String(req.headers["user-agent"] || "").slice(0, 260),
+      Boolean(documentItem)
+    ]
+  );
 }
 
 async function suspendExpiredCompanies() {
@@ -1000,6 +1069,17 @@ function normalizeDateInput(value) {
 
 function todayIsoDate() {
   return new Date().toISOString().slice(0, 10);
+}
+
+function hashLookupValue(value) {
+  return createHash("sha256").update(String(value || "").trim().toLowerCase()).digest("hex");
+}
+
+function getRequestIp(req) {
+  return String(req.ip || req.headers["x-forwarded-for"] || req.socket?.remoteAddress || "unknown")
+    .split(",")[0]
+    .trim()
+    .slice(0, 80);
 }
 
 function addPeriod(startDate, billingPeriod) {

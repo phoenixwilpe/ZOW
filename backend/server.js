@@ -7,7 +7,7 @@ const bcrypt = require("bcryptjs");
 const QRCode = require("qrcode");
 const path = require("node:path");
 const fs = require("node:fs");
-const { randomUUID } = require("node:crypto");
+const { createHash, randomUUID } = require("node:crypto");
 const { db, initDb } = require("./db");
 const { signToken, requireAuth, requireRole, canSeeDocument } = require("./auth");
 const {
@@ -16,6 +16,7 @@ const {
   getLoginStatus,
   recordLoginFailure,
   clearLoginFailures,
+  getPublicLookupStatus,
   safePasswordCompare,
   validatePasswordStrength
 } = require("./security");
@@ -69,6 +70,11 @@ app.get("/api/public/qr", async (req, res) => {
 
 app.post("/api/public/documents/lookup", (req, res) => {
   suspendExpiredCompanies();
+  const lookupStatus = getPublicLookupStatus(req);
+  if (!lookupStatus.allowed) {
+    res.setHeader("Retry-After", String(lookupStatus.retryAfterSeconds));
+    return res.status(429).json({ error: "Demasiadas consultas. Intenta nuevamente en unos minutos." });
+  }
   const code = String(req.body.code || "").trim();
   const ci = String(req.body.ci || "").trim();
   if (!code || !ci || code.length > 40 || ci.length > 40) {
@@ -77,7 +83,7 @@ app.post("/api/public/documents/lookup", (req, res) => {
 
   const documentItem = db
     .prepare(
-      `SELECT documents.code, documents.applicant_name, documents.reference, documents.subject,
+      `SELECT documents.id, documents.company_id, documents.code, documents.applicant_name, documents.reference, documents.subject,
               documents.status, documents.received_at, documents.updated_at,
               units.name AS current_unit_name, companies.name AS company_name
        FROM documents
@@ -90,6 +96,7 @@ app.post("/api/public/documents/lookup", (req, res) => {
        LIMIT 1`
     )
     .get(code, ci, todayIsoDate());
+  recordPublicLookup(req, code, ci, documentItem);
   if (!documentItem) return res.status(404).json({ error: "No se encontro una carpeta con esos datos" });
 
   res.json({
@@ -765,6 +772,22 @@ app.get("/api/companies", requireAuth, requireRole("zow_owner"), (req, res) => {
     )
     .all(...enabledPanelSystemIds, showVentasSaas ? 1 : 0);
   res.json({ companies });
+});
+
+app.get("/api/public-lookups", requireAuth, requireRole("zow_owner"), (req, res) => {
+  const lookups = db
+    .prepare(
+      `SELECT public_lookup_audit.id, public_lookup_audit.code, public_lookup_audit.ip_address,
+              public_lookup_audit.user_agent, public_lookup_audit.found, public_lookup_audit.created_at,
+              companies.name AS company_name, documents.applicant_name
+       FROM public_lookup_audit
+       LEFT JOIN companies ON companies.id = public_lookup_audit.company_id
+       LEFT JOIN documents ON documents.id = public_lookup_audit.document_id
+       ORDER BY public_lookup_audit.created_at DESC
+       LIMIT 80`
+    )
+    .all();
+  res.json({ lookups });
 });
 
 app.post("/api/companies", requireAuth, requireRole("zow_owner"), (req, res) => {
@@ -1535,6 +1558,22 @@ function suspendExpiredCompanies() {
   ).run("suspended", new Date().toISOString(), "active");
 }
 
+function recordPublicLookup(req, code, ci, documentItem) {
+  db.prepare(
+    `INSERT INTO public_lookup_audit (id, company_id, document_id, code, ci_hash, ip_address, user_agent, found, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)`
+  ).run(
+    randomUUID(),
+    documentItem?.company_id || null,
+    documentItem?.id || null,
+    code,
+    hashLookupValue(ci),
+    getRequestIp(req),
+    String(req.headers["user-agent"] || "").slice(0, 260),
+    documentItem ? 1 : 0
+  );
+}
+
 function normalizeMembership(body = {}) {
   const billingPeriod = normalizeBillingPeriod(body.billingPeriod || body.billing_period || "mensual");
   const startsAt = normalizeDateInput(body.startsAt) || todayIsoDate();
@@ -1559,6 +1598,17 @@ function normalizeDateInput(value) {
 
 function todayIsoDate() {
   return new Date().toISOString().slice(0, 10);
+}
+
+function hashLookupValue(value) {
+  return createHash("sha256").update(String(value || "").trim().toLowerCase()).digest("hex");
+}
+
+function getRequestIp(req) {
+  return String(req.ip || req.headers["x-forwarded-for"] || req.socket?.remoteAddress || "unknown")
+    .split(",")[0]
+    .trim()
+    .slice(0, 80);
 }
 
 function addPeriod(startDate, billingPeriod) {
