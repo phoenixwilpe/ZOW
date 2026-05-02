@@ -412,6 +412,8 @@ let reportFilters = { unit: "", status: "all", from: "", to: "", deadline: "all"
 let auditFilters = { action: "all", from: "", to: "", term: "" };
 let systemHealth = null;
 let systemHealthLoaded = false;
+let commercialLeads = [];
+let commercialLeadsLoaded = false;
 
 const loginScreen = document.querySelector("#loginScreen");
 const loginForm = document.querySelector("#loginForm");
@@ -974,6 +976,8 @@ async function loadRemoteConfig() {
     publicLookupsLoaded = false;
     systemHealth = null;
     systemHealthLoaded = false;
+    commercialLeads = [];
+    commercialLeadsLoaded = false;
     units = [];
     users = [];
     documents = [];
@@ -2072,11 +2076,12 @@ function renderZowAdmin(mode = "overview") {
     <div class="admin-tabs" role="tablist" aria-label="ZOW SaaS">
       <button class="${mode === "overview" ? "is-active" : ""}" type="button" data-zow-tab="overview">Empresas</button>
       <button class="${mode === "new" ? "is-active" : ""}" type="button" data-zow-tab="new">Nueva empresa</button>
+      <button class="${mode === "leads" ? "is-active" : ""}" type="button" data-zow-tab="leads">Leads</button>
       <button class="${mode === "security" ? "is-active" : ""}" type="button" data-zow-tab="security">Seguridad</button>
       <button class="${mode === "health" ? "is-active" : ""}" type="button" data-zow-tab="health">Estado</button>
     </div>
 
-    ${mode === "new" ? renderCompanyCreatePanel() : mode === "security" ? renderPublicLookupPanel() : mode === "health" ? renderSystemHealthPanel() : renderCompanyListPanel()}
+    ${mode === "new" ? renderCompanyCreatePanel() : mode === "leads" ? renderLeadsPanel() : mode === "security" ? renderPublicLookupPanel() : mode === "health" ? renderSystemHealthPanel() : renderCompanyListPanel()}
   `;
 
   emptyDetail.classList.add("hidden");
@@ -2094,6 +2099,20 @@ function renderZowAdmin(mode = "overview") {
   document.querySelector("#refreshSystemHealth")?.addEventListener("click", () => {
     systemHealthLoaded = false;
     renderZowAdmin("health");
+  });
+  document.querySelector("#refreshLeads")?.addEventListener("click", () => {
+    commercialLeadsLoaded = false;
+    renderZowAdmin("leads");
+  });
+  document.querySelectorAll("[data-lead-status]").forEach((button) => {
+    button.addEventListener("click", async () => {
+      await apiRequest(`/leads/${button.dataset.leadId}/status`, {
+        method: "PATCH",
+        body: { status: button.dataset.leadStatus }
+      });
+      commercialLeadsLoaded = false;
+      renderZowAdmin("leads");
+    });
   });
   document.querySelectorAll("[data-company-systems]").forEach((button) => {
     button.addEventListener("click", () => renderCompanySystemsPanel(button.dataset.companySystems));
@@ -2213,6 +2232,99 @@ function renderCompanyListPanel() {
       </div>
     </section>
   `;
+}
+
+function renderLeadsPanel() {
+  if (!commercialLeadsLoaded) {
+    loadCommercialLeads();
+    return `
+      <section class="admin-panel">
+        <div class="admin-panel-head">
+          <div>
+            <p class="eyebrow">Comercial</p>
+            <h3>Solicitudes recibidas</h3>
+          </div>
+        </div>
+        <div class="empty-state"><strong>Cargando leads</strong><span>Revisando solicitudes de la web SYSTEM ZOW SAAS.</span></div>
+      </section>
+    `;
+  }
+
+  const newCount = commercialLeads.filter((lead) => lead.status === "nuevo").length;
+  return `
+    <section class="admin-panel">
+      <div class="admin-panel-head">
+        <div>
+          <p class="eyebrow">Comercial</p>
+          <h3>Leads y solicitudes</h3>
+          <span>${newCount} solicitud(es) nueva(s)</span>
+        </div>
+        <button class="ghost-button" type="button" id="refreshLeads">Actualizar</button>
+      </div>
+      ${commercialLeads.length ? renderLeadRows() : `<div class="empty-state"><strong>Sin solicitudes</strong><span>Las solicitudes del formulario comercial apareceran aqui.</span></div>`}
+    </section>
+  `;
+}
+
+function renderLeadRows() {
+  return `
+    <div class="admin-list compact-audit-list">
+      ${commercialLeads
+        .map(
+          (lead) => `
+            <article class="admin-row">
+              <div>
+                <strong>${escapeHtml(lead.company || "Sin empresa")}</strong>
+                <span>${escapeHtml(lead.name)} / ${escapeHtml(lead.phone)} / ${escapeHtml(lead.email || "Sin correo")}</span>
+                <span>${escapeHtml(systemLeadLabel(lead.system_id))} / Plan ${escapeHtml(billingPeriodLabel(lead.plan))}</span>
+                <span>${escapeHtml(lead.message || "Sin mensaje")}</span>
+              </div>
+              <div class="admin-row-meta">
+                <span class="status-pill ${lead.status === "nuevo" ? "derivado" : "recibido"}">${escapeHtml(leadStatusLabel(lead.status))}</span>
+                <span>${formatDateTime(lead.created_at)}</span>
+                <button class="ghost-button" type="button" data-lead-id="${lead.id}" data-lead-status="contactado">Contactado</button>
+                <button class="ghost-button" type="button" data-lead-id="${lead.id}" data-lead-status="convertido">Convertido</button>
+                <button class="ghost-button" type="button" data-lead-id="${lead.id}" data-lead-status="descartado">Descartar</button>
+              </div>
+            </article>
+          `
+        )
+        .join("")}
+    </div>
+  `;
+}
+
+async function loadCommercialLeads() {
+  try {
+    const response = await apiRequest("/leads");
+    commercialLeads = response.leads || [];
+    commercialLeadsLoaded = true;
+    renderZowAdmin("leads");
+  } catch (error) {
+    commercialLeads = [];
+    commercialLeadsLoaded = true;
+    alert(error.message || "No se pudieron cargar los leads");
+    renderZowAdmin("leads");
+  }
+}
+
+function systemLeadLabel(systemId) {
+  const labels = {
+    correspondencia: "Correspondencia ZOW",
+    ventas_almacen: "Zow Ventas-Almacen",
+    varios: "Varios sistemas"
+  };
+  return labels[systemId] || systemId || "Sin sistema";
+}
+
+function leadStatusLabel(status) {
+  const labels = {
+    nuevo: "Nuevo",
+    contactado: "Contactado",
+    convertido: "Convertido",
+    descartado: "Descartado"
+  };
+  return labels[status] || status || "Nuevo";
 }
 
 function renderPublicLookupPanel() {
@@ -3201,7 +3313,8 @@ function auditActionLabel(action) {
     company_create: "Empresa creada",
     company_update: "Empresa actualizada",
     company_status: "Estado de empresa",
-    company_systems_update: "Accesos SaaS"
+    company_systems_update: "Accesos SaaS",
+    lead_status: "Estado de lead"
   };
   return labels[action] || action || "Evento";
 }

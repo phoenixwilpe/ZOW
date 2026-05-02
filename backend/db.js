@@ -139,6 +139,20 @@ function initDb() {
       created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
     );
 
+    CREATE TABLE IF NOT EXISTS leads (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      company TEXT NOT NULL DEFAULT '',
+      phone TEXT NOT NULL DEFAULT '',
+      email TEXT NOT NULL DEFAULT '',
+      system_id TEXT NOT NULL DEFAULT '',
+      plan TEXT NOT NULL DEFAULT '',
+      message TEXT NOT NULL DEFAULT '',
+      status TEXT NOT NULL DEFAULT 'nuevo',
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    );
+
     CREATE TABLE IF NOT EXISTS organization_settings (
       id TEXT PRIMARY KEY,
       company_id TEXT NOT NULL DEFAULT 'company-default',
@@ -339,6 +353,7 @@ function migrateSchema() {
   ensureColumn("public_lookup_audit", "user_agent", "TEXT NOT NULL DEFAULT ''");
   ensureColumn("audit_events", "metadata", "TEXT NOT NULL DEFAULT ''");
   ensureColumn("audit_events", "ip_address", "TEXT NOT NULL DEFAULT ''");
+  ensureColumn("leads", "status", "TEXT NOT NULL DEFAULT 'nuevo'");
   migrateTenantTables();
   db.prepare("UPDATE units SET company_id = COALESCE(NULLIF(company_id, ''), 'company-default')").run();
   db.prepare("UPDATE users SET company_id = COALESCE(NULLIF(company_id, ''), 'company-default')").run();

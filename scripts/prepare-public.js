@@ -8,6 +8,8 @@ const files = [
   "index.html",
   "app.js",
   "styles.css",
+  "system-zow.html",
+  "system-zow.js",
   "consulta.html",
   "consulta.js",
   "ventas-almacen.html",

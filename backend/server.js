@@ -68,6 +68,16 @@ app.get("/api/public/qr", async (req, res) => {
   res.send(buffer);
 });
 
+app.post("/api/leads", (req, res) => {
+  const lead = readLeadPayload(req.body);
+  if (!lead.name || !lead.company || !lead.phone) return res.status(400).json({ error: "Nombre, empresa y celular son obligatorios" });
+  db.prepare(
+    `INSERT INTO leads (id, name, company, phone, email, system_id, plan, message, status, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'nuevo', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`
+  ).run(lead.id, lead.name, lead.company, lead.phone, lead.email, lead.systemId, lead.plan, lead.message);
+  res.status(201).json({ ok: true });
+});
+
 app.post("/api/public/documents/lookup", (req, res) => {
   suspendExpiredCompanies();
   const lookupStatus = getPublicLookupStatus(req);
@@ -847,6 +857,21 @@ app.get("/api/system-health", requireAuth, requireRole("zow_owner"), (req, res) 
   });
 });
 
+app.get("/api/leads", requireAuth, requireRole("zow_owner"), (req, res) => {
+  const leads = db.prepare("SELECT * FROM leads ORDER BY created_at DESC LIMIT 200").all();
+  res.json({ leads });
+});
+
+app.patch("/api/leads/:id/status", requireAuth, requireRole("zow_owner"), (req, res) => {
+  const status = String(req.body.status || "").trim();
+  if (!["nuevo", "contactado", "convertido", "descartado"].includes(status)) return res.status(400).json({ error: "Estado invalido" });
+  const lead = db.prepare("SELECT id, company FROM leads WHERE id = ?").get(req.params.id);
+  if (!lead) return res.status(404).json({ error: "Lead no encontrado" });
+  db.prepare("UPDATE leads SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?").run(status, lead.id);
+  recordAuditEvent({ req, action: "lead_status", entityType: "lead", entityId: lead.id, description: `Cambio lead ${lead.company} a ${status}` });
+  res.json({ ok: true });
+});
+
 app.get("/api/audit", requireAuth, requireRole("admin", "zow_owner"), (req, res) => {
   const params = [];
   const companyFilter = req.user.role === "zow_owner" ? "" : "WHERE audit_events.company_id = ?";
@@ -1506,6 +1531,19 @@ function slugify(value) {
 
 function normalizeUsername(value) {
   return String(value || "").trim().toLowerCase();
+}
+
+function readLeadPayload(body) {
+  return {
+    id: randomUUID(),
+    name: String(body.name || "").trim().slice(0, 140),
+    company: String(body.company || "").trim().slice(0, 160),
+    phone: String(body.phone || "").trim().slice(0, 60),
+    email: String(body.email || "").trim().toLowerCase().slice(0, 160),
+    systemId: String(body.system || body.systemId || "").trim().slice(0, 80),
+    plan: String(body.plan || "").trim().slice(0, 40),
+    message: String(body.message || "").trim().slice(0, 1000)
+  };
 }
 
 function sqlPlaceholders(items) {

@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>SYSTEM ZOW SAAS | Sistemas SaaS para empresas</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body class="system-zow-site">
+    <header class="site-header">
+      <a class="site-brand" href="/system-zow" aria-label="SYSTEM ZOW SAAS">
+        <img src="assets/brand/zow-systems-logo-transparent.png" alt="SYSTEM ZOW SAAS" />
+        <span>SAAS</span>
+      </a>
+      <nav class="site-nav" aria-label="Navegacion comercial">
+        <a href="#sistemas">Sistemas</a>
+        <a href="#planes">Planes</a>
+        <a href="#contacto">Contacto</a>
+        <a class="site-login-link" href="/panel">Panel privado</a>
+      </nav>
+    </header>
+
+    <main>
+      <section class="site-hero">
+        <div class="site-hero-copy">
+          <p class="eyebrow">Software SaaS para empresas publicas y privadas</p>
+          <h1>SYSTEM ZOW SAAS</h1>
+          <p>
+            Centraliza procesos, usuarios, permisos, reportes y auditoria en sistemas web listos para operar desde cualquier lugar.
+          </p>
+          <div class="site-hero-actions">
+            <a class="primary-button" href="#contacto">Solicitar acceso</a>
+            <a class="ghost-button" href="/correspondencia">Ver Correspondencia ZOW</a>
+          </div>
+        </div>
+        <div class="site-hero-panel" aria-label="Resumen SaaS">
+          <span>Panel ZOW</span>
+          <strong>Empresas, planes y sistemas en un solo control</strong>
+          <div>
+            <small>Multiempresa</small>
+            <small>PostgreSQL/Supabase</small>
+            <small>Vercel</small>
+            <small>Auditoria</small>
+          </div>
+        </div>
+      </section>
+
+      <section class="site-section" id="sistemas">
+        <div class="site-section-head">
+          <p class="eyebrow">Catalogo</p>
+          <h2>Sistemas SaaS disponibles</h2>
+        </div>
+        <div class="product-grid">
+          <article class="product-card">
+            <img src="assets/brand/zow-correspondencia-login-logo-transparent.png" alt="Correspondencia ZOW" />
+            <div>
+              <span>Disponible</span>
+              <h3>Correspondencia ZOW</h3>
+              <p>Recepcion documental, derivaciones, hoja de control con QR, archivo digital, reportes y auditoria.</p>
+              <a href="/correspondencia">Ingresar al sistema</a>
+            </div>
+          </article>
+          <article class="product-card">
+            <img src="assets/brand/zow-ventas-almacen-logo.png" alt="Zow Ventas-Almacen" />
+            <div>
+              <span>En desarrollo</span>
+              <h3>Zow Ventas-Almacen</h3>
+              <p>Ventas, comprobantes, inventario, stock, caja, clientes, productos y control operativo comercial.</p>
+              <a href="#contacto">Solicitar informacion</a>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <section class="site-section site-band" id="planes">
+        <div class="site-section-head">
+          <p class="eyebrow">Planes flexibles</p>
+          <h2>Contrata por periodo</h2>
+        </div>
+        <div class="plan-grid">
+          <article><span>Mensual</span><strong>Inicio rapido</strong><small>Ideal para probar y validar operacion.</small></article>
+          <article><span>Trimestral</span><strong>Implementacion</strong><small>Para empresas que estan ordenando procesos.</small></article>
+          <article><span>Semestral</span><strong>Crecimiento</strong><small>Mejor continuidad y soporte operativo.</small></article>
+          <article><span>Anual</span><strong>Institucional</strong><small>Para operaciones estables y mayor planificacion.</small></article>
+        </div>
+      </section>
+
+      <section class="site-section contact-section" id="contacto">
+        <div class="site-section-head">
+          <p class="eyebrow">Contacto</p>
+          <h2>Solicita una demo o acceso</h2>
+          <p>Registraremos tu solicitud en el Panel ZOW para hacer seguimiento comercial.</p>
+        </div>
+        <form class="lead-form" id="leadForm">
+          <label>Nombre completo<input name="name" type="text" required /></label>
+          <label>Empresa<input name="company" type="text" required /></label>
+          <label>Celular<input name="phone" type="tel" required /></label>
+          <label>Correo<input name="email" type="email" placeholder="opcional" /></label>
+          <label>
+            Sistema de interes
+            <select name="system">
+              <option value="correspondencia">Correspondencia ZOW</option>
+              <option value="ventas_almacen">Zow Ventas-Almacen</option>
+              <option value="varios">Varios sistemas</option>
+            </select>
+          </label>
+          <label>
+            Plan estimado
+            <select name="plan">
+              <option value="mensual">Mensual</option>
+              <option value="trimestral">Trimestral</option>
+              <option value="semestral">Semestral</option>
+              <option value="anual">Anual</option>
+            </select>
+          </label>
+          <label class="span-2">Mensaje<textarea name="message" rows="4" placeholder="Cuéntanos que necesita tu empresa"></textarea></label>
+          <button class="primary-button" type="submit">Enviar solicitud</button>
+          <p class="form-error" id="leadMessage" aria-live="polite"></p>
+        </form>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <span>© 2026 SYSTEM ZOW SAAS. Derecho de autor: Wilmar Peinado B.</span>
+      <a href="/panel">Acceso privado</a>
+    </footer>
+    <script src="system-zow.js"></script>
+  </body>
+</html>
