@@ -399,7 +399,7 @@ let currentUser = loadSession();
 let selectedId = documents[0]?.id ?? null;
 let activeView = "dashboard";
 let movementCache = {};
-let organizationSettings = { companyName: "Empresa sin configurar" };
+let organizationSettings = { companyName: "Empresa sin configurar", taxId: "", phone: "", address: "", logoUrl: "", logoName: "" };
 let notifications = [];
 let editingUserId = null;
 let companies = [];
@@ -2340,7 +2340,7 @@ function renderCompanyPanel() {
       <div class="admin-panel-head">
         <div>
           <p class="eyebrow">Empresa</p>
-          <h3>Datos de la organizacion</h3>
+          <h3>Datos de la organizacion y membrete</h3>
         </div>
       </div>
       <form class="admin-form" id="organizationForm">
@@ -2349,6 +2349,29 @@ function renderCompanyPanel() {
             Nombre de la empresa
             <input id="organizationName" type="text" value="${escapeHtml(organizationSettings.companyName || "")}" required />
           </label>
+          <label>
+            NIT / Identificacion tributaria
+            <input id="organizationTaxId" type="text" value="${escapeHtml(organizationSettings.taxId || "")}" placeholder="Opcional" />
+          </label>
+          <label>
+            Telefono institucional
+            <input id="organizationPhone" type="text" value="${escapeHtml(organizationSettings.phone || "")}" placeholder="Opcional" />
+          </label>
+          <label class="span-2">
+            Direccion
+            <input id="organizationAddress" type="text" value="${escapeHtml(organizationSettings.address || "")}" placeholder="Opcional" />
+          </label>
+          <label class="span-2">
+            Logo para hoja de control PNG
+            <input id="organizationLogo" type="file" accept="image/png" />
+          </label>
+        </div>
+        <div class="letterhead-preview">
+          ${organizationSettings.logoUrl ? `<img src="${escapeHtml(organizationSettings.logoUrl)}" alt="Logo institucional" />` : `<span>Sin logo configurado</span>`}
+          <div>
+            <strong>${escapeHtml(organizationSettings.companyName || "Empresa sin configurar")}</strong>
+            <small>${escapeHtml([organizationSettings.taxId, organizationSettings.phone, organizationSettings.address].filter(Boolean).join(" / ") || "Estos datos apareceran en la hoja de control.")}</small>
+          </div>
         </div>
         <button class="primary-button" type="submit">Guardar empresa</button>
       </form>
@@ -2618,16 +2641,28 @@ async function handleAdminUnitSubmit(event) {
 
 async function handleOrganizationSubmit(event) {
   event.preventDefault();
-  const companyName = documentWindowValue("#organizationName").trim();
+  const payload = {
+    companyName: documentWindowValue("#organizationName").trim(),
+    taxId: documentWindowValue("#organizationTaxId").trim(),
+    phone: documentWindowValue("#organizationPhone").trim(),
+    address: documentWindowValue("#organizationAddress").trim()
+  };
+  const logoFile = document.querySelector("#organizationLogo")?.files?.[0];
 
   if (sessionStorage.getItem(TOKEN_KEY)) {
-    const response = await apiRequest("/settings", { method: "PATCH", body: { companyName } });
+    let response = await apiRequest("/settings", { method: "PATCH", body: payload });
     organizationSettings = response.settings;
+    if (logoFile) {
+      const formData = new FormData();
+      formData.append("logo", logoFile);
+      response = await apiRequest("/settings/logo", { method: "POST", body: formData });
+      organizationSettings = response.settings;
+    }
   } else {
-    organizationSettings = { companyName };
+    organizationSettings = { ...organizationSettings, ...payload };
   }
 
-  renderAdmin();
+  renderAdmin("company");
   renderSession();
 }
 
@@ -2741,6 +2776,14 @@ function printControlSheet(item) {
   const unit = units.find((unitItem) => unitItem.id === item.currentUnitId);
   const printable = window.open("", "_blank", "width=900,height=720");
   if (!printable) return;
+  const companyDetails = [
+    organizationSettings.taxId ? `NIT/ID: ${organizationSettings.taxId}` : "",
+    organizationSettings.phone ? `Tel.: ${organizationSettings.phone}` : "",
+    organizationSettings.address || ""
+  ].filter(Boolean);
+  const logoMarkup = organizationSettings.logoUrl
+    ? `<img class="company-logo" src="${escapeHtml(organizationSettings.logoUrl)}" alt="Logo institucional" />`
+    : `<div class="logo-placeholder">Logo</div>`;
 
   printable.document.write(`
     <!doctype html>
@@ -2749,14 +2792,20 @@ function printControlSheet(item) {
         <meta charset="UTF-8" />
         <title>Hoja de control ${escapeHtml(item.code)}</title>
         <style>
-          body { font-family: Arial, sans-serif; color: #17262b; padding: 32px; }
-          h1 { margin: 0 0 6px; font-size: 24px; }
+          body { font-family: Arial, sans-serif; color: #17262b; padding: 30px; }
+          h1 { margin: 0 0 4px; font-size: 22px; }
           h2 { margin: 24px 0 10px; font-size: 16px; text-transform: uppercase; }
-          .head { display: flex; justify-content: space-between; gap: 24px; border-bottom: 2px solid #17262b; padding-bottom: 18px; }
+          .head { display: grid; grid-template-columns: 96px 1fr auto; align-items: center; gap: 18px; border-bottom: 2px solid #17262b; padding-bottom: 16px; }
+          .company-logo { width: 86px; max-height: 86px; object-fit: contain; }
+          .logo-placeholder { width: 84px; height: 84px; display: grid; place-items: center; border: 1px dashed #8aa0a6; color: #6b7f85; font-size: 12px; }
+          .company-meta { display: grid; gap: 3px; color: #52676d; font-size: 12px; line-height: 1.35; }
+          .system-label { margin-top: 6px; color: #17262b; font-weight: 700; }
           .code { border: 2px solid #17262b; padding: 12px 18px; font-size: 20px; font-weight: 800; text-align: center; }
+          .code span { display: block; margin-bottom: 4px; font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; color: #52676d; }
           table { width: 100%; border-collapse: collapse; margin-top: 14px; }
           th, td { border: 1px solid #8aa0a6; padding: 10px; text-align: left; vertical-align: top; }
           th { width: 190px; background: #eef4f5; }
+          .control-note { margin-top: 18px; padding: 10px 12px; border-left: 4px solid #17262b; background: #f4f8f8; font-size: 12px; color: #52676d; }
           .signatures { display: grid; grid-template-columns: 1fr 1fr; gap: 36px; margin-top: 56px; }
           .signature { border-top: 1px solid #17262b; padding-top: 8px; text-align: center; }
           @media print { button { display: none; } body { padding: 12px; } }
@@ -2765,11 +2814,15 @@ function printControlSheet(item) {
       <body>
         <button onclick="window.print()">Imprimir</button>
         <section class="head">
+          ${logoMarkup}
           <div>
-            <h1>Correspondencia ZOW</h1>
-            <span>${escapeHtml(organizationSettings.companyName || "Empresa sin configurar")} / Hoja de control documental</span>
+            <h1>${escapeHtml(organizationSettings.companyName || "Empresa sin configurar")}</h1>
+            <div class="company-meta">
+              ${companyDetails.map((detail) => `<span>${escapeHtml(detail)}</span>`).join("")}
+              <span class="system-label">Correspondencia ZOW / Hoja de control documental</span>
+            </div>
           </div>
-          <div class="code">${escapeHtml(item.code)}</div>
+          <div class="code"><span>Codigo de control</span>${escapeHtml(item.code)}</div>
         </section>
 
         <h2>Datos de recepcion</h2>
@@ -2792,6 +2845,10 @@ function printControlSheet(item) {
           <tr><th>Archivo digital</th><td>${escapeHtml(item.hasDigitalFile ? item.fileRef : "Pendiente de escaneo")}</td></tr>
           <tr><th>Anexos</th><td>${escapeHtml(item.attachments || "Sin anexos")}</td></tr>
         </table>
+
+        <div class="control-note">
+          Esta hoja acompana la carpeta fisica y permite consultar el estado digital mediante el codigo de control.
+        </div>
 
         <div class="signatures">
           <div class="signature">Recepcion</div>

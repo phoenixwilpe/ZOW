@@ -1028,6 +1028,45 @@ h3 {
   gap: 14px;
 }
 
+.letterhead-preview {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 12px;
+  background: #ffffff;
+}
+
+.letterhead-preview img {
+  width: 64px;
+  height: 64px;
+  object-fit: contain;
+}
+
+.letterhead-preview > span {
+  width: 64px;
+  height: 64px;
+  display: grid;
+  place-items: center;
+  border: 1px dashed var(--line);
+  border-radius: 8px;
+  color: var(--muted);
+  font-size: 12px;
+  text-align: center;
+}
+
+.letterhead-preview div {
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+}
+
+.letterhead-preview small {
+  color: var(--muted);
+  line-height: 1.4;
+}
+
 .admin-row-meta {
   display: flex;
   flex-wrap: wrap;

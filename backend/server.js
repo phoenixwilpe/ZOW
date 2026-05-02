@@ -39,11 +39,18 @@ const uploadsDir = process.env.UPLOADS_DIR || (process.env.VERCEL ? "/tmp/zow-up
 const enabledPanelSystemIds = process.env.ENABLE_VENTAS_SAAS === "true" ? ["correspondencia", "ventas_almacen"] : ["correspondencia"];
 const showVentasSaas = process.env.ENABLE_VENTAS_SAAS === "true";
 fs.mkdirSync(uploadsDir, { recursive: true });
+const logosDir = path.join(uploadsDir, "logos");
+fs.mkdirSync(logosDir, { recursive: true });
 
 const upload = multer({
   dest: uploadsDir,
   limits: { fileSize: 20 * 1024 * 1024, files: 20 },
   fileFilter: fileFilterForDocuments
+});
+const logoUpload = multer({
+  dest: logosDir,
+  limits: { fileSize: 600 * 1024, files: 1 },
+  fileFilter: fileFilterForLogo
 });
 
 app.use(cors(corsOptions()));
@@ -130,14 +137,42 @@ app.get("/api/settings", requireAuth, (req, res) => {
 app.patch("/api/settings", requireAuth, requireRole("admin"), (req, res) => {
   const companyName = String(req.body.companyName || "").trim();
   if (!companyName) return res.status(400).json({ error: "Nombre de empresa obligatorio" });
+  const settings = {
+    companyName,
+    taxId: String(req.body.taxId || "").trim(),
+    phone: String(req.body.phone || "").trim(),
+    address: String(req.body.address || "").trim()
+  };
 
   db.prepare(
-    `INSERT INTO organization_settings (id, company_id, company_name, updated_at)
-     VALUES (?, ?, ?, ?)
-     ON CONFLICT(id) DO UPDATE SET company_name = excluded.company_name, updated_at = excluded.updated_at`
-  ).run(req.user.company_id, req.user.company_id, companyName, new Date().toISOString());
+    `INSERT INTO organization_settings (id, company_id, company_name, tax_id, phone, address, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?)
+     ON CONFLICT(id) DO UPDATE SET company_name = excluded.company_name, tax_id = excluded.tax_id, phone = excluded.phone, address = excluded.address, updated_at = excluded.updated_at`
+  ).run(req.user.company_id, req.user.company_id, settings.companyName, settings.taxId, settings.phone, settings.address, new Date().toISOString());
 
-  res.json({ settings: { companyName } });
+  res.json({ settings: mapSettings(loadSettings(req.user.company_id)) });
+});
+
+app.post("/api/settings/logo", requireAuth, requireRole("admin"), logoUpload.single("logo"), (req, res) => {
+  if (!req.file) return res.status(400).json({ error: "Selecciona un logo PNG" });
+  const now = new Date().toISOString();
+  const relativePath = path.relative(path.join(__dirname, ".."), req.file.path).replace(/\\/g, "/");
+  db.prepare(
+    `INSERT INTO organization_settings (id, company_id, company_name, logo_bucket, logo_path, logo_name, logo_mime, logo_updated_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+     ON CONFLICT(id) DO UPDATE SET logo_bucket = excluded.logo_bucket, logo_path = excluded.logo_path, logo_name = excluded.logo_name, logo_mime = excluded.logo_mime, logo_updated_at = excluded.logo_updated_at, updated_at = excluded.updated_at`
+  ).run(
+    req.user.company_id,
+    req.user.company_id,
+    req.user.company_name || "Empresa sin configurar",
+    "local",
+    relativePath,
+    req.file.originalname || "logo.png",
+    req.file.mimetype || "image/png",
+    now,
+    now
+  );
+  res.json({ settings: mapSettings(loadSettings(req.user.company_id)) });
 });
 
 app.post("/api/units", requireAuth, requireRole("admin"), (req, res) => {
@@ -1247,7 +1282,7 @@ app.use((error, _req, res, _next) => {
   if (error?.message === "Origen no permitido por ZOW") {
     return res.status(403).json({ error: "Origen no permitido" });
   }
-  if (error?.message?.startsWith("Solo se permiten")) {
+  if (error?.message?.startsWith("Solo se permiten") || error?.message?.startsWith("El logo")) {
     return res.status(400).json({ error: error.message });
   }
   return res.status(500).json({ error: "Error de servidor" });
@@ -1319,6 +1354,11 @@ function fileFilterForDocuments(_req, file, callback) {
   return callback(new Error("Solo se permiten archivos PDF o imagenes JPG, PNG y WEBP."));
 }
 
+function fileFilterForLogo(_req, file, callback) {
+  if (file.mimetype === "image/png") return callback(null, true);
+  return callback(new Error("El logo institucional debe ser PNG."));
+}
+
 function attachUploadedFiles({ files, companyId, documentId, userId, uploadedAt }) {
   if (!files.length) return;
   const insertFile = db.prepare(
@@ -1379,7 +1419,9 @@ function mapSettings(settings = {}) {
     taxId: settings.tax_id || "",
     phone: settings.phone || "",
     address: settings.address || "",
-    ticketNote: settings.ticket_note || ""
+    ticketNote: settings.ticket_note || "",
+    logoName: settings.logo_name || "",
+    logoUrl: settings.logo_path ? `/${settings.logo_path}` : ""
   };
 }
 

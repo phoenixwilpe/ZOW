@@ -23,7 +23,7 @@ function applySecurity(app, express) {
         "base-uri 'self'",
         "frame-ancestors 'none'",
         "form-action 'self'",
-        "img-src 'self' data: blob:",
+        "img-src 'self' data: blob: https://*.supabase.co",
         "script-src 'self'",
         "style-src 'self' 'unsafe-inline'",
         "connect-src 'self' https://*.supabase.co"

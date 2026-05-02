@@ -123,6 +123,11 @@ function initDb() {
       phone TEXT NOT NULL DEFAULT '',
       address TEXT NOT NULL DEFAULT '',
       ticket_note TEXT NOT NULL DEFAULT '',
+      logo_bucket TEXT NOT NULL DEFAULT '',
+      logo_path TEXT NOT NULL DEFAULT '',
+      logo_name TEXT NOT NULL DEFAULT '',
+      logo_mime TEXT NOT NULL DEFAULT '',
+      logo_updated_at TEXT NOT NULL DEFAULT '',
       updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
     );
 
@@ -284,6 +289,11 @@ function migrateSchema() {
   ensureColumn("organization_settings", "phone", "TEXT NOT NULL DEFAULT ''");
   ensureColumn("organization_settings", "address", "TEXT NOT NULL DEFAULT ''");
   ensureColumn("organization_settings", "ticket_note", "TEXT NOT NULL DEFAULT ''");
+  ensureColumn("organization_settings", "logo_bucket", "TEXT NOT NULL DEFAULT ''");
+  ensureColumn("organization_settings", "logo_path", "TEXT NOT NULL DEFAULT ''");
+  ensureColumn("organization_settings", "logo_name", "TEXT NOT NULL DEFAULT ''");
+  ensureColumn("organization_settings", "logo_mime", "TEXT NOT NULL DEFAULT ''");
+  ensureColumn("organization_settings", "logo_updated_at", "TEXT NOT NULL DEFAULT ''");
   ensureColumn("companies", "contact_name", "TEXT NOT NULL DEFAULT ''");
   ensureColumn("companies", "contact_email", "TEXT NOT NULL DEFAULT ''");
   ensureColumn("companies", "contact_phone", "TEXT NOT NULL DEFAULT ''");

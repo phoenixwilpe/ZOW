@@ -83,6 +83,11 @@ create table if not exists organization_settings (
   phone text not null default '',
   address text not null default '',
   ticket_note text not null default '',
+  logo_bucket text not null default '',
+  logo_path text not null default '',
+  logo_name text not null default '',
+  logo_mime text not null default '',
+  logo_updated_at timestamptz,
   updated_at timestamptz not null default now()
 );
 

@@ -36,6 +36,11 @@ const upload = multer({
   limits: { fileSize: 20 * 1024 * 1024, files: 20 },
   fileFilter: fileFilterForDocuments
 });
+const logoUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 600 * 1024, files: 1 },
+  fileFilter: fileFilterForLogo
+});
 const supabase =
   process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY
     ? createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY)
@@ -114,19 +119,56 @@ app.get("/api/units", requireAuth, async (req, res) => {
 
 app.get("/api/settings", requireAuth, async (req, res) => {
   if (req.user.role === "zow_owner") return res.json({ settings: { companyName: "Panel ZOW SaaS" } });
-  res.json({ settings: mapSettings(await loadSettings(req.user.company_id)) });
+  await ensureSettingsSchema();
+  res.json({ settings: await mapSettings(await loadSettings(req.user.company_id)) });
 });
 
 app.patch("/api/settings", requireAuth, requireRole("admin"), async (req, res) => {
+  await ensureSettingsSchema();
   const companyName = String(req.body.companyName || "").trim();
   if (!companyName) return res.status(400).json({ error: "Nombre de empresa obligatorio" });
+  const settings = {
+    companyName,
+    taxId: String(req.body.taxId || "").trim(),
+    phone: String(req.body.phone || "").trim(),
+    address: String(req.body.address || "").trim()
+  };
   await pg.run(
-    `INSERT INTO organization_settings (id, company_id, company_name, updated_at)
-     VALUES (?, ?, ?, now())
-     ON CONFLICT(id) DO UPDATE SET company_name = excluded.company_name, updated_at = excluded.updated_at`,
-    [req.user.company_id, req.user.company_id, companyName]
+    `INSERT INTO organization_settings (id, company_id, company_name, tax_id, phone, address, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, now())
+     ON CONFLICT(id) DO UPDATE SET company_name = excluded.company_name, tax_id = excluded.tax_id, phone = excluded.phone, address = excluded.address, updated_at = excluded.updated_at`,
+    [req.user.company_id, req.user.company_id, settings.companyName, settings.taxId, settings.phone, settings.address]
   );
-  res.json({ settings: { companyName } });
+  res.json({ settings: await mapSettings(await loadSettings(req.user.company_id)) });
+});
+
+app.post("/api/settings/logo", requireAuth, requireRole("admin"), logoUpload.single("logo"), async (req, res) => {
+  await ensureSettingsSchema();
+  if (!req.file) return res.status(400).json({ error: "Selecciona un logo PNG" });
+  if (!supabase) return res.status(500).json({ error: "Storage no configurado" });
+  const now = new Date().toISOString();
+  const storagePath = `${req.user.company_id}/branding/${randomUUID()}-${sanitizeFileName(req.file.originalname || "logo.png")}`;
+  const { error } = await supabase.storage.from(storageBucket).upload(storagePath, req.file.buffer, {
+    contentType: req.file.mimetype || "image/png",
+    upsert: false
+  });
+  if (error) return res.status(500).json({ error: "No se pudo subir el logo" });
+  await pg.run(
+    `INSERT INTO organization_settings (id, company_id, company_name, logo_bucket, logo_path, logo_name, logo_mime, logo_updated_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?::timestamptz, now())
+     ON CONFLICT(id) DO UPDATE SET logo_bucket = excluded.logo_bucket, logo_path = excluded.logo_path, logo_name = excluded.logo_name, logo_mime = excluded.logo_mime, logo_updated_at = excluded.logo_updated_at, updated_at = excluded.updated_at`,
+    [
+      req.user.company_id,
+      req.user.company_id,
+      req.user.company_name || "Empresa sin configurar",
+      storageBucket,
+      storagePath,
+      req.file.originalname || "logo.png",
+      req.file.mimetype || "image/png",
+      now
+    ]
+  );
+  res.json({ settings: await mapSettings(await loadSettings(req.user.company_id)) });
 });
 
 app.post("/api/units", requireAuth, requireRole("admin"), async (req, res) => {
@@ -719,7 +761,7 @@ app.use((error, _req, res, _next) => {
   if (error?.message === "Origen no permitido por ZOW") {
     return res.status(403).json({ error: "Origen no permitido" });
   }
-  if (error?.message?.startsWith("Solo se permiten")) {
+  if (error?.message?.startsWith("Solo se permiten") || error?.message?.startsWith("El logo")) {
     return res.status(400).json({ error: error.message });
   }
   return res.status(500).json({ error: "Error de servidor" });
@@ -774,6 +816,11 @@ function fileFilterForDocuments(_req, file, callback) {
   return callback(new Error("Solo se permiten archivos PDF o imagenes JPG, PNG y WEBP."));
 }
 
+function fileFilterForLogo(_req, file, callback) {
+  if (file.mimetype === "image/png") return callback(null, true);
+  return callback(new Error("El logo institucional debe ser PNG."));
+}
+
 async function attachUploadedFiles({ files, companyId, documentId, userId, uploadedAt }) {
   if (!files.length) return;
   for (const file of files) {
@@ -800,10 +847,12 @@ function buildDerivationComment(unitName, comment) {
 }
 
 async function loadSettings(companyId) {
+  await ensureSettingsSchema();
   return pg.get("SELECT * FROM organization_settings WHERE company_id = ? OR id = ? ORDER BY (id = ?) DESC LIMIT 1", [companyId, companyId, companyId]);
 }
 
-function mapSettings(settings = {}) {
+async function mapSettings(settings = {}) {
+  const logoUrl = await buildLogoUrl(settings);
   return {
     companyName: settings?.company_name || "Empresa sin configurar",
     storeName: settings?.store_name || "",
@@ -811,8 +860,32 @@ function mapSettings(settings = {}) {
     taxId: settings?.tax_id || "",
     phone: settings?.phone || "",
     address: settings?.address || "",
-    ticketNote: settings?.ticket_note || ""
+    ticketNote: settings?.ticket_note || "",
+    logoName: settings?.logo_name || "",
+    logoUrl
   };
+}
+
+async function buildLogoUrl(settings = {}) {
+  if (!settings?.logo_path || !supabase) return "";
+  const { data, error } = await supabase.storage
+    .from(settings.logo_bucket || storageBucket)
+    .createSignedUrl(settings.logo_path, 60 * 60);
+  return error ? "" : data?.signedUrl || "";
+}
+
+let settingsSchemaReady;
+async function ensureSettingsSchema() {
+  if (!settingsSchemaReady) {
+    settingsSchemaReady = Promise.all([
+      pg.run("ALTER TABLE organization_settings ADD COLUMN IF NOT EXISTS logo_bucket text not null default ''"),
+      pg.run("ALTER TABLE organization_settings ADD COLUMN IF NOT EXISTS logo_path text not null default ''"),
+      pg.run("ALTER TABLE organization_settings ADD COLUMN IF NOT EXISTS logo_name text not null default ''"),
+      pg.run("ALTER TABLE organization_settings ADD COLUMN IF NOT EXISTS logo_mime text not null default ''"),
+      pg.run("ALTER TABLE organization_settings ADD COLUMN IF NOT EXISTS logo_updated_at timestamptz")
+    ]);
+  }
+  await settingsSchemaReady;
 }
 
 async function getDocumentById(id, companyId) {
