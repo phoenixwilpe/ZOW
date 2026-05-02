@@ -356,7 +356,7 @@ const defaultDocuments = [
         date: "2026-04-26T10:20:00",
         status: "Reservado",
         owner: "Direccion de Tecnologia e Innovacion",
-        comment: "Numero de nota solicitado. Pendiente completar despacho y recepcion fisica."
+        comment: "Comunicacion saliente heredada de datos demo. Flujo principal actual centrado en recepcion y derivacion."
       }
     ]
   },
@@ -585,6 +585,9 @@ document.querySelectorAll("[data-special-action]").forEach((button) => {
     if (button.dataset.specialAction === "digital") {
       if (!canAttachDigital(selectedDocument)) return;
       uploadForm.reset();
+      document.querySelector("#uploadModalTitle").textContent = selectedDocument.hasDigitalFile
+        ? "Adjuntar otro documento escaneado"
+        : "Adjuntar documento escaneado";
       uploadModal.showModal();
     }
 
@@ -693,7 +696,7 @@ uploadForm.addEventListener("submit", async (event) => {
   const selectedDocument = getSelectedDocument();
   if (!selectedDocument || !canAttachDigital(selectedDocument)) return;
 
-  const files = [...document.querySelector("#digitalFile").files];
+  const files = [...document.querySelector("#digitalFile").files].slice(0, 1);
   const comment = documentWindowValue("#digitalFileComment").trim();
   const uploadedAt = new Date().toISOString();
 
@@ -717,8 +720,8 @@ uploadForm.addEventListener("submit", async (event) => {
 
   updateDocument(selectedDocument.id, {
     hasDigitalFile: true,
-    fileRef: files.map((file) => file.name).join(", "),
-    digitalFileName: files.map((file) => file.name).join(", "),
+    fileRef: mergeFileNames(selectedDocument.fileRef, files.map((file) => file.name)),
+    digitalFileName: mergeFileNames(selectedDocument.digitalFileName, files.map((file) => file.name)),
     digitalFileSize: files.reduce((total, file) => total + file.size, 0),
     digitalAttachedAt: uploadedAt,
     history: [
@@ -726,7 +729,7 @@ uploadForm.addEventListener("submit", async (event) => {
       createHistoryItem(
         "Archivo digital",
         currentUser.name,
-        `${files.map((file) => file.name).join(", ")} adjuntado(s) el ${formatDateTime(uploadedAt)}. ${comment || "Sin observaciones."}`
+        `${files.map((file) => file.name).join(", ")} adjuntado el ${formatDateTime(uploadedAt)}. ${comment || "Sin observaciones."}`
       )
     ]
   });
@@ -737,7 +740,7 @@ uploadForm.addEventListener("submit", async (event) => {
 
 documentForm.addEventListener("submit", async (event) => {
   event.preventDefault();
-  const direction = currentUser.role === "funcionario" ? "Saliente" : documentWindowValue("#docDirection");
+  const direction = "Entrante";
   const year = documentWindowValue("#docYear");
   const code = buildNextCode(direction, year);
   const now = new Date().toISOString();
@@ -781,7 +784,7 @@ documentForm.addEventListener("submit", async (event) => {
     owner: documentWindowValue("#docOwner").trim(),
     position: documentWindowValue("#docPosition").trim(),
     priority: documentWindowValue("#docPriority"),
-    status: isIncoming ? "En recepcion" : direction === "Saliente" && !hasDigitalAttachment ? "Reservado" : "Recibido",
+    status: "En recepcion",
     dueDate: documentWindowValue("#docDueDate"),
     fileRef: selectedFiles.length ? selectedFiles.map((file) => file.name).join(", ") : "Pendiente de adjunto",
     digitalFileName: selectedFiles.map((file) => file.name).join(", "),
@@ -797,13 +800,9 @@ documentForm.addEventListener("submit", async (event) => {
     createdAt: now,
     history: [
       createHistoryItem(
-        isIncoming ? "En recepcion" : direction === "Saliente" && !hasDigitalAttachment ? "Reservado" : "Recibido",
+        "En recepcion",
         documentWindowValue("#docOwner").trim(),
-        isIncoming
-          ? "Documento recibido por Recepcion. Pendiente de derivacion a la unidad responsable."
-          : direction === "Saliente"
-          ? "Numero de nota solicitado y comunicacion registrada."
-          : "Comunicacion recibida registrada en recepcion principal."
+        "Documento recibido por Recepcion. Pendiente de derivacion a la unidad responsable."
       )
     ]
   };
@@ -1332,8 +1331,6 @@ function getFilteredDocuments() {
       if (activeView === "inbox") return item.direction === "Entrante";
       if (activeView === "pendingDerivation") return item.direction === "Entrante" && item.status === "En recepcion";
       if (activeView === "derivedDocuments") return item.status === "Derivado";
-      if (activeView === "outbox") return item.direction === "Saliente";
-      if (activeView === "noteNumber") return item.direction === "Saliente" && item.status === "Reservado";
       if (activeView === "pendingReceipt") return !item.physicalReceived;
       if (activeView === "tracking") return true;
       if (activeView === "archive") return item.status === "Archivado";
@@ -1365,6 +1362,14 @@ function getFilteredDocuments() {
 
 function normalizeStatus(status) {
   return status.replace(/\s+/g, " ").trim();
+}
+
+function mergeFileNames(currentValue, newNames) {
+  const currentNames = String(currentValue || "")
+    .split(",")
+    .map((name) => name.trim())
+    .filter((name) => name && name !== "Pendiente de adjunto" && name !== "Pendiente de escaneo");
+  return [...currentNames, ...newNames].join(", ");
 }
 
 function render() {
@@ -1543,7 +1548,7 @@ function renderMetrics() {
   }
 
   metricCards[0].textContent = "Ultimo correlativo";
-  metricCards[1].textContent = "Total despachadas";
+  metricCards[1].textContent = "Total derivadas";
   metricCards[2].textContent = "Total recibidas";
   metricCards[3].textContent = "Sin archivo digital";
   const lastCode = visibleDocuments
@@ -1552,7 +1557,7 @@ function renderMetrics() {
     .at(-1);
 
   document.querySelector("#lastMetric").textContent = lastCode?.split("-").at(-1) ?? "0";
-  document.querySelector("#outboxMetric").textContent = visibleDocuments.filter((item) => item.direction === "Saliente").length;
+  document.querySelector("#outboxMetric").textContent = visibleDocuments.filter((item) => item.status === "Derivado").length;
   document.querySelector("#inboxMetric").textContent = visibleDocuments.filter((item) => item.direction === "Entrante").length;
   document.querySelector("#digitalMetric").textContent = visibleDocuments.filter((item) => !item.hasDigitalFile).length;
 }
@@ -1564,15 +1569,13 @@ function renderViewHeading() {
       : currentUser?.role === "funcionario"
       ? ["Correo", "Bandeja de entrada de la unidad"]
       : ["Correo", "Correspondencia recibida y pendiente"],
-    noteNumber: ["Solicitar numero de nota", "Notas reservadas"],
     pendingDerivation: ["Correspondencia sin derivar", "Registrada y pendiente de envio"],
     derivedDocuments: ["Correspondencia derivada", "Documentacion enviada a otras areas"],
     inbox: ["Recepcion central", "Toda la correspondencia recibida"],
-    outbox: ["Despacho", "Comunicaciones salientes"],
     pendingReceipt: ["Notas por recibir", "Pendientes de entrega fisica"],
     tracking: ["Seguimiento", "Buscar por codigo de seguimiento"],
     archive: ["Archivo digital", "Tramites archivados"],
-    reports: ["Reportes", "Despachadas, recibidas y derivadas por area"],
+    reports: ["Reportes", "Recibidas, derivadas y archivadas por area"],
     admin: ["Sistema", "Configuracion de Correspondencia ZOW"],
     zowAdmin: ["ZOW SaaS", "Empresas y planes"]
   };
@@ -1667,16 +1670,9 @@ function renderWorkflowPanel() {
     dashboard: `
       <div>
         <strong>Flujo recomendado</strong>
-        <span>1. Solicitar numero de nota / 2. Completar despacho / 3. Escanear y adjuntar archivo digital / 4. Derivar o hacer seguimiento.</span>
+        <span>1. Registrar ingreso / 2. Adjuntar digital / 3. Imprimir hoja de control / 4. Derivar y hacer seguimiento.</span>
       </div>
       <button class="ghost-button" type="button" id="manualBtn">Manual del sistema</button>
-    `,
-    noteNumber: `
-      <div>
-        <strong>Notas reservadas</strong>
-        <span>Correlativos solicitados que todavia necesitan completar despacho y archivo digital.</span>
-      </div>
-      <button class="primary-button" type="button" id="quickNewNote">Solicitar Nro. Nota</button>
     `,
     pendingReceipt: `
       <div>
@@ -1697,9 +1693,9 @@ function renderWorkflowPanel() {
       </div>
       <form class="report-form">
         <select aria-label="Tipo de reporte">
-          <option>Despachadas por area</option>
           <option>Recibidas por area</option>
           <option>Derivadas por area</option>
+          <option>Archivadas por area</option>
         </select>
         <input type="text" placeholder="Area" />
         <input type="date" />
@@ -1722,13 +1718,6 @@ function renderWorkflowPanel() {
 
   workflowPanel.innerHTML = panels[activeView] ?? "";
   workflowPanel.classList.toggle("hidden", !panels[activeView]);
-
-  document.querySelector("#quickNewNote")?.addEventListener("click", () => {
-    syncUnitSelects();
-    document.querySelector("#docDirection").value = "Saliente";
-    document.querySelector("#docHasDigital").checked = false;
-    modal.showModal();
-  });
 
   document.querySelector("#manualBtn")?.addEventListener("click", () => {
     window.open("C:/Users/WWW/Downloads/manualCorrespondencia.pdf", "_blank");

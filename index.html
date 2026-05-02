@@ -58,9 +58,9 @@
 
       <nav class="nav" aria-label="Principal">
         <div class="nav-group is-open" data-roles="recepcion_principal,recepcion_secundaria,funcionario,supervisor">
-          <button class="nav-group-toggle" type="button" aria-expanded="true">Principal</button>
+          <button class="nav-group-toggle" type="button" aria-expanded="true">Inicio</button>
           <div class="nav-group-items">
-            <button class="nav-item is-active" data-view="dashboard" data-roles="recepcion_principal,recepcion_secundaria,funcionario,supervisor">Correo</button>
+            <button class="nav-item is-active" data-view="dashboard" data-roles="recepcion_principal,recepcion_secundaria,funcionario,supervisor">Bandeja</button>
           </div>
         </div>
         <div class="nav-group is-open" data-roles="recepcion_principal">
@@ -70,13 +70,6 @@
             <button class="nav-item" data-view="derivedDocuments" data-roles="recepcion_principal">Derivadas</button>
             <button class="nav-item" data-view="inbox" data-roles="recepcion_principal">Todas recibidas</button>
             <button class="nav-item" data-view="pendingReceipt" data-roles="recepcion_principal,recepcion_secundaria">Pendiente fisico</button>
-          </div>
-        </div>
-        <div class="nav-group" data-roles="recepcion_principal">
-          <button class="nav-group-toggle" type="button" aria-expanded="false">Despacho</button>
-          <div class="nav-group-items">
-            <button class="nav-item" data-view="noteNumber" data-roles="recepcion_principal">Nro. Nota</button>
-            <button class="nav-item" data-view="outbox" data-roles="recepcion_principal">Salientes</button>
           </div>
         </div>
         <div class="nav-group" data-roles="recepcion_principal,recepcion_secundaria,funcionario,supervisor">
@@ -130,7 +123,7 @@
           <strong id="lastMetric">0</strong>
         </article>
         <article>
-          <span>Total despachadas</span>
+          <span>Total derivadas</span>
           <strong id="outboxMetric">0</strong>
         </article>
         <article>
@@ -288,7 +281,6 @@
             Tipo de movimiento
             <select id="docDirection" required>
               <option value="Entrante">Entrante</option>
-              <option value="Saliente">Saliente</option>
             </select>
           </label>
           <label>
@@ -461,15 +453,15 @@
         <div class="modal-header">
           <div>
             <p class="eyebrow">Archivo digital</p>
-            <h2>Adjuntar documento escaneado</h2>
+            <h2 id="uploadModalTitle">Adjuntar documento escaneado</h2>
           </div>
           <button class="icon-button" type="button" id="closeUploadModal" aria-label="Cerrar">x</button>
         </div>
 
         <div class="form-grid">
           <label class="span-2">
-            Archivos PDF o imagen
-            <input id="digitalFile" type="file" accept=".pdf,image/*" multiple required />
+            Archivo PDF o imagen
+            <input id="digitalFile" type="file" accept=".pdf,image/*" required />
           </label>
           <label class="span-2">
             Observacion

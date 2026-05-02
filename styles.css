@@ -76,6 +76,7 @@ body {
     var(--bg);
   display: grid;
   grid-template-columns: 280px minmax(0, 1fr);
+  overflow-x: hidden;
 }
 
 .login-screen {
@@ -268,6 +269,8 @@ button:disabled {
   display: flex;
   flex-direction: column;
   gap: 32px;
+  position: sticky;
+  top: 0;
 }
 
 .sidebar-brand {
@@ -313,12 +316,16 @@ button:disabled {
 
 .nav {
   display: grid;
-  gap: 20px;
+  gap: 12px;
 }
 
 .nav-group {
   display: grid;
-  gap: 7px;
+  gap: 6px;
+  border: 1px solid rgb(255 255 255 / 7%);
+  border-radius: 8px;
+  padding: 8px;
+  background: rgb(255 255 255 / 3%);
 }
 
 .nav-group-toggle {
@@ -358,7 +365,7 @@ button:disabled {
 .nav-item {
   border: 0;
   border-radius: 8px;
-  padding: 12px 14px;
+  padding: 11px 12px;
   background: transparent;
   color: #dbe7ea;
   text-align: left;
@@ -697,7 +704,7 @@ h3 {
 
 .content-grid {
   display: grid;
-  grid-template-columns: minmax(360px, 1fr) minmax(340px, 0.8fr);
+  grid-template-columns: minmax(320px, 1fr) minmax(320px, 0.82fr);
   gap: 14px;
   align-items: start;
 }
@@ -714,6 +721,7 @@ h3 {
 .detail-panel {
   min-height: 590px;
   padding: 18px;
+  min-width: 0;
 }
 
 .admin-grid {
@@ -1345,7 +1353,7 @@ dialog::backdrop {
   margin-top: 20px;
 }
 
-@media (max-width: 980px) {
+@media (max-width: 1180px) {
   body {
     grid-template-columns: 1fr;
   }
@@ -1371,12 +1379,81 @@ dialog::backdrop {
   }
 
   .sidebar {
+    position: sticky;
+    top: 0;
+    z-index: 10;
     min-height: auto;
-    padding: 16px;
+    padding: 12px 16px;
+    gap: 12px;
+    border-bottom: 1px solid var(--side-line);
+  }
+
+  .sidebar-brand {
+    border-bottom: 0;
+    padding-bottom: 0;
+  }
+
+  .sidebar-brand img {
+    width: 150px;
+    padding: 6px;
   }
 
   .nav {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    display: flex;
+    gap: 10px;
+    overflow-x: auto;
+    padding-bottom: 2px;
+    scroll-snap-type: x proximity;
+  }
+
+  .nav::-webkit-scrollbar {
+    height: 6px;
+  }
+
+  .nav::-webkit-scrollbar-thumb {
+    background: rgb(255 255 255 / 18%);
+    border-radius: 999px;
+  }
+
+  .nav-group {
+    min-width: min(230px, 78vw);
+    scroll-snap-align: start;
+  }
+
+  .nav-group-items {
+    display: grid;
+  }
+
+  .nav-group-toggle::after {
+    display: none;
+  }
+
+  .nav-group:not(.is-open) .nav-group-items {
+    display: grid;
+  }
+
+  .app-shell {
+    padding: 20px;
+  }
+
+  .content-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .document-list,
+  .detail-panel {
+    min-height: auto;
+  }
+
+  .metrics {
+    grid-template-columns: repeat(4, minmax(140px, 1fr));
+    overflow-x: auto;
+    padding-bottom: 2px;
+  }
+}
+
+@media (max-width: 980px) {
+  .nav {
     gap: 10px;
   }
 
@@ -1396,7 +1473,6 @@ dialog::backdrop {
     display: none;
   }
 
-  .content-grid,
   .metrics,
   .institutional-block,
   .admin-config-grid {
@@ -1412,7 +1488,7 @@ dialog::backdrop {
 
 @media (max-width: 720px) {
   .app-shell {
-    padding: 16px;
+    padding: 12px;
   }
 
   .login-screen {
@@ -1451,7 +1527,25 @@ dialog::backdrop {
   }
 
   .nav {
-    grid-template-columns: 1fr 1fr;
+    margin-inline: -4px;
+  }
+
+  .nav-group {
+    min-width: 82vw;
+  }
+
+  .topbar-actions,
+  .action-row,
+  .modal-actions,
+  .admin-actions {
+    width: 100%;
+  }
+
+  .topbar-actions > *,
+  .action-row > *,
+  .modal-actions > *,
+  .admin-actions > * {
+    width: 100%;
   }
 
   .metrics,
@@ -1479,5 +1573,34 @@ dialog::backdrop {
 
   .span-2 {
     grid-column: auto;
+  }
+
+  dialog {
+    width: calc(100vw - 16px);
+    max-height: calc(100vh - 16px);
+    overflow: auto;
+  }
+
+  .modal-body {
+    padding: 16px;
+  }
+}
+
+@media (max-width: 420px) {
+  .sidebar {
+    padding: 10px;
+  }
+
+  .sidebar-brand img {
+    width: 128px;
+  }
+
+  .metrics strong {
+    font-size: 24px;
+  }
+
+  .document-list,
+  .detail-panel {
+    padding: 14px;
   }
 }
