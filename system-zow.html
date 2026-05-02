@@ -8,14 +8,14 @@
   </head>
   <body class="system-zow-site">
     <header class="site-header">
-      <a class="site-brand" href="/system-zow" aria-label="SYSTEM ZOW SAAS">
-        <span class="site-brand-mark"><img src="assets/brand/zow-systems-logo-transparent.png" alt="" /></span>
-        <span class="site-brand-copy"><strong>SYSTEM ZOW</strong><small>SAAS empresarial</small></span>
+      <a class="site-brand" href="/" aria-label="SYSTEM ZOW SAAS">
+        <span class="zow-symbol" aria-hidden="true"><span></span></span>
+        <span class="site-brand-copy"><strong>SYSTEM ZOW</strong><small>SAAS cloud platform</small></span>
       </a>
       <nav class="site-nav" aria-label="Navegacion comercial">
         <a href="#sistemas">Sistemas</a>
-        <a href="#planes">Planes</a>
         <a href="#operacion">Operacion</a>
+        <a href="#planes">Planes</a>
         <a href="#contacto">Contacto</a>
         <a class="site-login-link" href="/panel">Panel privado</a>
       </nav>
@@ -24,32 +24,44 @@
     <main>
       <section class="site-hero">
         <div class="site-hero-copy">
-          <img class="site-hero-logo" src="assets/brand/zow-systems-logo-transparent.png" alt="SYSTEM ZOW SAAS" />
-          <p class="eyebrow">Software SaaS para empresas publicas y privadas</p>
+          <div class="hero-badge"><span></span> Plataforma SaaS multiempresa</div>
           <h1>SYSTEM ZOW SAAS</h1>
           <p>
-            Implementamos sistemas web multiempresa para controlar operaciones reales: usuarios, planes, permisos,
-            documentos, ventas, reportes y auditoria desde una sola plataforma.
+            Sistemas empresariales en la nube para vender, activar y administrar clientes con datos separados,
+            control de usuarios, membresias, auditoria y operaciones por empresa.
           </p>
           <div class="site-hero-actions">
-            <a class="primary-button" href="#contacto">Solicitar acceso</a>
-            <a class="ghost-button" href="/correspondencia">Ver Correspondencia ZOW</a>
+            <a class="primary-button" href="#contacto">Solicitar demo</a>
+            <a class="ghost-button" href="/correspondencia">Entrar a Correspondencia</a>
+          </div>
+          <div class="hero-metrics" aria-label="Capacidades SYSTEM ZOW">
+            <article><strong>24/7</strong><span>Acceso web</span></article>
+            <article><strong>100%</strong><span>Separacion por empresa</span></article>
+            <article><strong>QR</strong><span>Control y trazabilidad</span></article>
           </div>
         </div>
-        <div class="site-hero-visual" aria-label="Resumen de plataforma SYSTEM ZOW">
-          <div class="dashboard-preview">
-            <div class="preview-topbar">
-              <span></span><span></span><span></span>
-              <strong>Panel ZOW</strong>
+
+        <div class="site-hero-visual" aria-label="Panel futurista de SYSTEM ZOW">
+          <div class="holo-panel">
+            <div class="holo-panel-top">
+              <span class="zow-symbol small" aria-hidden="true"><span></span></span>
+              <div><strong>Command Center</strong><small>Empresas, sistemas y planes</small></div>
+              <i>LIVE</i>
             </div>
-            <div class="preview-grid">
-              <article><span>Empresas activas</span><strong>Multiempresa</strong></article>
-              <article><span>Datos separados</span><strong>PostgreSQL</strong></article>
-              <article><span>Accesos</span><strong>Planes y roles</strong></article>
-              <article><span>Control</span><strong>Auditoria</strong></article>
+            <div class="holo-main">
+              <div class="holo-core">
+                <span>SZ</span>
+                <i></i>
+              </div>
+              <div class="holo-lines">
+                <span></span><span></span><span></span><span></span>
+              </div>
             </div>
-            <div class="preview-flow">
-              <span>Lead</span><i></i><span>Empresa</span><i></i><span>Sistema</span><i></i><span>Soporte</span>
+            <div class="holo-grid">
+              <article><span>Clientes</span><strong>Activos</strong></article>
+              <article><span>Planes</span><strong>Mensual - Anual</strong></article>
+              <article><span>Datos</span><strong>PostgreSQL</strong></article>
+              <article><span>Auditoria</span><strong>En tiempo real</strong></article>
             </div>
           </div>
         </div>
@@ -57,13 +69,13 @@
 
       <section class="site-section" id="sistemas">
         <div class="site-section-head">
-          <p class="eyebrow">Catalogo</p>
-          <h2>Sistemas SaaS disponibles</h2>
-          <p>Cada sistema funciona separado, con sus propios permisos y datos por empresa.</p>
+          <p class="eyebrow">Catalogo SaaS</p>
+          <h2>Sistemas listos para empresas reales</h2>
+          <p>Cada producto se activa por empresa, con permisos, usuarios, planes y datos separados.</p>
         </div>
         <div class="product-grid">
           <article class="product-card">
-            <img src="assets/brand/zow-correspondencia-login-logo-transparent.png" alt="Correspondencia ZOW" />
+            <div class="product-icon correspondence-icon" aria-hidden="true"></div>
             <div>
               <span>Disponible</span>
               <h3>Correspondencia ZOW</h3>
@@ -72,11 +84,11 @@
             </div>
           </article>
           <article class="product-card">
-            <img src="assets/brand/zow-ventas-almacen-logo-transparent.png" alt="Zow Ventas-Almacen" />
+            <div class="product-icon sales-icon" aria-hidden="true"></div>
             <div>
               <span>En desarrollo</span>
               <h3>Zow Ventas-Almacen</h3>
-              <p>Ventas, comprobantes, inventario, stock, caja, clientes, productos y control operativo comercial.</p>
+              <p>Ventas, comprobantes, inventario, caja, clientes, productos, stock y control operativo comercial.</p>
               <a href="#contacto">Solicitar informacion</a>
             </div>
           </article>
@@ -86,27 +98,27 @@
       <section class="site-section operation-section" id="operacion">
         <div class="site-section-head">
           <p class="eyebrow">Operacion SaaS</p>
-          <h2>Un panel para vender, activar y controlar</h2>
-          <p>Desde el Panel ZOW se registran empresas, se asignan sistemas, se controlan membresias y se da seguimiento a leads comerciales.</p>
+          <h2>Del lead al cliente activo</h2>
+          <p>El panel ZOW permite captar solicitudes, convertirlas en empresas, activar sistemas y controlar vencimientos.</p>
         </div>
         <div class="operation-grid">
-          <article><strong>1</strong><span>Captura leads desde la web</span></article>
-          <article><strong>2</strong><span>Convierte el lead en empresa cliente</span></article>
-          <article><strong>3</strong><span>Activa sistemas, usuarios y vencimientos</span></article>
-          <article><strong>4</strong><span>Audita accesos y crecimiento del servicio</span></article>
+          <article><strong>01</strong><span>Captura leads desde la web comercial.</span></article>
+          <article><strong>02</strong><span>Convierte el lead en empresa cliente.</span></article>
+          <article><strong>03</strong><span>Asigna sistemas, planes y credenciales.</span></article>
+          <article><strong>04</strong><span>Audita uso, accesos y renovaciones.</span></article>
         </div>
       </section>
 
       <section class="site-section site-band" id="planes">
         <div class="site-section-head">
-          <p class="eyebrow">Planes flexibles</p>
-          <h2>Contrata por periodo</h2>
+          <p class="eyebrow">Planes</p>
+          <h2>Membresias por periodo</h2>
         </div>
         <div class="plan-grid">
-          <article><span>Mensual</span><strong>Inicio rapido</strong><small>Ideal para probar y validar operacion.</small></article>
-          <article><span>Trimestral</span><strong>Implementacion</strong><small>Para empresas que estan ordenando procesos.</small></article>
-          <article><span>Semestral</span><strong>Crecimiento</strong><small>Mejor continuidad y soporte operativo.</small></article>
-          <article><span>Anual</span><strong>Institucional</strong><small>Para operaciones estables y mayor planificacion.</small></article>
+          <article><span>Mensual</span><strong>Inicio rapido</strong><small>Para probar y validar operacion.</small></article>
+          <article><span>Trimestral</span><strong>Implementacion</strong><small>Para ordenar procesos por etapas.</small></article>
+          <article><span>Semestral</span><strong>Crecimiento</strong><small>Para continuidad y soporte operativo.</small></article>
+          <article><span>Anual</span><strong>Institucional</strong><small>Para operaciones estables.</small></article>
         </div>
       </section>
 
@@ -114,7 +126,7 @@
         <div class="site-section-head">
           <p class="eyebrow">Contacto</p>
           <h2>Solicita una demo o acceso</h2>
-          <p>Registraremos tu solicitud en el Panel ZOW para hacer seguimiento comercial.</p>
+          <p>Tu solicitud se registra en el Panel ZOW para seguimiento comercial.</p>
         </div>
         <form class="lead-form" id="leadForm">
           <label>Nombre completo<input name="name" type="text" required /></label>
