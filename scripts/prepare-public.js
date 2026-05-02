@@ -6,6 +6,7 @@ const outDir = path.join(root, "public");
 
 const files = [
   "index.html",
+  "correspondencia.html",
   "app.js",
   "styles.css",
   "system-zow.html",

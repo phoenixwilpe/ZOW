@@ -3,488 +3,127 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Correspondencia ZOW</title>
+    <title>SYSTEM ZOW SAAS | Sistemas SaaS para empresas</title>
     <link rel="stylesheet" href="styles.css" />
   </head>
-  <body class="app-correspondencia">
-    <section class="login-screen" id="loginScreen">
-      <div class="login-layout">
-        <section class="login-intro" aria-label="Correspondencia ZOW">
-          <img class="login-product-logo" src="assets/brand/zow-correspondencia-login-logo-transparent.png" alt="Correspondencia ZOW" />
-          <div class="login-copy">
-            <p class="eyebrow">SaaS documental</p>
-            <h1>Correspondencia ZOW</h1>
-            <p>Recepcion, derivacion, seguimiento, archivo digital y reportes por unidad en un solo flujo ordenado.</p>
-          </div>
-          <div class="login-highlights" aria-label="Capacidades principales">
-            <div>
-              <strong>01</strong>
-              <span>Recepcion centralizada</span>
-            </div>
-            <div>
-              <strong>02</strong>
-              <span>Derivacion por unidad</span>
-            </div>
-            <div>
-              <strong>03</strong>
-              <span>Seguimiento auditable</span>
-            </div>
-          </div>
-        </section>
-
-        <form class="login-card" id="loginForm">
-          <div>
-            <p class="eyebrow">Acceso seguro</p>
-            <h2>Ingresar al sistema</h2>
-          </div>
-          <div class="login-notice" role="note">
-            <strong>¡Bienvenido!</strong>
-            <p>
-              NOTA: Este sistema puede integrarse al control del Directorio Activo de funcionarios de la empresa. En ese caso,
-              el usuario y la contrasena seran los mismos asignados para acceder al equipo y correo institucional.
-            </p>
-          </div>
-          <label>
-            Usuario
-            <input id="loginUsername" type="text" autocomplete="username" required placeholder="usuario@zow.com" />
-          </label>
-          <label>
-            Contrasena
-            <input id="loginPassword" type="password" autocomplete="current-password" required placeholder="Contrasena" />
-          </label>
-          <button class="primary-button" type="submit">Ingresar</button>
-          <p id="loginError" class="form-error"></p>
-          <p class="copyright-line">© 2026 Wilmar Peinado B. Todos los derechos reservados.</p>
-        </form>
-      </div>
-    </section>
-
-    <aside class="sidebar" id="sidebar">
-      <div class="sidebar-brand">
-        <img id="sidebarBrandLogo" src="assets/brand/zow-correspondencia-login-logo-transparent.png" alt="Correspondencia ZOW" />
-      </div>
-
-      <nav class="nav" aria-label="Principal">
-        <div class="nav-group is-open" data-roles="recepcion_principal,recepcion_secundaria,funcionario,supervisor">
-          <button class="nav-group-toggle" type="button" aria-expanded="true">Inicio</button>
-          <div class="nav-group-items">
-            <button class="nav-item is-active" data-view="dashboard" data-roles="recepcion_principal,recepcion_secundaria,funcionario,supervisor">Bandeja</button>
-          </div>
-        </div>
-        <div class="nav-group is-open" data-roles="recepcion_principal">
-          <button class="nav-group-toggle" type="button" aria-expanded="true">Recepcion</button>
-          <div class="nav-group-items">
-            <button class="nav-item" data-view="pendingDerivation" data-roles="recepcion_principal">Sin derivar</button>
-            <button class="nav-item" data-view="derivedDocuments" data-roles="recepcion_principal">Derivadas</button>
-            <button class="nav-item" data-view="inbox" data-roles="recepcion_principal">Todas recibidas</button>
-            <button class="nav-item" data-view="pendingReceipt" data-roles="recepcion_principal,recepcion_secundaria">Pendiente fisico</button>
-          </div>
-        </div>
-        <div class="nav-group" data-roles="recepcion_principal,recepcion_secundaria,funcionario,supervisor">
-          <button class="nav-group-toggle" type="button" aria-expanded="false">Consulta</button>
-          <div class="nav-group-items">
-            <button class="nav-item" data-view="tracking" data-roles="recepcion_principal,recepcion_secundaria,funcionario,supervisor">Seguimiento</button>
-            <button class="nav-item" data-view="archive" data-roles="recepcion_principal,recepcion_secundaria,funcionario,supervisor">Archivo</button>
-            <button class="nav-item" data-view="reports" data-roles="recepcion_principal,supervisor">Reportes</button>
-          </div>
-        </div>
-        <div class="nav-group hidden" data-admin-only data-roles="admin">
-          <button class="nav-group-toggle" type="button" aria-expanded="false">Sistema</button>
-          <div class="nav-group-items">
-            <button class="nav-item" data-view="admin" data-roles="admin">Configuracion</button>
-          </div>
-        </div>
-        <div class="nav-group hidden" data-zow-owner-only data-roles="zow_owner">
-          <button class="nav-group-toggle" type="button" aria-expanded="false">ZOW SaaS</button>
-          <div class="nav-group-items">
-            <button class="nav-item" data-view="zowAdmin" data-roles="zow_owner">Empresas</button>
-          </div>
-        </div>
+  <body class="system-zow-site">
+    <header class="site-header">
+      <a class="site-brand" href="/system-zow" aria-label="SYSTEM ZOW SAAS">
+        <img src="assets/brand/zow-systems-logo-transparent.png" alt="SYSTEM ZOW SAAS" />
+        <span>SAAS</span>
+      </a>
+      <nav class="site-nav" aria-label="Navegacion comercial">
+        <a href="#sistemas">Sistemas</a>
+        <a href="#planes">Planes</a>
+        <a href="#contacto">Contacto</a>
+        <a class="site-login-link" href="/panel">Panel privado</a>
       </nav>
+    </header>
 
-      <div class="sidebar-footer">
-        <span id="sessionRole">Demo MVP</span>
-        <strong id="sessionUnit">Gestion 2026</strong>
-        <small>© 2026 Wilmar Peinado B.</small>
-      </div>
-    </aside>
-
-    <main class="app-shell" id="appShell">
-      <header class="topbar">
-        <div>
-          <p class="eyebrow" id="currentAreaLabel">Recepcion principal</p>
-          <h1 id="companyNameTitle">Correspondencia ZOW</h1>
+    <main>
+      <section class="site-hero">
+        <div class="site-hero-copy">
+          <p class="eyebrow">Software SaaS para empresas publicas y privadas</p>
+          <h1>SYSTEM ZOW SAAS</h1>
+          <p>
+            Centraliza procesos, usuarios, permisos, reportes y auditoria en sistemas web listos para operar desde cualquier lugar.
+          </p>
+          <div class="site-hero-actions">
+            <a class="primary-button" href="#contacto">Solicitar acceso</a>
+            <a class="ghost-button" href="/correspondencia">Ver Correspondencia ZOW</a>
+          </div>
         </div>
-        <div class="topbar-actions">
-          <button class="notification-button hidden" id="notificationBtn" type="button">
-            Derivados nuevos <strong id="notificationCount">0</strong>
-          </button>
-          <span class="user-badge" id="currentUserBadge"></span>
-          <button class="ghost-button" id="seedDataBtn">Restaurar demo</button>
-          <button class="primary-button" id="openNewDocument">Nuevo documento</button>
-          <button class="ghost-button" id="logoutBtn">Salir</button>
+        <div class="site-hero-panel" aria-label="Resumen SaaS">
+          <span>Panel ZOW</span>
+          <strong>Empresas, planes y sistemas en un solo control</strong>
+          <div>
+            <small>Multiempresa</small>
+            <small>PostgreSQL/Supabase</small>
+            <small>Vercel</small>
+            <small>Auditoria</small>
+          </div>
         </div>
-      </header>
-
-      <section class="metrics" aria-label="Indicadores">
-        <article>
-          <span>Ultimo correlativo</span>
-          <strong id="lastMetric">0</strong>
-        </article>
-        <article>
-          <span>Total derivadas</span>
-          <strong id="outboxMetric">0</strong>
-        </article>
-        <article>
-          <span>Total recibidas</span>
-          <strong id="inboxMetric">0</strong>
-        </article>
-        <article>
-          <span>Sin archivo digital</span>
-          <strong id="digitalMetric">0</strong>
-        </article>
       </section>
 
-      <section class="workspace">
-        <details class="filter-panel">
-          <summary>Busqueda y filtros</summary>
-          <div class="toolbar">
-            <div class="search-box">
-              <span aria-hidden="true">#</span>
-              <input id="searchInput" type="search" placeholder="Buscar por codigo de carpeta, CI, solicitante o referencia" />
-            </div>
-            <select id="statusFilter" aria-label="Filtrar por estado">
-              <option value="all">Todos los estados</option>
-              <option value="Recibido">Recibido</option>
-              <option value="En recepcion">En recepcion</option>
-              <option value="Derivado">Derivado</option>
-              <option value="En revision">En revision</option>
-              <option value="Atendido">Atendido</option>
-              <option value="Archivado">Archivado</option>
-              <option value="Vencido">Vencido</option>
-              <option value="Reservado">Reservado</option>
-            </select>
-          </div>
-        </details>
-
-        <section id="workflowPanel" class="workflow-panel hidden" aria-label="Flujo guiado"></section>
-
-        <div class="content-grid">
-          <section class="document-list" aria-label="Lista de documentos">
-            <div class="section-heading">
-              <div>
-                <p class="eyebrow" id="viewEyebrow">Panel general</p>
-                <h2 id="viewTitle">Documentos recientes</h2>
-              </div>
-              <span id="resultCount">0 registros</span>
-            </div>
-            <div id="documentList"></div>
-          </section>
-
-          <section class="detail-panel" aria-label="Detalle del documento">
-            <div id="emptyDetail" class="empty-state">
-              <strong>Selecciona un documento</strong>
-              <span>El seguimiento, derivaciones y acciones apareceran aqui.</span>
-            </div>
-
-            <div id="documentDetail" class="hidden">
-              <div class="detail-header">
-                <div>
-                  <p class="eyebrow" id="detailType">Documento</p>
-                  <h2 id="detailSubject">Asunto</h2>
-                  <span id="detailCode" class="code-pill"></span>
-                </div>
-                <span id="detailStatus" class="status-pill"></span>
-              </div>
-
-              <dl class="detail-grid">
-                <div>
-                  <dt>Responsable</dt>
-                  <dd id="detailOwner"></dd>
-                </div>
-                <div>
-                  <dt>Area actual</dt>
-                  <dd id="detailArea"></dd>
-                </div>
-                <div>
-                  <dt>Fecha limite</dt>
-                  <dd id="detailDueDate"></dd>
-                </div>
-                <div>
-                  <dt>Origen / Destino</dt>
-                  <dd id="detailContact"></dd>
-                </div>
-              </dl>
-
-              <div class="institutional-block">
-                <div>
-                  <span>Solicitante</span>
-                  <strong id="detailApplicant"></strong>
-                </div>
-                <div>
-                  <span>CI / Celular</span>
-                  <strong id="detailApplicantContact"></strong>
-                </div>
-                <div>
-                  <span>Cantidad de hojas</span>
-                  <strong id="detailSheetCount"></strong>
-                </div>
-                <div>
-                  <span>Fecha y hora recepcion</span>
-                  <strong id="detailReceivedAt"></strong>
-                </div>
-                <div>
-                  <span>Nro. comunicacion / CITE</span>
-                  <strong id="detailInternalNumber"></strong>
-                </div>
-                <div>
-                  <span>Referencia</span>
-                  <strong id="detailReference"></strong>
-                </div>
-                <div>
-                  <span>Anexos</span>
-                  <strong id="detailAttachments"></strong>
-                </div>
-                <div>
-                  <span>Archivo digital</span>
-                  <strong id="detailDigital"></strong>
-                </div>
-              </div>
-
-              <details class="action-menu">
-                <summary>Acciones del documento</summary>
-                <div class="action-row">
-                  <button class="secondary-button" type="button" data-derive-action>Derivar</button>
-                  <button class="secondary-button" type="button" data-action="En revision">En revision</button>
-                  <button class="secondary-button" type="button" data-action="Atendido">Atendido</button>
-                  <button class="secondary-button" type="button" data-action="Archivado">Archivar</button>
-                  <button class="secondary-button" type="button" data-special-action="control">Hoja de control</button>
-                  <button class="secondary-button" type="button" data-special-action="digital">Adjuntar / actualizar digital</button>
-                  <button class="secondary-button" type="button" data-special-action="download">Descargar digital</button>
-                  <button class="secondary-button" type="button" data-special-action="physical">Recibir fisico</button>
-                </div>
-              </details>
-
-              <div class="timeline-block">
-                <h3>Historial</h3>
-                <div id="timeline"></div>
-              </div>
-            </div>
-          </section>
+      <section class="site-section" id="sistemas">
+        <div class="site-section-head">
+          <p class="eyebrow">Catalogo</p>
+          <h2>Sistemas SaaS disponibles</h2>
         </div>
+        <div class="product-grid">
+          <article class="product-card">
+            <img src="assets/brand/zow-correspondencia-login-logo-transparent.png" alt="Correspondencia ZOW" />
+            <div>
+              <span>Disponible</span>
+              <h3>Correspondencia ZOW</h3>
+              <p>Recepcion documental, derivaciones, hoja de control con QR, archivo digital, reportes y auditoria.</p>
+              <a href="/correspondencia">Ingresar al sistema</a>
+            </div>
+          </article>
+          <article class="product-card">
+            <img src="assets/brand/zow-ventas-almacen-logo.png" alt="Zow Ventas-Almacen" />
+            <div>
+              <span>En desarrollo</span>
+              <h3>Zow Ventas-Almacen</h3>
+              <p>Ventas, comprobantes, inventario, stock, caja, clientes, productos y control operativo comercial.</p>
+              <a href="#contacto">Solicitar informacion</a>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <section class="site-section site-band" id="planes">
+        <div class="site-section-head">
+          <p class="eyebrow">Planes flexibles</p>
+          <h2>Contrata por periodo</h2>
+        </div>
+        <div class="plan-grid">
+          <article><span>Mensual</span><strong>Inicio rapido</strong><small>Ideal para probar y validar operacion.</small></article>
+          <article><span>Trimestral</span><strong>Implementacion</strong><small>Para empresas que estan ordenando procesos.</small></article>
+          <article><span>Semestral</span><strong>Crecimiento</strong><small>Mejor continuidad y soporte operativo.</small></article>
+          <article><span>Anual</span><strong>Institucional</strong><small>Para operaciones estables y mayor planificacion.</small></article>
+        </div>
+      </section>
+
+      <section class="site-section contact-section" id="contacto">
+        <div class="site-section-head">
+          <p class="eyebrow">Contacto</p>
+          <h2>Solicita una demo o acceso</h2>
+          <p>Registraremos tu solicitud en el Panel ZOW para hacer seguimiento comercial.</p>
+        </div>
+        <form class="lead-form" id="leadForm">
+          <label>Nombre completo<input name="name" type="text" required /></label>
+          <label>Empresa<input name="company" type="text" required /></label>
+          <label>Celular<input name="phone" type="tel" required /></label>
+          <label>Correo<input name="email" type="email" placeholder="opcional" /></label>
+          <label>
+            Sistema de interes
+            <select name="system">
+              <option value="correspondencia">Correspondencia ZOW</option>
+              <option value="ventas_almacen">Zow Ventas-Almacen</option>
+              <option value="varios">Varios sistemas</option>
+            </select>
+          </label>
+          <label>
+            Plan estimado
+            <select name="plan">
+              <option value="mensual">Mensual</option>
+              <option value="trimestral">Trimestral</option>
+              <option value="semestral">Semestral</option>
+              <option value="anual">Anual</option>
+            </select>
+          </label>
+          <label class="span-2">Mensaje<textarea name="message" rows="4" placeholder="Cuéntanos que necesita tu empresa"></textarea></label>
+          <button class="primary-button" type="submit">Enviar solicitud</button>
+          <p class="form-error" id="leadMessage" aria-live="polite"></p>
+        </form>
       </section>
     </main>
 
-    <dialog id="documentModal">
-      <form id="documentForm" method="dialog" class="modal-body">
-        <div class="modal-header">
-          <div>
-            <p class="eyebrow">Registro</p>
-            <h2>Nueva carpeta / documentacion</h2>
-          </div>
-          <button class="icon-button" type="button" id="closeModal" aria-label="Cerrar">x</button>
-        </div>
-
-        <div class="form-grid">
-          <label>
-            Tipo de movimiento
-            <select id="docDirection" required>
-              <option value="Entrante">Entrante</option>
-            </select>
-          </label>
-          <label>
-            Gestion
-            <select id="docYear" required>
-              <option>2026</option>
-              <option>2025</option>
-              <option>2024</option>
-            </select>
-          </label>
-          <label>
-            Tipo de documento
-            <select id="docType" required>
-              <option>Carpeta documental</option>
-              <option>Documentacion externa</option>
-              <option>Oficio</option>
-              <option>Carta</option>
-              <option>Solicitud</option>
-              <option>Informe</option>
-              <option>Memo</option>
-              <option>Factura</option>
-              <option>Contrato</option>
-            </select>
-          </label>
-          <label>
-            Nro. comunicacion / CITE
-            <input id="docInternalNumber" type="text" placeholder="Ej. SDGI-DTI-012/2026" />
-          </label>
-          <label>
-            Nombre del solicitante
-            <input id="docApplicantName" type="text" required placeholder="Nombre completo" />
-          </label>
-          <label>
-            CI
-            <input id="docApplicantCi" type="text" required placeholder="Cedula de identidad" />
-          </label>
-          <label>
-            Celular
-            <input id="docApplicantPhone" type="tel" required placeholder="Numero de contacto" />
-          </label>
-          <label>
-            Cantidad de hojas
-            <input id="docSheetCount" type="number" min="1" value="1" required />
-          </label>
-          <label class="span-2">
-            Referencia
-            <input id="docReference" type="text" required placeholder="Referencia escrita en la comunicacion" />
-          </label>
-          <label class="span-2">
-            Asunto
-            <input id="docSubject" type="text" required placeholder="Resumen breve del tramite" />
-          </label>
-          <label>
-            Emisor
-            <input id="docSender" type="text" placeholder="Se completa con el solicitante si queda vacio" />
-          </label>
-          <label>
-            Receptor
-            <input id="docReceiver" type="text" required placeholder="Como figura en la nota" />
-          </label>
-          <label>
-            Area responsable
-            <select id="docArea" required></select>
-          </label>
-          <label>
-            Responsable
-            <input id="docOwner" type="text" required placeholder="Nombre del funcionario" />
-          </label>
-          <label>
-            Cargo del solicitante
-            <input id="docPosition" type="text" placeholder="Ej. Profesional tecnico" />
-          </label>
-          <label>
-            Prioridad
-            <select id="docPriority" required>
-              <option>Normal</option>
-              <option>Alta</option>
-              <option>Urgente</option>
-            </select>
-          </label>
-          <label>
-            Fecha limite
-            <input id="docDueDate" type="date" required />
-          </label>
-          <label>
-            Archivos escaneados
-            <input id="docFile" type="file" accept=".pdf,image/*" multiple />
-          </label>
-          <label>
-            Anexos
-            <input id="docAttachments" type="text" placeholder="Detalle de anexos o sin anexos" />
-          </label>
-          <label>
-            Copias
-            <input id="docCopies" type="text" placeholder="Separar por coma si aplica" />
-          </label>
-          <label>
-            Vias
-            <input id="docVia" type="text" placeholder="Separar por coma si aplica" />
-          </label>
-          <label class="check-row">
-            <input id="docIsResponse" type="checkbox" />
-            Es respuesta
-          </label>
-          <label class="check-row">
-            <input id="docIsExternal" type="checkbox" />
-            Dirigida fuera de la institucion
-          </label>
-          <label class="check-row">
-            <input id="docHasDigital" type="checkbox" />
-            Ya tiene archivo digital
-          </label>
-        </div>
-
-        <div class="modal-actions">
-          <button class="ghost-button" type="button" id="cancelModal">Cancelar</button>
-          <button class="primary-button" type="submit">Guardar documento</button>
-        </div>
-      </form>
-    </dialog>
-
-    <dialog id="deriveModal">
-      <form id="movementForm" method="dialog" class="modal-body">
-        <div class="modal-header">
-          <div>
-            <p class="eyebrow">Derivacion</p>
-            <h2>Derivar documento</h2>
-          </div>
-          <button class="icon-button" type="button" id="closeDeriveModal" aria-label="Cerrar">x</button>
-        </div>
-
-        <div class="form-grid">
-          <label>
-            Tipo de instruccion
-            <select id="movementInstruction">
-              <option>Para conocimiento</option>
-              <option>Responder</option>
-              <option>Informar</option>
-              <option>Archivar</option>
-              <option>Coordinar atencion</option>
-            </select>
-          </label>
-          <label>
-            Fecha y hora de derivacion
-            <input id="movementDateTime" type="text" readonly />
-          </label>
-          <label>
-            Dias de plazo
-            <input id="movementDays" type="number" min="0" value="3" />
-          </label>
-          <label>
-            Unidad(es) destino
-            <select id="movementOwner" multiple size="5"></select>
-          </label>
-          <label class="span-2">
-            Comentario interno
-            <textarea id="movementComment" rows="3" placeholder="Anotar instruccion, observacion o respuesta"></textarea>
-          </label>
-        </div>
-
-        <div class="modal-actions">
-          <button class="ghost-button" type="button" id="cancelDeriveModal">Cancelar</button>
-          <button class="primary-button" type="submit">Registrar derivacion</button>
-        </div>
-      </form>
-    </dialog>
-
-    <dialog id="uploadModal">
-      <form id="uploadForm" method="dialog" class="modal-body">
-        <div class="modal-header">
-          <div>
-            <p class="eyebrow">Archivo digital</p>
-            <h2 id="uploadModalTitle">Adjuntar documento escaneado</h2>
-          </div>
-          <button class="icon-button" type="button" id="closeUploadModal" aria-label="Cerrar">x</button>
-        </div>
-
-        <div class="form-grid">
-          <label class="span-2">
-            Archivo PDF o imagen
-            <input id="digitalFile" type="file" accept=".pdf,image/*" required />
-          </label>
-          <label class="span-2">
-            Observacion
-            <textarea id="digitalFileComment" rows="3" placeholder="Ej. Escaneo con firma y sello de recepcion"></textarea>
-          </label>
-        </div>
-
-        <div class="modal-actions">
-          <button class="ghost-button" type="button" id="cancelUploadModal">Cancelar</button>
-          <button class="primary-button" type="submit">Guardar archivo digital</button>
-        </div>
-      </form>
-    </dialog>
-
-    <script src="app.js"></script>
+    <footer class="site-footer">
+      <span>© 2026 SYSTEM ZOW SAAS. Derecho de autor: Wilmar Peinado B.</span>
+      <a href="/panel">Acceso privado</a>
+    </footer>
+    <script src="system-zow.js"></script>
   </body>
 </html>

@@ -8,20 +8,16 @@
       "destination": "/api/index.js"
     },
     {
-      "source": "/",
-      "destination": "/system-zow.html"
-    },
-    {
       "source": "/system-zow",
-      "destination": "/system-zow.html"
+      "destination": "/index.html"
     },
     {
       "source": "/correspondencia",
-      "destination": "/index.html"
+      "destination": "/correspondencia.html"
     },
     {
       "source": "/panel",
-      "destination": "/index.html"
+      "destination": "/correspondencia.html"
     },
     {
       "source": "/consulta",
