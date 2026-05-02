@@ -9,12 +9,13 @@
   <body class="system-zow-site">
     <header class="site-header">
       <a class="site-brand" href="/system-zow" aria-label="SYSTEM ZOW SAAS">
-        <img src="assets/brand/zow-systems-logo-transparent.png" alt="SYSTEM ZOW SAAS" />
-        <span>SAAS</span>
+        <span class="site-brand-mark"><img src="assets/brand/zow-systems-logo-transparent.png" alt="" /></span>
+        <span class="site-brand-copy"><strong>SYSTEM ZOW</strong><small>SAAS empresarial</small></span>
       </a>
       <nav class="site-nav" aria-label="Navegacion comercial">
         <a href="#sistemas">Sistemas</a>
         <a href="#planes">Planes</a>
+        <a href="#operacion">Operacion</a>
         <a href="#contacto">Contacto</a>
         <a class="site-login-link" href="/panel">Panel privado</a>
       </nav>
@@ -23,24 +24,33 @@
     <main>
       <section class="site-hero">
         <div class="site-hero-copy">
+          <img class="site-hero-logo" src="assets/brand/zow-systems-logo-transparent.png" alt="SYSTEM ZOW SAAS" />
           <p class="eyebrow">Software SaaS para empresas publicas y privadas</p>
           <h1>SYSTEM ZOW SAAS</h1>
           <p>
-            Centraliza procesos, usuarios, permisos, reportes y auditoria en sistemas web listos para operar desde cualquier lugar.
+            Implementamos sistemas web multiempresa para controlar operaciones reales: usuarios, planes, permisos,
+            documentos, ventas, reportes y auditoria desde una sola plataforma.
           </p>
           <div class="site-hero-actions">
             <a class="primary-button" href="#contacto">Solicitar acceso</a>
             <a class="ghost-button" href="/correspondencia">Ver Correspondencia ZOW</a>
           </div>
         </div>
-        <div class="site-hero-panel" aria-label="Resumen SaaS">
-          <span>Panel ZOW</span>
-          <strong>Empresas, planes y sistemas en un solo control</strong>
-          <div>
-            <small>Multiempresa</small>
-            <small>PostgreSQL/Supabase</small>
-            <small>Vercel</small>
-            <small>Auditoria</small>
+        <div class="site-hero-visual" aria-label="Resumen de plataforma SYSTEM ZOW">
+          <div class="dashboard-preview">
+            <div class="preview-topbar">
+              <span></span><span></span><span></span>
+              <strong>Panel ZOW</strong>
+            </div>
+            <div class="preview-grid">
+              <article><span>Empresas activas</span><strong>Multiempresa</strong></article>
+              <article><span>Datos separados</span><strong>PostgreSQL</strong></article>
+              <article><span>Accesos</span><strong>Planes y roles</strong></article>
+              <article><span>Control</span><strong>Auditoria</strong></article>
+            </div>
+            <div class="preview-flow">
+              <span>Lead</span><i></i><span>Empresa</span><i></i><span>Sistema</span><i></i><span>Soporte</span>
+            </div>
           </div>
         </div>
       </section>
@@ -49,6 +59,7 @@
         <div class="site-section-head">
           <p class="eyebrow">Catalogo</p>
           <h2>Sistemas SaaS disponibles</h2>
+          <p>Cada sistema funciona separado, con sus propios permisos y datos por empresa.</p>
         </div>
         <div class="product-grid">
           <article class="product-card">
@@ -61,7 +72,7 @@
             </div>
           </article>
           <article class="product-card">
-            <img src="assets/brand/zow-ventas-almacen-logo.png" alt="Zow Ventas-Almacen" />
+            <img src="assets/brand/zow-ventas-almacen-logo-transparent.png" alt="Zow Ventas-Almacen" />
             <div>
               <span>En desarrollo</span>
               <h3>Zow Ventas-Almacen</h3>
@@ -69,6 +80,20 @@
               <a href="#contacto">Solicitar informacion</a>
             </div>
           </article>
+        </div>
+      </section>
+
+      <section class="site-section operation-section" id="operacion">
+        <div class="site-section-head">
+          <p class="eyebrow">Operacion SaaS</p>
+          <h2>Un panel para vender, activar y controlar</h2>
+          <p>Desde el Panel ZOW se registran empresas, se asignan sistemas, se controlan membresias y se da seguimiento a leads comerciales.</p>
+        </div>
+        <div class="operation-grid">
+          <article><strong>1</strong><span>Captura leads desde la web</span></article>
+          <article><strong>2</strong><span>Convierte el lead en empresa cliente</span></article>
+          <article><strong>3</strong><span>Activa sistemas, usuarios y vencimientos</span></article>
+          <article><strong>4</strong><span>Audita accesos y crecimiento del servicio</span></article>
         </div>
       </section>
 
@@ -113,7 +138,7 @@
               <option value="anual">Anual</option>
             </select>
           </label>
-          <label class="span-2">Mensaje<textarea name="message" rows="4" placeholder="Cuéntanos que necesita tu empresa"></textarea></label>
+          <label class="span-2">Mensaje<textarea name="message" rows="4" placeholder="Cuentanos que necesita tu empresa"></textarea></label>
           <button class="primary-button" type="submit">Enviar solicitud</button>
           <p class="form-error" id="leadMessage" aria-live="polite"></p>
         </form>
