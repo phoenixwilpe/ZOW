@@ -691,6 +691,30 @@ app.get("/api/public-lookups", requireAuth, requireRole("zow_owner"), async (_re
   res.json({ lookups });
 });
 
+app.get("/api/system-health", requireAuth, requireRole("zow_owner"), async (_req, res) => {
+  await ensureAuditSchema();
+  await ensurePublicLookupAuditSchema();
+  const [companies, users, documents, audit, publicLookups, dbTime] = await Promise.all([
+    pg.get("SELECT COUNT(*)::int AS total, COUNT(*) FILTER (WHERE status = 'active')::int AS active, COUNT(*) FILTER (WHERE status = 'suspended')::int AS suspended FROM companies WHERE id <> 'zow-internal'"),
+    pg.get("SELECT COUNT(*)::int AS total, COUNT(*) FILTER (WHERE is_active = true)::int AS active FROM users"),
+    pg.get("SELECT COUNT(*)::int AS total, COUNT(*) FILTER (WHERE status = 'Archivado')::int AS archived FROM documents"),
+    pg.get("SELECT COUNT(*)::int AS total, MAX(created_at) AS latest FROM audit_events"),
+    pg.get("SELECT COUNT(*)::int AS total, COUNT(*) FILTER (WHERE found = false)::int AS failed FROM public_lookup_audit"),
+    pg.get("SELECT now() AS now")
+  ]);
+  res.json({
+    ok: true,
+    database: "postgres",
+    checkedAt: new Date().toISOString(),
+    dbTime: dbTime?.now,
+    companies,
+    users,
+    documents,
+    audit,
+    publicLookups
+  });
+});
+
 app.get("/api/audit", requireAuth, requireRole("admin", "zow_owner"), async (req, res) => {
   await ensureAuditSchema();
   const params = [];

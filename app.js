@@ -409,6 +409,9 @@ let publicLookupsLoaded = false;
 let auditEvents = [];
 let auditLoaded = false;
 let reportFilters = { unit: "", status: "all", from: "", to: "", deadline: "all" };
+let auditFilters = { action: "all", from: "", to: "", term: "" };
+let systemHealth = null;
+let systemHealthLoaded = false;
 
 const loginScreen = document.querySelector("#loginScreen");
 const loginForm = document.querySelector("#loginForm");
@@ -969,6 +972,8 @@ async function loadRemoteConfig() {
     companies = companiesResponse.companies || [];
     publicLookups = [];
     publicLookupsLoaded = false;
+    systemHealth = null;
+    systemHealthLoaded = false;
     units = [];
     users = [];
     documents = [];
@@ -2068,9 +2073,10 @@ function renderZowAdmin(mode = "overview") {
       <button class="${mode === "overview" ? "is-active" : ""}" type="button" data-zow-tab="overview">Empresas</button>
       <button class="${mode === "new" ? "is-active" : ""}" type="button" data-zow-tab="new">Nueva empresa</button>
       <button class="${mode === "security" ? "is-active" : ""}" type="button" data-zow-tab="security">Seguridad</button>
+      <button class="${mode === "health" ? "is-active" : ""}" type="button" data-zow-tab="health">Estado</button>
     </div>
 
-    ${mode === "new" ? renderCompanyCreatePanel() : mode === "security" ? renderPublicLookupPanel() : renderCompanyListPanel()}
+    ${mode === "new" ? renderCompanyCreatePanel() : mode === "security" ? renderPublicLookupPanel() : mode === "health" ? renderSystemHealthPanel() : renderCompanyListPanel()}
   `;
 
   emptyDetail.classList.add("hidden");
@@ -2083,6 +2089,11 @@ function renderZowAdmin(mode = "overview") {
   document.querySelector("#refreshPublicLookups")?.addEventListener("click", async () => {
     publicLookupsLoaded = false;
     renderZowAdmin("security");
+  });
+  if (mode === "security" && auditLoaded) bindAuditFilters();
+  document.querySelector("#refreshSystemHealth")?.addEventListener("click", () => {
+    systemHealthLoaded = false;
+    renderZowAdmin("health");
   });
   document.querySelectorAll("[data-company-systems]").forEach((button) => {
     button.addEventListener("click", () => renderCompanySystemsPanel(button.dataset.companySystems));
@@ -2235,6 +2246,7 @@ function renderPublicLookupPanel() {
       </section>
       ${publicLookups.length ? renderPublicLookupRows() : `<div class="empty-state"><strong>Sin consultas publicas</strong><span>Aun no hay busquedas desde QR o desde /consulta.</span></div>`}
     </section>
+    ${renderAuditPanel()}
   `;
 }
 
@@ -2261,6 +2273,76 @@ function renderPublicLookupRows() {
         .join("")}
     </div>
   `;
+}
+
+function renderSystemHealthPanel() {
+  if (!systemHealthLoaded) {
+    loadSystemHealth();
+    return `
+      <section class="admin-panel">
+        <div class="admin-panel-head">
+          <div>
+            <p class="eyebrow">Estado del SaaS</p>
+            <h3>Verificando sistema</h3>
+          </div>
+        </div>
+        <div class="empty-state"><strong>Consultando salud</strong><span>Revisando API, base de datos y registros principales.</span></div>
+      </section>
+    `;
+  }
+
+  const health = systemHealth || {};
+  return `
+    <section class="admin-panel">
+      <div class="admin-panel-head">
+        <div>
+          <p class="eyebrow">Estado del SaaS</p>
+          <h3>${health.ok ? "Sistema operativo" : "Revisar sistema"}</h3>
+          <span>Ultima revision: ${formatDateTime(health.checkedAt || new Date().toISOString())}</span>
+        </div>
+        <button class="ghost-button" type="button" id="refreshSystemHealth">Actualizar</button>
+      </div>
+      <section class="setup-overview">
+        <article><span>Base</span><strong>${escapeHtml(health.database || "N/D")}</strong></article>
+        <article><span>Empresas activas</span><strong>${Number(health.companies?.active || 0)}</strong></article>
+        <article><span>Usuarios activos</span><strong>${Number(health.users?.active || 0)}</strong></article>
+        <article><span>Docs registrados</span><strong>${Number(health.documents?.total || 0)}</strong></article>
+      </section>
+      <div class="report-columns">
+        ${renderHealthBox("Empresas", [["Total", health.companies?.total], ["Suspendidas", health.companies?.suspended]])}
+        ${renderHealthBox("Auditoria", [["Eventos", health.audit?.total], ["Ultimo", health.audit?.latest ? formatDateTime(health.audit.latest) : "Sin eventos"]])}
+        ${renderHealthBox("Consulta publica", [["Consultas", health.publicLookups?.total], ["Fallidas", health.publicLookups?.failed]])}
+      </div>
+      <section class="cloud-safe-note">
+        <strong>Operacion recomendada</strong>
+        <span>Si la base responde y los contadores se mantienen, los deploys no estan borrando datos. Realiza backup manual antes de cambios grandes.</span>
+      </section>
+    </section>
+  `;
+}
+
+function renderHealthBox(title, rows) {
+  return `
+    <section class="report-box">
+      <h4>${escapeHtml(title)}</h4>
+      ${rows
+        .map(([label, value]) => `<div><span>${escapeHtml(label)}</span><strong>${escapeHtml(value ?? 0)}</strong></div>`)
+        .join("")}
+    </section>
+  `;
+}
+
+async function loadSystemHealth() {
+  try {
+    systemHealth = await apiRequest("/system-health");
+    systemHealthLoaded = true;
+    renderZowAdmin("health");
+  } catch (error) {
+    systemHealthLoaded = true;
+    systemHealth = { ok: false, checkedAt: new Date().toISOString(), database: "error" };
+    alert(error.message || "No se pudo verificar el estado del sistema");
+    renderZowAdmin("health");
+  }
 }
 
 async function loadPublicLookups() {
@@ -2718,6 +2800,7 @@ function renderAdmin(mode = "overview") {
     auditLoaded = false;
     renderAdmin("audit");
   });
+  if (mode === "audit") bindAuditFilters();
 }
 
 function renderAdminOverview(operativeUnits, activeUsers) {
@@ -2964,9 +3047,37 @@ function renderAuditPanel() {
           <p class="eyebrow">Auditoria</p>
           <h3>Eventos internos recientes</h3>
         </div>
-        <button class="ghost-button" type="button" id="refreshAudit">Actualizar</button>
+        <div class="admin-actions">
+          <button class="ghost-button" type="button" id="exportAuditCsv">CSV</button>
+          <button class="ghost-button" type="button" id="refreshAudit">Actualizar</button>
+        </div>
       </div>
-      ${auditEvents.length ? renderAuditRows() : `<div class="empty-state"><strong>Sin eventos</strong><span>Las acciones importantes apareceran aqui.</span></div>`}
+      <form class="report-filter-grid" id="auditFilters">
+        <label>
+          Accion
+          <select id="auditAction">
+            <option value="all" ${auditFilters.action === "all" ? "selected" : ""}>Todas</option>
+            ${[...new Set(auditEvents.map((event) => event.action).filter(Boolean))]
+              .sort()
+              .map((action) => `<option value="${escapeHtml(action)}" ${auditFilters.action === action ? "selected" : ""}>${escapeHtml(auditActionLabel(action))}</option>`)
+              .join("")}
+          </select>
+        </label>
+        <label>
+          Desde
+          <input id="auditFrom" type="date" value="${escapeHtml(auditFilters.from)}" />
+        </label>
+        <label>
+          Hasta
+          <input id="auditTo" type="date" value="${escapeHtml(auditFilters.to)}" />
+        </label>
+        <label class="span-2">
+          Buscar
+          <input id="auditTerm" type="search" value="${escapeHtml(auditFilters.term)}" placeholder="usuario, empresa, IP o descripcion" />
+        </label>
+        <button class="ghost-button" type="button" id="clearAuditFilters">Limpiar</button>
+      </form>
+      ${getFilteredAuditEvents().length ? renderAuditRows() : `<div class="empty-state"><strong>Sin eventos</strong><span>Ajusta los filtros o espera nuevas acciones.</span></div>`}
     </section>
   `;
 }
@@ -2974,7 +3085,7 @@ function renderAuditPanel() {
 function renderAuditRows() {
   return `
     <div class="admin-list compact-audit-list">
-      ${auditEvents
+      ${getFilteredAuditEvents()
         .map(
           (event) => `
             <article class="admin-row">
@@ -3010,6 +3121,67 @@ async function loadAuditEvents() {
     if (isZowOwner()) renderZowAdmin("security");
     else renderAdmin("audit");
   }
+}
+
+function bindAuditFilters() {
+  document.querySelector("#exportAuditCsv")?.addEventListener("click", exportAuditCsv);
+  document.querySelector("#clearAuditFilters")?.addEventListener("click", () => {
+    auditFilters = { action: "all", from: "", to: "", term: "" };
+    if (isZowOwner()) renderZowAdmin("security");
+    else renderAdmin("audit");
+  });
+  ["#auditAction", "#auditFrom", "#auditTo", "#auditTerm"].forEach((selector) => {
+    const eventName = selector === "#auditTerm" ? "input" : "change";
+    document.querySelector(selector)?.addEventListener(eventName, () => {
+      auditFilters = {
+        action: document.querySelector("#auditAction")?.value || "all",
+        from: document.querySelector("#auditFrom")?.value || "",
+        to: document.querySelector("#auditTo")?.value || "",
+        term: document.querySelector("#auditTerm")?.value.trim().toLowerCase() || ""
+      };
+      if (isZowOwner()) renderZowAdmin("security");
+      else renderAdmin("audit");
+    });
+  });
+}
+
+function getFilteredAuditEvents() {
+  return auditEvents.filter((event) => {
+    if (auditFilters.action !== "all" && event.action !== auditFilters.action) return false;
+    const created = normalizeDateForInput(event.created_at);
+    if (auditFilters.from && created && created < auditFilters.from) return false;
+    if (auditFilters.to && created && created > auditFilters.to) return false;
+    if (auditFilters.term) {
+      const haystack = [event.action, event.description, event.company_name, event.actor_name, event.ip_address, event.entity_type]
+        .join(" ")
+        .toLowerCase();
+      if (!haystack.includes(auditFilters.term)) return false;
+    }
+    return true;
+  });
+}
+
+function exportAuditCsv() {
+  const header = ["Fecha", "Accion", "Descripcion", "Empresa", "Usuario", "Entidad", "IP"];
+  const rows = getFilteredAuditEvents().map((event) => [
+    event.created_at,
+    auditActionLabel(event.action),
+    event.description,
+    event.company_name,
+    event.actor_name,
+    event.entity_type,
+    event.ip_address
+  ]);
+  const csv = [header, ...rows].map((row) => row.map(csvCell).join(",")).join("\n");
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `auditoria-zow-${new Date().toISOString().slice(0, 10)}.csv`;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
 }
 
 function auditActionLabel(action) {

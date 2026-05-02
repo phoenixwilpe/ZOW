@@ -828,6 +828,25 @@ app.get("/api/public-lookups", requireAuth, requireRole("zow_owner"), (req, res)
   res.json({ lookups });
 });
 
+app.get("/api/system-health", requireAuth, requireRole("zow_owner"), (req, res) => {
+  const companies = db.prepare("SELECT COUNT(*) AS total, SUM(CASE WHEN status = 'active' THEN 1 ELSE 0 END) AS active, SUM(CASE WHEN status = 'suspended' THEN 1 ELSE 0 END) AS suspended FROM companies WHERE id <> 'zow-internal'").get();
+  const users = db.prepare("SELECT COUNT(*) AS total, SUM(CASE WHEN is_active = 1 THEN 1 ELSE 0 END) AS active FROM users").get();
+  const documents = db.prepare("SELECT COUNT(*) AS total, SUM(CASE WHEN status = 'Archivado' THEN 1 ELSE 0 END) AS archived FROM documents").get();
+  const audit = db.prepare("SELECT COUNT(*) AS total, MAX(created_at) AS latest FROM audit_events").get();
+  const publicLookups = db.prepare("SELECT COUNT(*) AS total, SUM(CASE WHEN found = 0 THEN 1 ELSE 0 END) AS failed FROM public_lookup_audit").get();
+  res.json({
+    ok: true,
+    database: "sqlite",
+    checkedAt: new Date().toISOString(),
+    dbTime: new Date().toISOString(),
+    companies,
+    users,
+    documents,
+    audit,
+    publicLookups
+  });
+});
+
 app.get("/api/audit", requireAuth, requireRole("admin", "zow_owner"), (req, res) => {
   const params = [];
   const companyFilter = req.user.role === "zow_owner" ? "" : "WHERE audit_events.company_id = ?";
