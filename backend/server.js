@@ -27,6 +27,8 @@ const USER_ROLES = new Set([
 const app = express();
 const port = Number(process.env.PORT || 4174);
 const uploadsDir = process.env.UPLOADS_DIR || (process.env.VERCEL ? "/tmp/zow-uploads" : path.join(__dirname, "..", "uploads"));
+const enabledPanelSystemIds = process.env.ENABLE_VENTAS_SAAS === "true" ? ["correspondencia", "ventas_almacen"] : ["correspondencia"];
+const showVentasSaas = process.env.ENABLE_VENTAS_SAAS === "true";
 fs.mkdirSync(uploadsDir, { recursive: true });
 
 const upload = multer({
@@ -76,7 +78,9 @@ app.get("/api/auth/me", requireAuth, (req, res) => {
 
 app.get("/api/auth/systems", requireAuth, (req, res) => {
   if (req.user.role === "zow_owner") {
-    const systems = db.prepare("SELECT * FROM saas_systems WHERE status = 'active' ORDER BY name").all();
+    const systems = db
+      .prepare(`SELECT * FROM saas_systems WHERE status = 'active' AND id IN (${sqlPlaceholders(enabledPanelSystemIds)}) ORDER BY name`)
+      .all(...enabledPanelSystemIds);
     return res.json({ systems });
   }
 
@@ -86,9 +90,10 @@ app.get("/api/auth/systems", requireAuth, (req, res) => {
        FROM company_system_access
        JOIN saas_systems ON saas_systems.id = company_system_access.system_id
        WHERE company_system_access.company_id = ? AND company_system_access.status = 'active' AND saas_systems.status = 'active'
+         AND saas_systems.id IN (${sqlPlaceholders(enabledPanelSystemIds)})
        ORDER BY saas_systems.name`
     )
-    .all(req.user.company_id);
+    .all(req.user.company_id, ...enabledPanelSystemIds);
   res.json({ systems });
 });
 
@@ -626,6 +631,7 @@ app.get("/api/companies", requireAuth, requireRole("zow_owner"), (req, res) => {
        LEFT JOIN documents ON documents.company_id = companies.id
        LEFT JOIN company_system_access ON company_system_access.company_id = companies.id AND company_system_access.status = 'active'
        LEFT JOIN saas_systems ON saas_systems.id = company_system_access.system_id
+         AND saas_systems.id IN (${sqlPlaceholders(enabledPanelSystemIds)})
        LEFT JOIN users AS admin_user ON admin_user.id = (
          SELECT id
          FROM users AS company_admin
@@ -633,11 +639,19 @@ app.get("/api/companies", requireAuth, requireRole("zow_owner"), (req, res) => {
          ORDER BY company_admin.is_protected DESC, company_admin.created_at ASC
          LIMIT 1
        )
-       WHERE companies.id <> 'zow-internal'
+       WHERE companies.id NOT IN ('zow-internal', 'company-default')
+         AND companies.slug NOT LIKE 'cliente-prueba-%'
+         AND (? = 1 OR NOT EXISTS (
+           SELECT 1
+           FROM company_system_access hidden_access
+           WHERE hidden_access.company_id = companies.id
+             AND hidden_access.system_id = 'ventas_almacen'
+             AND hidden_access.status = 'active'
+         ))
        GROUP BY companies.id
        ORDER BY companies.created_at DESC`
     )
-    .all();
+    .all(...enabledPanelSystemIds, showVentasSaas ? 1 : 0);
   res.json({ companies });
 });
 
@@ -837,7 +851,7 @@ app.patch("/api/companies/:id", requireAuth, requireRole("zow_owner"), (req, res
 });
 
 app.get("/api/systems", requireAuth, requireRole("zow_owner"), (req, res) => {
-  const systems = db.prepare("SELECT * FROM saas_systems ORDER BY name").all();
+  const systems = db.prepare(`SELECT * FROM saas_systems WHERE id IN (${sqlPlaceholders(enabledPanelSystemIds)}) ORDER BY name`).all(...enabledPanelSystemIds);
   res.json({ systems });
 });
 
@@ -850,9 +864,10 @@ app.get("/api/companies/:id/systems", requireAuth, requireRole("zow_owner"), (re
               COALESCE(company_system_access.plan, '') AS access_plan
        FROM saas_systems
        LEFT JOIN company_system_access ON company_system_access.system_id = saas_systems.id AND company_system_access.company_id = ?
+       WHERE saas_systems.id IN (${sqlPlaceholders(enabledPanelSystemIds)})
        ORDER BY saas_systems.name`
     )
-    .all(company.id);
+    .all(company.id, ...enabledPanelSystemIds);
   res.json({ systems });
 });
 
@@ -1234,6 +1249,10 @@ function slugify(value) {
 
 function normalizeUsername(value) {
   return String(value || "").trim().toLowerCase();
+}
+
+function sqlPlaceholders(items) {
+  return items.map(() => "?").join(", ");
 }
 
 function getDocumentById(id, companyId) {

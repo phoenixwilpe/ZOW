@@ -28,6 +28,8 @@ const supabase =
     ? createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY)
     : null;
 const storageBucket = process.env.SUPABASE_STORAGE_BUCKET || "documentos";
+const enabledPanelSystemIds = process.env.ENABLE_VENTAS_SAAS === "true" ? ["correspondencia", "ventas_almacen"] : ["correspondencia"];
+const showVentasSaas = process.env.ENABLE_VENTAS_SAAS === "true";
 
 app.use(cors());
 app.use(express.json());
@@ -68,16 +70,16 @@ app.get("/api/auth/me", requireAuth, (req, res) => res.json({ user: req.user }))
 
 app.get("/api/auth/systems", requireAuth, async (req, res) => {
   if (req.user.role === "zow_owner") {
-    const systems = await pg.all("SELECT * FROM saas_systems WHERE status = 'active' ORDER BY name");
+    const systems = await pg.all("SELECT * FROM saas_systems WHERE status = 'active' AND id = ANY(?::text[]) ORDER BY name", [enabledPanelSystemIds]);
     return res.json({ systems });
   }
   const systems = await pg.all(
     `SELECT saas_systems.*, company_system_access.plan, company_system_access.status AS access_status
      FROM company_system_access
      JOIN saas_systems ON saas_systems.id = company_system_access.system_id
-     WHERE company_system_access.company_id = ? AND company_system_access.status = 'active' AND saas_systems.status = 'active'
+     WHERE company_system_access.company_id = ? AND company_system_access.status = 'active' AND saas_systems.status = 'active' AND saas_systems.id = ANY(?::text[])
      ORDER BY saas_systems.name`,
-    [req.user.company_id]
+    [req.user.company_id, enabledPanelSystemIds]
   );
   res.json({ systems });
 });
@@ -474,7 +476,7 @@ app.get("/api/companies", requireAuth, requireRole("zow_owner"), async (_req, re
             COALESCE((SELECT STRING_AGG(saas_systems.name, ', ' ORDER BY saas_systems.name)
               FROM company_system_access
               JOIN saas_systems ON saas_systems.id = company_system_access.system_id
-              WHERE company_system_access.company_id = companies.id AND company_system_access.status = 'active'), '') AS systems,
+              WHERE company_system_access.company_id = companies.id AND company_system_access.status = 'active' AND saas_systems.id = ANY(?::text[])), '') AS systems,
             admin_user.id AS admin_user_id,
             admin_user.name AS admin_name,
             admin_user.username AS admin_username
@@ -486,8 +488,18 @@ app.get("/api/companies", requireAuth, requireRole("zow_owner"), async (_req, re
        ORDER BY is_protected DESC, created_at ASC
        LIMIT 1
      ) AS admin_user ON true
-     WHERE companies.id <> 'zow-internal'
+     WHERE companies.id NOT IN ('zow-internal', 'company-default')
+       AND companies.slug NOT LIKE 'cliente-prueba-%'
+       AND (?::boolean = true OR NOT EXISTS (
+         SELECT 1
+         FROM company_system_access hidden_access
+         WHERE hidden_access.company_id = companies.id
+           AND hidden_access.system_id = 'ventas_almacen'
+           AND hidden_access.status = 'active'
+       ))
      ORDER BY created_at DESC`
+    ,
+    [enabledPanelSystemIds, showVentasSaas]
   );
   res.json({ companies });
 });
@@ -623,7 +635,7 @@ app.patch("/api/companies/:id", requireAuth, requireRole("zow_owner"), async (re
 });
 
 app.get("/api/systems", requireAuth, requireRole("zow_owner"), async (_req, res) => {
-  res.json({ systems: await pg.all("SELECT * FROM saas_systems ORDER BY name") });
+  res.json({ systems: await pg.all("SELECT * FROM saas_systems WHERE id = ANY(?::text[]) ORDER BY name", [enabledPanelSystemIds]) });
 });
 
 app.get("/api/companies/:id/systems", requireAuth, requireRole("zow_owner"), async (req, res) => {
@@ -634,8 +646,9 @@ app.get("/api/companies/:id/systems", requireAuth, requireRole("zow_owner"), asy
             COALESCE(company_system_access.plan, '') AS access_plan
      FROM saas_systems
      LEFT JOIN company_system_access ON company_system_access.system_id = saas_systems.id AND company_system_access.company_id = ?
+     WHERE saas_systems.id = ANY(?::text[])
      ORDER BY saas_systems.name`,
-    [company.id]
+    [company.id, enabledPanelSystemIds]
   );
   res.json({ systems });
 });
