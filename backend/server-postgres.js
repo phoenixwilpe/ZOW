@@ -48,8 +48,8 @@ const supabase =
     ? createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY)
     : null;
 const storageBucket = process.env.SUPABASE_STORAGE_BUCKET || "documentos";
-const enabledPanelSystemIds = process.env.ENABLE_VENTAS_SAAS === "true" ? ["correspondencia", "ventas_almacen"] : ["correspondencia"];
-const showVentasSaas = process.env.ENABLE_VENTAS_SAAS === "true";
+const showVentasSaas = true;
+const enabledPanelSystemIds = ["correspondencia", "ventas_almacen"];
 
 app.use(cors(corsOptions()));
 applySecurity(app, express);
@@ -970,10 +970,12 @@ app.patch("/api/companies/:id", requireAuth, requireRole("zow_owner"), async (re
 });
 
 app.get("/api/systems", requireAuth, requireRole("zow_owner"), async (_req, res) => {
+  await ensureSaasSystems();
   res.json({ systems: await pg.all("SELECT * FROM saas_systems WHERE id = ANY(?::text[]) ORDER BY name", [enabledPanelSystemIds]) });
 });
 
 app.get("/api/companies/:id/systems", requireAuth, requireRole("zow_owner"), async (req, res) => {
+  await ensureSaasSystems();
   const company = await pg.get("SELECT id FROM companies WHERE id = ? AND id <> 'zow-internal'", [req.params.id]);
   if (!company) return res.status(404).json({ error: "Empresa no encontrada" });
   const systems = await pg.all(
@@ -1879,6 +1881,31 @@ async function ensureVentasSchema() {
     })();
   }
   await ventasSchemaReady;
+}
+
+let saasSystemsReady;
+async function ensureSaasSystems() {
+  if (!saasSystemsReady) {
+    saasSystemsReady = (async () => {
+      const systems = [
+        ["correspondencia", "Correspondencia ZOW", "correspondencia-zow", "Recepcion, derivacion, seguimiento y archivo documental."],
+        ["ventas_almacen", "Zow Ventas-Almacen", "zow-ventas-almacen", "Ventas, productos, stock, almacen e inventario."]
+      ];
+      for (const system of systems) {
+        await pg.run(
+          `INSERT INTO saas_systems (id, name, slug, description, status)
+           VALUES (?, ?, ?, ?, 'active'::system_status)
+           ON CONFLICT(id) DO UPDATE SET
+             name = excluded.name,
+             slug = excluded.slug,
+             description = excluded.description,
+             status = 'active'::system_status`,
+          system
+        );
+      }
+    })();
+  }
+  await saasSystemsReady;
 }
 
 async function buildNextSaleCode(companyId, date = new Date().toISOString(), client = pg) {

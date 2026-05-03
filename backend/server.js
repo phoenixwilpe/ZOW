@@ -38,8 +38,8 @@ const USER_ROLES = new Set([
 const app = express();
 const port = Number(process.env.PORT || 4174);
 const uploadsDir = process.env.UPLOADS_DIR || (process.env.VERCEL ? "/tmp/zow-uploads" : path.join(__dirname, "..", "uploads"));
-const enabledPanelSystemIds = process.env.ENABLE_VENTAS_SAAS === "true" ? ["correspondencia", "ventas_almacen"] : ["correspondencia"];
-const showVentasSaas = process.env.ENABLE_VENTAS_SAAS === "true";
+const showVentasSaas = true;
+const enabledPanelSystemIds = ["correspondencia", "ventas_almacen"];
 fs.mkdirSync(uploadsDir, { recursive: true });
 const logosDir = path.join(uploadsDir, "logos");
 fs.mkdirSync(logosDir, { recursive: true });
@@ -1147,11 +1147,13 @@ app.patch("/api/companies/:id", requireAuth, requireRole("zow_owner"), (req, res
 });
 
 app.get("/api/systems", requireAuth, requireRole("zow_owner"), (req, res) => {
+  ensureSaasSystems();
   const systems = db.prepare(`SELECT * FROM saas_systems WHERE id IN (${sqlPlaceholders(enabledPanelSystemIds)}) ORDER BY name`).all(...enabledPanelSystemIds);
   res.json({ systems });
 });
 
 app.get("/api/companies/:id/systems", requireAuth, requireRole("zow_owner"), (req, res) => {
+  ensureSaasSystems();
   const company = db.prepare("SELECT id FROM companies WHERE id = ? AND id <> 'zow-internal'").get(req.params.id);
   if (!company) return res.status(404).json({ error: "Empresa no encontrada" });
   const systems = db
@@ -1681,6 +1683,29 @@ function requireVentasRole(...roles) {
 
 function ventasOwnOnly(role) {
   return !["admin", "ventas_admin", "supervisor"].includes(role);
+}
+
+function ensureSaasSystems() {
+  const systems = [
+    {
+      id: "correspondencia",
+      name: "Correspondencia ZOW",
+      slug: "correspondencia-zow",
+      description: "Recepcion, derivacion, seguimiento y archivo documental."
+    },
+    {
+      id: "ventas_almacen",
+      name: "Zow Ventas-Almacen",
+      slug: "zow-ventas-almacen",
+      description: "Ventas, productos, stock, almacen e inventario."
+    }
+  ];
+  const upsert = db.prepare(
+    `INSERT INTO saas_systems (id, name, slug, description, status)
+     VALUES (?, ?, ?, ?, 'active')
+     ON CONFLICT(id) DO UPDATE SET name = excluded.name, slug = excluded.slug, description = excluded.description, status = 'active'`
+  );
+  systems.forEach((system) => upsert.run(system.id, system.name, system.slug, system.description));
 }
 
 function loadSettings(companyId) {
