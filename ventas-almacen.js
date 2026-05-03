@@ -10,9 +10,12 @@ let products = [];
 let customers = [];
 let categories = [];
 let sales = [];
+let users = [];
+let units = [];
 let cash = { pendingSales: [], total: 0 };
 let summary = {};
 let saleCart = [];
+let editingUserId = "";
 let storeSettings = { companyName: "", storeName: "", currency: "BOB", taxId: "", phone: "", address: "", ticketNote: "" };
 
 const loginScreen = document.querySelector("#loginScreen");
@@ -123,14 +126,16 @@ async function render() {
   if (!currentUser || !sessionStorage.getItem(TOKEN_KEY)) return renderLoggedOut();
   try {
     await assertVentasAccess();
-    const [settingsResponse, summaryResponse, productsResponse, customersResponse, categoriesResponse, salesResponse, cashResponse] = await Promise.all([
+    const [settingsResponse, summaryResponse, productsResponse, customersResponse, categoriesResponse, salesResponse, cashResponse, usersResponse, unitsResponse] = await Promise.all([
       apiRequest("/ventas/settings"),
       apiRequest("/ventas/summary"),
       apiRequest("/ventas/products"),
       apiRequest("/ventas/customers"),
       apiRequest("/ventas/categories"),
       apiRequest("/ventas/sales"),
-      apiRequest("/ventas/cash")
+      apiRequest("/ventas/cash"),
+      currentUser?.role === "admin" ? apiRequest("/users") : Promise.resolve({ users: [] }),
+      currentUser?.role === "admin" ? apiRequest("/units") : Promise.resolve({ units: [] })
     ]);
     storeSettings = settingsResponse.settings || storeSettings;
     summary = summaryResponse.summary || {};
@@ -138,6 +143,8 @@ async function render() {
     customers = customersResponse.customers || [];
     categories = categoriesResponse.categories || [];
     sales = salesResponse.sales || [];
+    users = (usersResponse.users || []).map(normalizeUser);
+    units = (unitsResponse.units || []).map(normalizeUnit);
     cash = cashResponse || { pendingSales: [], total: 0 };
     renderLoggedIn();
   } catch (error) {
@@ -364,7 +371,10 @@ function renderCustomers() {
 
 function renderInventory() {
   setCount(`${products.length} producto${products.length === 1 ? "" : "s"}`);
-  mainList().innerHTML = products.map(renderProductRow).join("") || empty("Sin productos");
+  mainList().innerHTML = products.map(renderInventoryProductRow).join("") || empty("Sin productos");
+  document.querySelectorAll("[data-stock-move]").forEach((button) => {
+    button.addEventListener("click", () => openStockMovement(button.dataset.stockMove, button.dataset.type));
+  });
 }
 
 function renderSettings() {
@@ -385,6 +395,7 @@ function renderSettings() {
         <div class="modal-actions"><button class="primary-button" type="submit">Guardar configuracion</button></div>
       </form>
     </section>
+    ${currentUser.role === "admin" ? renderVentasUsersPanel() : ""}
     <section class="admin-panel">
       <div class="admin-panel-head"><div><p class="eyebrow">Roles recomendados</p><h3>Operacion por permisos</h3></div></div>
       <div class="setup-overview">
@@ -395,10 +406,41 @@ function renderSettings() {
     </section>
   `;
   document.querySelector("#storeSettingsForm")?.addEventListener("submit", saveStoreSettings);
+  document.querySelector("#ventasUserForm")?.addEventListener("submit", saveVentasUser);
+  document.querySelector("#cancelVentasUserEdit")?.addEventListener("click", () => {
+    editingUserId = "";
+    renderMain();
+  });
+  document.querySelectorAll("[data-edit-user]").forEach((button) => {
+    button.addEventListener("click", () => {
+      editingUserId = button.dataset.editUser;
+      renderMain();
+    });
+  });
+  document.querySelectorAll("[data-toggle-user]").forEach((button) => {
+    button.addEventListener("click", () => toggleVentasUser(button.dataset.toggleUser));
+  });
 }
 
 function renderProductRow(product) {
   return `<article class="admin-row"><div><strong>${escapeHtml(product.name)}</strong><span>${escapeHtml(product.code)} / ${escapeHtml(product.category || "Sin categoria")} / ${escapeHtml(product.unit)}</span><span>Stock ${num(product.stock)} / Minimo ${num(product.min_stock)}</span></div><div class="admin-row-meta"><span>Costo ${money(product.cost_price)}</span><span>Venta ${money(product.sale_price)}</span><span class="${Number(product.stock || 0) <= Number(product.min_stock || 0) ? "danger-text" : "ok-text"}">${Number(product.stock || 0) <= Number(product.min_stock || 0) ? "Bajo minimo" : "Stock OK"}</span></div></article>`;
+}
+
+function renderInventoryProductRow(product) {
+  const canMoveStock = ["admin", "ventas_admin", "almacen"].includes(currentUser?.role);
+  return `<article class="admin-row inventory-row">
+    <div>
+      <strong>${escapeHtml(product.name)}</strong>
+      <span>${escapeHtml(product.code)} / ${escapeHtml(product.category || "Sin categoria")} / ${escapeHtml(product.unit)}</span>
+      <span>Stock ${num(product.stock)} / Minimo ${num(product.min_stock)}</span>
+    </div>
+    <div class="admin-row-meta">
+      <span>Costo ${money(product.cost_price)}</span>
+      <span>Venta ${money(product.sale_price)}</span>
+      <span class="${Number(product.stock || 0) <= Number(product.min_stock || 0) ? "danger-text" : "ok-text"}">${Number(product.stock || 0) <= Number(product.min_stock || 0) ? "Bajo minimo" : "Stock OK"}</span>
+      ${canMoveStock ? `<div class="mini-action-row"><button class="ghost-button" type="button" data-stock-move="${product.id}" data-type="entrada">Entrada</button><button class="ghost-button" type="button" data-stock-move="${product.id}" data-type="salida">Salida</button><button class="ghost-button" type="button" data-stock-move="${product.id}" data-type="ajuste">Ajuste</button></div>` : ""}
+    </div>
+  </article>`;
 }
 
 function renderSellProduct(product) {
@@ -457,6 +499,63 @@ function buildRouteGroups() {
 function renderPriceRow(product) {
   const margin = Number(product.sale_price || 0) - Number(product.cost_price || 0);
   return `<article class="price-row"><div><strong>${escapeHtml(product.name)}</strong><span>${escapeHtml(product.code)} / ${escapeHtml(product.category || "Sin categoria")}</span></div><div><span>${money(product.sale_price)}</span><small>Margen ${money(margin)}</small></div></article>`;
+}
+
+function renderVentasUsersPanel() {
+  const editing = users.find((user) => user.id === editingUserId);
+  const operativeUsers = users.filter((user) => ["ventas_admin", "cajero", "almacen", "vendedor", "supervisor"].includes(user.role));
+  return `
+    <section class="admin-panel">
+      <div class="admin-panel-head">
+        <div><p class="eyebrow">Usuarios Ventas-Almacen</p><h3>Credenciales operativas</h3></div>
+        <span>${operativeUsers.length} usuario${operativeUsers.length === 1 ? "" : "s"}</span>
+      </div>
+      <form class="admin-form" id="ventasUserForm">
+        <div class="form-grid">
+          <label>Nombre completo<input id="ventasUserName" type="text" value="${escapeHtml(editing?.name || "")}" required /></label>
+          <label>Usuario<input id="ventasUsername" type="email" value="${escapeHtml(editing?.username || "")}" placeholder="usuario@empresa.com" required /></label>
+          <label>Contrasena<input id="ventasUserPassword" type="password" autocomplete="new-password" placeholder="${editing ? "Dejar vacio para mantener" : "Minimo 10 caracteres"}" ${editing ? "" : "required"} /></label>
+          <label>CI<input id="ventasUserCi" type="text" value="${escapeHtml(editing?.ci || "")}" /></label>
+          <label>Celular<input id="ventasUserPhone" type="tel" value="${escapeHtml(editing?.phone || "")}" /></label>
+          <label>Cargo<input id="ventasUserPosition" type="text" value="${escapeHtml(editing?.position || "")}" placeholder="Cajero, almacen, vendedor" /></label>
+          <label>Rol
+            <select id="ventasUserRole" required>
+              <option value="ventas_admin" ${editing?.role === "ventas_admin" ? "selected" : ""}>Administrador ventas</option>
+              <option value="cajero" ${editing?.role === "cajero" ? "selected" : ""}>Cajero</option>
+              <option value="almacen" ${editing?.role === "almacen" ? "selected" : ""}>Almacen</option>
+              <option value="vendedor" ${editing?.role === "vendedor" ? "selected" : ""}>Vendedor</option>
+              <option value="supervisor" ${editing?.role === "supervisor" ? "selected" : ""}>Supervisor</option>
+            </select>
+          </label>
+          <label>Unidad / Sucursal
+            <select id="ventasUserUnit" required>
+              ${units.map((unit) => `<option value="${unit.id}" ${editing?.unitId === unit.id || (!editing && unit.id === currentUser.unitId) ? "selected" : ""}>${escapeHtml(unit.name)}</option>`).join("")}
+            </select>
+          </label>
+        </div>
+        <div class="modal-actions">
+          ${editing ? `<button class="ghost-button" type="button" id="cancelVentasUserEdit">Cancelar edicion</button>` : ""}
+          <button class="primary-button" type="submit">${editing ? "Actualizar usuario" : "Crear usuario"}</button>
+        </div>
+      </form>
+      <div class="admin-list">${operativeUsers.map(renderVentasUserRow).join("") || empty("Aun no hay usuarios operativos de ventas")}</div>
+    </section>
+  `;
+}
+
+function renderVentasUserRow(user) {
+  return `<article class="admin-row">
+    <div>
+      <strong>${escapeHtml(user.name)}</strong>
+      <span>${escapeHtml(user.username)} / ${roleLabel(user.role)}</span>
+      <span>${escapeHtml(user.unitName || "Sin unidad")} / ${escapeHtml(user.position || "Sin cargo")}</span>
+    </div>
+    <div class="admin-row-meta">
+      <span class="${user.active ? "ok-text" : "danger-text"}">${user.active ? "Activo" : "Inactivo"}</span>
+      <button class="ghost-button" type="button" data-edit-user="${user.id}">Editar</button>
+      <button class="ghost-button" type="button" data-toggle-user="${user.id}">${user.active ? "Desactivar" : "Activar"}</button>
+    </div>
+  </article>`;
 }
 
 function addToCart(productId) {
@@ -537,6 +636,53 @@ async function saveStoreSettings(event) {
   await render();
 }
 
+async function saveVentasUser(event) {
+  event.preventDefault();
+  const payload = {
+    name: value("#ventasUserName").trim(),
+    username: value("#ventasUsername").trim().toLowerCase(),
+    password: value("#ventasUserPassword"),
+    role: value("#ventasUserRole"),
+    unitId: value("#ventasUserUnit"),
+    position: value("#ventasUserPosition").trim(),
+    ci: value("#ventasUserCi").trim(),
+    phone: value("#ventasUserPhone").trim()
+  };
+  if (editingUserId && !payload.password) delete payload.password;
+  await apiRequest(editingUserId ? `/users/${editingUserId}` : "/users", {
+    method: editingUserId ? "PATCH" : "POST",
+    body: payload
+  });
+  editingUserId = "";
+  await render();
+}
+
+async function toggleVentasUser(userId) {
+  const user = users.find((item) => item.id === userId);
+  if (!user || user.protected || user.id === currentUser.id) return;
+  await apiRequest(`/users/${user.id}/status`, { method: "PATCH", body: { active: !user.active } });
+  await render();
+}
+
+async function openStockMovement(productId, type) {
+  const product = products.find((item) => item.id === productId);
+  if (!product) return;
+  const quantityValue = window.prompt(`Cantidad para ${type} de ${product.name}`, "1");
+  if (quantityValue === null) return;
+  const quantity = Number(quantityValue);
+  if (!Number.isFinite(quantity) || quantity <= 0) {
+    window.alert("Ingresa una cantidad valida.");
+    return;
+  }
+  const reference = window.prompt("Referencia del movimiento", type === "entrada" ? "Compra / reposicion" : "Control de stock") || "";
+  const note = window.prompt("Nota interna", "") || "";
+  await apiRequest(`/ventas/products/${product.id}/movements`, {
+    method: "POST",
+    body: { type, quantity, reference, note }
+  });
+  await render();
+}
+
 async function assertVentasAccess() {
   if (currentUser?.role === "zow_owner") throw new Error("El panel ZOW administra empresas. Ingresa con un usuario de empresa.");
   await apiRequest("/ventas/settings");
@@ -566,6 +712,30 @@ function money(value) { return `${Number(value || 0).toLocaleString("es-BO", { m
 function num(value) { return Number(value || 0).toLocaleString("es-BO"); }
 function formatDateTime(date) { return new Intl.DateTimeFormat("es-BO", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" }).format(new Date(date)); }
 function roleLabel(role) { return { admin: "Encargado de sistema", recepcion_principal: "Recepcion principal", recepcion_secundaria: "Recepcion secundaria", funcionario: "Funcionario", supervisor: "Secretario / Director", ventas_admin: "Administrador ventas", cajero: "Cajero", almacen: "Almacen", vendedor: "Vendedor" }[role] || role; }
+function normalizeUser(user) {
+  return {
+    id: user.id,
+    name: user.name || "",
+    username: user.username || "",
+    role: user.role || "",
+    unitId: user.unitId || user.unit_id || "",
+    unitName: user.unitName || user.unit_name || "",
+    position: user.position || "",
+    ci: user.ci || "",
+    phone: user.phone || "",
+    active: user.active ?? user.is_active ?? true,
+    protected: user.protected ?? user.is_protected ?? false
+  };
+}
+function normalizeUnit(unit) {
+  return {
+    id: unit.id,
+    name: unit.name || "",
+    code: unit.code || "",
+    level: unit.level || "",
+    active: unit.active ?? unit.is_active ?? true
+  };
+}
 function canAccessView(view) { return accessibleViewsForRole(currentUser?.role).includes(view); }
 function defaultViewForRole() { return accessibleViewsForRole(currentUser?.role)[0] || "summary"; }
 function accessibleViewsForRole(role) {

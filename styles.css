@@ -1685,6 +1685,24 @@ h3 {
   font-size: 0.86rem;
 }
 
+.inventory-row .admin-row-meta {
+  align-items: flex-end;
+}
+
+.mini-action-row {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.mini-action-row .ghost-button {
+  min-height: 32px;
+  padding: 0 10px;
+  font-size: 0.78rem;
+}
+
 .admin-action-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -5672,6 +5690,12 @@ body.system-zow-site .lead-form.is-highlighted {
   .price-row {
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  .inventory-row .admin-row-meta,
+  .mini-action-row {
+    align-items: flex-start;
+    justify-content: flex-start;
   }
 
   .ventas-module-card {
