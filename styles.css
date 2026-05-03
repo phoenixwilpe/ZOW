@@ -1957,6 +1957,15 @@ h3 {
   min-height: 100vh;
 }
 
+.ventas-touch-shell[data-active-view="sell"] .topbar {
+  margin-bottom: 10px;
+  padding: 10px 14px;
+}
+
+.ventas-touch-shell[data-active-view="sell"] .topbar h1 {
+  font-size: clamp(1.25rem, 2vw, 1.75rem);
+}
+
 .ventas-touch-shell .topbar {
   border: 0;
   border-radius: 8px;
@@ -2000,6 +2009,10 @@ h3 {
   grid-template-columns: 168px minmax(0, 1fr);
   align-items: start;
   width: 100%;
+}
+
+.ventas-menu-toggle {
+  display: none;
 }
 
 .ventas-tabs {
@@ -2096,6 +2109,11 @@ h3 {
   box-shadow: none;
 }
 
+.ventas-touch-shell[data-active-view="sell"] .ventas-footer,
+.ventas-touch-shell[data-active-view="sell"] .ventas-workflow-footer {
+  display: none;
+}
+
 .ventas-workspace .document-list {
   border: 0;
   border-radius: 8px;
@@ -2107,18 +2125,32 @@ h3 {
 .touch-pos-shell {
   grid-template-columns: minmax(0, 1.42fr) minmax(390px, 0.78fr);
   gap: 16px;
-  min-height: calc(100vh - 176px);
+  height: calc(100vh - 118px);
+  min-height: 520px;
+  overflow: hidden;
 }
 
 .touch-panel,
 .touch-cart-panel {
   min-width: 0;
   width: 100%;
+  max-height: 100%;
   border: 0;
   border-radius: 8px;
   background:
     linear-gradient(180deg, rgb(255 255 255 / 96%), rgb(249 252 251 / 96%));
   box-shadow: 0 20px 58px rgb(15 32 28 / 8%);
+}
+
+.touch-panel {
+  display: grid;
+  grid-template-rows: auto auto auto minmax(0, 1fr);
+  overflow: hidden;
+}
+
+.touch-cart-panel {
+  display: grid;
+  overflow: hidden;
 }
 
 .touch-pos-head,
@@ -2212,6 +2244,9 @@ h3 {
 .touch-product-grid {
   grid-template-columns: repeat(auto-fit, minmax(168px, 1fr));
   gap: 12px;
+  min-height: 0;
+  overflow: auto;
+  padding-right: 4px;
 }
 
 .touch-product-card {
@@ -2284,7 +2319,9 @@ h3 {
 }
 
 .touch-cart-list {
-  max-height: min(46vh, 520px);
+  max-height: none;
+  min-height: 0;
+  overflow: auto;
 }
 
 .touch-cart-list .empty-state {
@@ -2347,6 +2384,13 @@ h3 {
   border-radius: 8px;
   font-size: 1.2rem;
   box-shadow: 0 20px 45px rgb(15 159 110 / 22%);
+}
+
+.touch-cart-panel form {
+  min-height: 0;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto auto auto;
+  overflow: hidden;
 }
 
 .payment-modal-body {
@@ -6409,6 +6453,7 @@ body.system-zow-site .lead-form.is-highlighted {
     overflow-x: auto;
     width: 100%;
     margin-bottom: 14px;
+    max-height: none;
   }
 
   .ventas-tabs button {
@@ -6436,6 +6481,24 @@ body.system-zow-site .lead-form.is-highlighted {
     width: 100%;
   }
 
+  .touch-pos-shell {
+    height: auto;
+    min-height: 0;
+    overflow: visible;
+  }
+
+  .touch-panel,
+  .touch-cart-panel,
+  .touch-cart-panel form {
+    max-height: none;
+    overflow: visible;
+  }
+
+  .touch-product-grid,
+  .touch-cart-list {
+    overflow: visible;
+  }
+
   .ventas-workspace .content-grid,
   .ventas-workspace .document-list,
   #mainList {
@@ -6458,6 +6521,76 @@ body.system-zow-site .lead-form.is-highlighted {
 }
 
 @media (max-width: 640px) {
+  .ventas-touch-shell[data-active-view="sell"] .topbar {
+    padding: 10px;
+  }
+
+  .ventas-touch-shell[data-active-view="sell"] .topbar h1 {
+    font-size: 1.35rem;
+  }
+
+  .ventas-menu-toggle {
+    width: 100%;
+    min-height: 58px;
+    border: 1px solid color-mix(in srgb, var(--accent) 22%, var(--line));
+    border-radius: 8px;
+    padding: 8px 12px;
+    background: linear-gradient(135deg, #101a18, #15312a);
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 10px;
+    box-shadow: 0 16px 34px rgb(15 32 28 / 14%);
+  }
+
+  .ventas-menu-toggle span {
+    color: rgb(255 255 255 / 64%);
+    font-size: 0.72rem;
+    font-weight: 900;
+    text-transform: uppercase;
+  }
+
+  .ventas-menu-toggle strong {
+    font-size: 1rem;
+  }
+
+  .ventas-menu-toggle::after {
+    content: "Abrir";
+    border-radius: 999px;
+    padding: 6px 9px;
+    background: rgb(255 255 255 / 13%);
+    color: white;
+    font-size: 0.76rem;
+    font-weight: 900;
+  }
+
+  .ventas-touch-shell.ventas-menu-open .ventas-menu-toggle::after {
+    content: "Cerrar";
+  }
+
+  .ventas-tabs {
+    display: grid;
+    max-height: 0;
+    margin-bottom: 0;
+    padding: 0 10px;
+    overflow: hidden;
+    transition: max-height 180ms ease, padding 180ms ease, margin 180ms ease;
+  }
+
+  .ventas-touch-shell.ventas-menu-open .ventas-tabs {
+    max-height: 70vh;
+    margin-bottom: 12px;
+    padding: 10px;
+    overflow: auto;
+  }
+
+  .ventas-tabs button {
+    min-height: 48px;
+    width: 100%;
+  }
+
   .ventas-module-grid,
   .promotion-grid,
   .route-grid,

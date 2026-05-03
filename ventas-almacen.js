@@ -64,6 +64,7 @@ const categoryForm = document.querySelector("#categoryForm");
 const paymentModal = document.querySelector("#paymentModal");
 const paymentForm = document.querySelector("#paymentForm");
 const paymentModalContent = document.querySelector("#paymentModalContent");
+const ventasMenuToggle = document.querySelector("#ventasMenuToggle");
 
 loginForm.addEventListener("submit", async (event) => {
   event.preventDefault();
@@ -99,8 +100,14 @@ document.querySelectorAll("[data-view]").forEach((button) => {
   button.addEventListener("click", () => {
     if (!canAccessView(button.dataset.view)) return;
     activeView = button.dataset.view;
+    closeVentasMenu();
     renderMain();
   });
+});
+
+ventasMenuToggle?.addEventListener("click", () => {
+  const isOpen = appShell.classList.toggle("ventas-menu-open");
+  ventasMenuToggle.setAttribute("aria-expanded", String(isOpen));
 });
 
 document.querySelector("#showProductForm").addEventListener("click", openProductModal);
@@ -248,6 +255,7 @@ function renderMain() {
   };
   document.querySelector("#viewEyebrow").textContent = titles[activeView][0];
   document.querySelector("#viewTitle").textContent = titles[activeView][1];
+  document.querySelector("#ventasMenuLabel").textContent = document.querySelector(`[data-view="${activeView}"]`)?.textContent || titles[activeView][0];
   renderWorkflow();
   const renderers = { summary: renderSummary, alerts: renderAlerts, sell: renderSell, finance: renderFinance, history: renderHistory, routes: renderRoutes, promotions: renderPromotions, reports: renderReports, catalog: renderCatalog, customers: renderCustomers, inventory: renderInventory, users: renderUsers, settings: renderSettings };
   renderers[activeView]();
@@ -316,6 +324,7 @@ function renderSell() {
   const sellProducts = filteredProducts();
   const totals = cartTotals();
   const categories = productCategories();
+  const cashState = cashSession?.status === "abierta" ? `Caja abierta / ${money(cashExpectedTotal())}` : "Caja sin abrir";
   mainList().innerHTML = `
     <section class="pos-shell touch-pos-shell">
       <section class="admin-panel pos-products touch-panel">
@@ -324,7 +333,7 @@ function renderSell() {
             <p class="eyebrow">Venta rapida</p>
             <h3>Productos</h3>
           </div>
-          <div class="touch-shortcuts"><span>F2 Buscar</span><span>F4 Cobrar</span></div>
+          <div class="touch-shortcuts"><span>${escapeHtml(cashState)}</span><span>F2 Buscar</span><span>F4 Cobrar</span></div>
         </div>
         ${ventasMessage ? `<div class="pos-toast">${escapeHtml(ventasMessage)}</div>` : ""}
         <div class="pos-search-row">
@@ -1302,4 +1311,8 @@ function accessibleViewsForRole(role) {
   return views[role] || ["summary"];
 }
 function canSeeAllSales() { return ["admin", "ventas_admin", "supervisor"].includes(currentUser?.role); }
+function closeVentasMenu() {
+  appShell.classList.remove("ventas-menu-open");
+  ventasMenuToggle?.setAttribute("aria-expanded", "false");
+}
 function escapeHtml(value) { return String(value ?? "").replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;").replaceAll("'", "&#039;"); }
