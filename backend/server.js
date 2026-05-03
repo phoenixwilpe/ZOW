@@ -1195,6 +1195,7 @@ app.patch("/api/companies/:id/systems", requireAuth, requireRole("zow_owner"), (
 });
 
 app.get("/api/ventas/summary", requireAuth, requireSystemAccess("ventas_almacen"), (req, res) => {
+  const ownOnly = ventasOwnOnly(req.user.role);
   const inventory = db
     .prepare(
       `SELECT COUNT(*) AS products,
@@ -1209,16 +1210,16 @@ app.get("/api/ventas/summary", requireAuth, requireSystemAccess("ventas_almacen"
     .prepare(
       `SELECT COUNT(*) AS sales, COALESCE(SUM(total), 0) AS income
        FROM sales_orders
-       WHERE company_id = ? AND status = 'confirmada'`
+       WHERE company_id = ? AND status = 'confirmada' ${ownOnly ? "AND created_by = ?" : ""}`
     )
-    .get(req.user.company_id);
+    .get(...(ownOnly ? [req.user.company_id, req.user.id] : [req.user.company_id]));
   const pendingCash = db
     .prepare(
       `SELECT COUNT(*) AS pending_sales, COALESCE(SUM(total), 0) AS pending_total
        FROM sales_orders
-       WHERE company_id = ? AND status = 'confirmada' AND cash_closed = 0`
+       WHERE company_id = ? AND status = 'confirmada' AND cash_closed = 0 ${ownOnly ? "AND created_by = ?" : ""}`
     )
-    .get(req.user.company_id);
+    .get(...(ownOnly ? [req.user.company_id, req.user.id] : [req.user.company_id]));
   res.json({ summary: { ...inventory, ...sales, ...pendingCash } });
 });
 
@@ -1365,7 +1366,7 @@ app.post("/api/ventas/customers", requireAuth, requireSystemAccess("ventas_almac
 });
 
 app.get("/api/ventas/sales", requireAuth, requireSystemAccess("ventas_almacen"), (req, res) => {
-  const ownOnly = !["admin", "ventas_admin"].includes(req.user.role);
+  const ownOnly = ventasOwnOnly(req.user.role);
   const sales = db
     .prepare(
       `SELECT sales_orders.*, users.name AS seller_name
@@ -1381,7 +1382,7 @@ app.get("/api/ventas/sales", requireAuth, requireSystemAccess("ventas_almacen"),
 app.get("/api/ventas/sales/:id", requireAuth, requireSystemAccess("ventas_almacen"), (req, res) => {
   const sale = db.prepare("SELECT * FROM sales_orders WHERE id = ? AND company_id = ?").get(req.params.id, req.user.company_id);
   if (!sale) return res.status(404).json({ error: "Venta no encontrada" });
-  if (!["admin", "ventas_admin"].includes(req.user.role) && sale.created_by !== req.user.id) {
+  if (ventasOwnOnly(req.user.role) && sale.created_by !== req.user.id) {
     return res.status(403).json({ error: "Permiso insuficiente" });
   }
   const items = db.prepare("SELECT * FROM sales_order_items WHERE sale_id = ? AND company_id = ?").all(sale.id, req.user.company_id);
@@ -1454,15 +1455,17 @@ app.post("/api/ventas/sales", requireAuth, requireSystemAccess("ventas_almacen")
 });
 
 app.get("/api/ventas/cash", requireAuth, requireSystemAccess("ventas_almacen"), (req, res) => {
+  const ownOnly = ventasOwnOnly(req.user.role);
   const pendingSales = db
-    .prepare("SELECT * FROM sales_orders WHERE company_id = ? AND status = 'confirmada' AND cash_closed = 0 ORDER BY created_at DESC")
-    .all(req.user.company_id);
+    .prepare(`SELECT * FROM sales_orders WHERE company_id = ? AND status = 'confirmada' AND cash_closed = 0 ${ownOnly ? "AND created_by = ?" : ""} ORDER BY created_at DESC`)
+    .all(...(ownOnly ? [req.user.company_id, req.user.id] : [req.user.company_id]));
   const total = pendingSales.reduce((sum, sale) => sum + Number(sale.total || 0), 0);
   res.json({ pendingSales, total });
 });
 
 app.post("/api/ventas/cash/close", requireAuth, requireSystemAccess("ventas_almacen"), requireVentasRole("admin", "ventas_admin", "cajero"), (req, res) => {
-  const pendingSales = db.prepare("SELECT * FROM sales_orders WHERE company_id = ? AND status = 'confirmada' AND cash_closed = 0").all(req.user.company_id);
+  const ownOnly = ventasOwnOnly(req.user.role);
+  const pendingSales = db.prepare(`SELECT * FROM sales_orders WHERE company_id = ? AND status = 'confirmada' AND cash_closed = 0 ${ownOnly ? "AND created_by = ?" : ""}`).all(...(ownOnly ? [req.user.company_id, req.user.id] : [req.user.company_id]));
   if (!pendingSales.length) return res.status(400).json({ error: "No hay ventas pendientes de cierre" });
   const now = new Date().toISOString();
   const closureId = randomUUID();
@@ -1472,12 +1475,13 @@ app.post("/api/ventas/cash/close", requireAuth, requireSystemAccess("ventas_alma
     `INSERT INTO cash_closures (id, company_id, code, total_sales, sale_count, created_by, created_at)
      VALUES (?, ?, ?, ?, ?, ?, ?)`
   ).run(closureId, req.user.company_id, code, total, pendingSales.length, req.user.id, now);
-  db.prepare("UPDATE sales_orders SET cash_closed = 1 WHERE company_id = ? AND status = 'confirmada' AND cash_closed = 0").run(req.user.company_id);
+  db.prepare(`UPDATE sales_orders SET cash_closed = 1 WHERE company_id = ? AND status = 'confirmada' AND cash_closed = 0 ${ownOnly ? "AND created_by = ?" : ""}`).run(...(ownOnly ? [req.user.company_id, req.user.id] : [req.user.company_id]));
   res.status(201).json({ closure: db.prepare("SELECT * FROM cash_closures WHERE id = ?").get(closureId) });
 });
 
 app.get("/api/ventas/cash/history", requireAuth, requireSystemAccess("ventas_almacen"), (req, res) => {
-  const closures = db.prepare("SELECT * FROM cash_closures WHERE company_id = ? ORDER BY created_at DESC").all(req.user.company_id);
+  const ownOnly = ventasOwnOnly(req.user.role);
+  const closures = db.prepare(`SELECT * FROM cash_closures WHERE company_id = ? ${ownOnly ? "AND created_by = ?" : ""} ORDER BY created_at DESC`).all(...(ownOnly ? [req.user.company_id, req.user.id] : [req.user.company_id]));
   res.json({ closures });
 });
 
@@ -1673,6 +1677,10 @@ function requireVentasRole(...roles) {
     }
     next();
   };
+}
+
+function ventasOwnOnly(role) {
+  return !["admin", "ventas_admin", "supervisor"].includes(role);
 }
 
 function loadSettings(companyId) {

@@ -231,11 +231,13 @@ function renderWorkflow() {
 
 function renderSummary() {
   setCount("Resumen");
+  const scopeText = canSeeAllSales() ? "Ventas" : "Mis ventas";
+  const incomeText = canSeeAllSales() ? "Ingresos" : "Mis ingresos";
   mainList().innerHTML = `
     <section class="setup-overview">
       <article><span>Clientes</span><strong>${customers.length}</strong></article>
-      <article><span>Ventas</span><strong>${summary.sales || 0}</strong></article>
-      <article><span>Ingresos</span><strong>${money(summary.income || 0)}</strong></article>
+      <article><span>${scopeText}</span><strong>${summary.sales || 0}</strong></article>
+      <article><span>${incomeText}</span><strong>${money(summary.income || 0)}</strong></article>
     </section>
     ${renderVentasCommandCenter()}
     ${renderServiceStrip()}
@@ -285,10 +287,12 @@ function renderSell() {
 
 function renderFinance() {
   setCount(`${sales.length} venta${sales.length === 1 ? "" : "s"}`);
+  const cashLabel = canSeeAllSales() ? "Pendiente caja" : "Mi caja pendiente";
+  const totalLabel = canSeeAllSales() ? "Monto pendiente" : "Mi monto pendiente";
   mainList().innerHTML = `
     <section class="setup-overview">
-      <article><span>Pendiente caja</span><strong>${cash.pendingSales?.length || 0}</strong></article>
-      <article><span>Monto pendiente</span><strong>${money(cash.total || 0)}</strong></article>
+      <article><span>${cashLabel}</span><strong>${cash.pendingSales?.length || 0}</strong></article>
+      <article><span>${totalLabel}</span><strong>${money(cash.total || 0)}</strong></article>
       <article><span>Ingreso total</span><strong>${money(summary.income || 0)}</strong></article>
     </section>
     <section class="admin-panel"><div class="admin-list">${sales.map(renderSaleRow).join("") || empty("Sin ventas")}</div></section>
@@ -799,12 +803,13 @@ function accessibleViewsForRole(role) {
   const views = {
     admin: ["summary", "alerts", "sell", "finance", "routes", "promotions", "reports", "catalog", "customers", "inventory", "settings"],
     ventas_admin: ["summary", "alerts", "sell", "finance", "routes", "promotions", "reports", "catalog", "customers", "inventory", "settings"],
-    cajero: ["summary", "sell", "finance", "routes", "customers", "reports"],
-    vendedor: ["summary", "sell", "routes", "promotions", "customers"],
+    cajero: ["summary", "sell", "finance", "customers"],
+    vendedor: ["summary", "sell", "customers"],
     almacen: ["summary", "alerts", "routes", "reports", "catalog", "inventory"],
     supervisor: ["summary", "alerts", "sell", "finance", "routes", "promotions", "reports", "catalog", "customers", "inventory"],
     funcionario: ["summary", "sell", "routes", "customers"]
   };
   return views[role] || ["summary"];
 }
+function canSeeAllSales() { return ["admin", "ventas_admin", "supervisor"].includes(currentUser?.role); }
 function escapeHtml(value) { return String(value ?? "").replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;").replaceAll("'", "&#039;"); }

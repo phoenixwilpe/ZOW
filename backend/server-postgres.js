@@ -1017,6 +1017,7 @@ app.patch("/api/companies/:id/systems", requireAuth, requireRole("zow_owner"), a
 app.get("/api/ventas/summary", requireAuth, async (req, res) => {
   if (!(await requireSystemAccess("ventas_almacen", req, res))) return;
   await ensureVentasSchema();
+  const ownOnly = ventasOwnOnly(req.user.role);
   const inventory = await pg.get(
     `SELECT COUNT(*) AS products,
             COALESCE(SUM(stock), 0) AS stock,
@@ -1029,14 +1030,14 @@ app.get("/api/ventas/summary", requireAuth, async (req, res) => {
   const sales = await pg.get(
     `SELECT COUNT(*) AS sales, COALESCE(SUM(total), 0) AS income
      FROM sales_orders
-     WHERE company_id = ? AND status = 'confirmada'`,
-    [req.user.company_id]
+     WHERE company_id = ? AND status = 'confirmada' ${ownOnly ? "AND created_by = ?" : ""}`,
+    ownOnly ? [req.user.company_id, req.user.id] : [req.user.company_id]
   );
   const pendingCash = await pg.get(
     `SELECT COUNT(*) AS pending_sales, COALESCE(SUM(total), 0) AS pending_total
      FROM sales_orders
-     WHERE company_id = ? AND status = 'confirmada' AND cash_closed = false`,
-    [req.user.company_id]
+     WHERE company_id = ? AND status = 'confirmada' AND cash_closed = false ${ownOnly ? "AND created_by = ?" : ""}`,
+    ownOnly ? [req.user.company_id, req.user.id] : [req.user.company_id]
   );
   res.json({ summary: { ...inventory, ...sales, ...pendingCash } });
 });
@@ -1173,7 +1174,7 @@ app.post("/api/ventas/customers", requireAuth, async (req, res) => {
 app.get("/api/ventas/sales", requireAuth, async (req, res) => {
   if (!(await requireSystemAccess("ventas_almacen", req, res))) return;
   await ensureVentasSchema();
-  const ownOnly = !["admin", "ventas_admin"].includes(req.user.role);
+  const ownOnly = ventasOwnOnly(req.user.role);
   const sales = await pg.all(
     `SELECT sales_orders.*, users.name AS seller_name
      FROM sales_orders
@@ -1190,7 +1191,7 @@ app.get("/api/ventas/sales/:id", requireAuth, async (req, res) => {
   await ensureVentasSchema();
   const sale = await pg.get("SELECT * FROM sales_orders WHERE id = ? AND company_id = ?", [req.params.id, req.user.company_id]);
   if (!sale) return res.status(404).json({ error: "Venta no encontrada" });
-  if (!["admin", "ventas_admin"].includes(req.user.role) && sale.created_by !== req.user.id) return res.status(403).json({ error: "Permiso insuficiente" });
+  if (ventasOwnOnly(req.user.role) && sale.created_by !== req.user.id) return res.status(403).json({ error: "Permiso insuficiente" });
   const items = await pg.all("SELECT * FROM sales_order_items WHERE sale_id = ? AND company_id = ?", [sale.id, req.user.company_id]);
   res.json({ sale, items });
 });
@@ -1257,9 +1258,10 @@ app.post("/api/ventas/sales", requireAuth, async (req, res) => {
 app.get("/api/ventas/cash", requireAuth, async (req, res) => {
   if (!(await requireSystemAccess("ventas_almacen", req, res))) return;
   await ensureVentasSchema();
+  const ownOnly = ventasOwnOnly(req.user.role);
   const pendingSales = await pg.all(
-    "SELECT * FROM sales_orders WHERE company_id = ? AND status = 'confirmada' AND cash_closed = false ORDER BY created_at DESC",
-    [req.user.company_id]
+    `SELECT * FROM sales_orders WHERE company_id = ? AND status = 'confirmada' AND cash_closed = false ${ownOnly ? "AND created_by = ?" : ""} ORDER BY created_at DESC`,
+    ownOnly ? [req.user.company_id, req.user.id] : [req.user.company_id]
   );
   const total = pendingSales.reduce((sum, sale) => sum + Number(sale.total || 0), 0);
   res.json({ pendingSales, total });
@@ -1269,7 +1271,11 @@ app.post("/api/ventas/cash/close", requireAuth, async (req, res) => {
   if (!(await requireSystemAccess("ventas_almacen", req, res))) return;
   if (!requireVentasRole(req, res, "admin", "ventas_admin", "cajero")) return;
   await ensureVentasSchema();
-  const pendingSales = await pg.all("SELECT * FROM sales_orders WHERE company_id = ? AND status = 'confirmada' AND cash_closed = false", [req.user.company_id]);
+  const ownOnly = ventasOwnOnly(req.user.role);
+  const pendingSales = await pg.all(
+    `SELECT * FROM sales_orders WHERE company_id = ? AND status = 'confirmada' AND cash_closed = false ${ownOnly ? "AND created_by = ?" : ""}`,
+    ownOnly ? [req.user.company_id, req.user.id] : [req.user.company_id]
+  );
   if (!pendingSales.length) return res.status(400).json({ error: "No hay ventas pendientes de cierre" });
   const closureId = randomUUID();
   const total = pendingSales.reduce((sum, sale) => sum + Number(sale.total || 0), 0);
@@ -1280,7 +1286,10 @@ app.post("/api/ventas/cash/close", requireAuth, async (req, res) => {
        VALUES (?, ?, ?, ?, ?, ?, now())`,
       [closureId, req.user.company_id, code, total, pendingSales.length, req.user.id]
     );
-    await client.run("UPDATE sales_orders SET cash_closed = true WHERE company_id = ? AND status = 'confirmada' AND cash_closed = false", [req.user.company_id]);
+    await client.run(
+      `UPDATE sales_orders SET cash_closed = true WHERE company_id = ? AND status = 'confirmada' AND cash_closed = false ${ownOnly ? "AND created_by = ?" : ""}`,
+      ownOnly ? [req.user.company_id, req.user.id] : [req.user.company_id]
+    );
   });
   res.status(201).json({ closure: await pg.get("SELECT * FROM cash_closures WHERE id = ?", [closureId]) });
 });
@@ -1288,7 +1297,11 @@ app.post("/api/ventas/cash/close", requireAuth, async (req, res) => {
 app.get("/api/ventas/cash/history", requireAuth, async (req, res) => {
   if (!(await requireSystemAccess("ventas_almacen", req, res))) return;
   await ensureVentasSchema();
-  const closures = await pg.all("SELECT * FROM cash_closures WHERE company_id = ? ORDER BY created_at DESC", [req.user.company_id]);
+  const ownOnly = ventasOwnOnly(req.user.role);
+  const closures = await pg.all(
+    `SELECT * FROM cash_closures WHERE company_id = ? ${ownOnly ? "AND created_by = ?" : ""} ORDER BY created_at DESC`,
+    ownOnly ? [req.user.company_id, req.user.id] : [req.user.company_id]
+  );
   res.json({ closures });
 });
 
@@ -1754,6 +1767,10 @@ function requireVentasRole(req, res, ...roles) {
     return false;
   }
   return true;
+}
+
+function ventasOwnOnly(role) {
+  return !["admin", "ventas_admin", "supervisor"].includes(role);
 }
 
 let ventasSchemaReady;
