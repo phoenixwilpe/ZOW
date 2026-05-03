@@ -1298,12 +1298,70 @@ app.get("/api/ventas/cash", requireAuth, async (req, res) => {
   if (!(await requireSystemAccess("ventas_almacen", req, res))) return;
   await ensureVentasSchema();
   const ownOnly = ventasOwnOnly(req.user.role);
+  const activeSession = await pg.get(
+    `SELECT cash_sessions.*, users.name AS opened_by_name
+     FROM cash_sessions
+     LEFT JOIN users ON users.id = cash_sessions.opened_by
+     WHERE cash_sessions.company_id = ? AND cash_sessions.opened_by = ? AND cash_sessions.status = 'abierta'
+     ORDER BY cash_sessions.opened_at DESC LIMIT 1`,
+    [req.user.company_id, req.user.id]
+  );
+  const movements = activeSession
+    ? await pg.all(
+        `SELECT cash_movements.*, users.name AS created_by_name
+         FROM cash_movements
+         LEFT JOIN users ON users.id = cash_movements.created_by
+         WHERE cash_movements.company_id = ? AND cash_movements.session_id = ?
+         ORDER BY cash_movements.created_at DESC`,
+        [req.user.company_id, activeSession.id]
+      )
+    : [];
   const pendingSales = await pg.all(
     `SELECT * FROM sales_orders WHERE company_id = ? AND status = 'confirmada' AND cash_closed = false ${ownOnly ? "AND created_by = ?" : ""} ORDER BY created_at DESC`,
     ownOnly ? [req.user.company_id, req.user.id] : [req.user.company_id]
   );
   const total = pendingSales.reduce((sum, sale) => sum + Number(sale.total || 0), 0);
-  res.json({ pendingSales, total });
+  res.json({ pendingSales, total, activeSession, movements });
+});
+
+app.post("/api/ventas/cash/open", requireAuth, async (req, res) => {
+  if (!(await requireSystemAccess("ventas_almacen", req, res))) return;
+  if (!requireVentasRole(req, res, "admin", "ventas_admin", "cajero")) return;
+  await ensureVentasSchema();
+  const active = await pg.get("SELECT id FROM cash_sessions WHERE company_id = ? AND opened_by = ? AND status = 'abierta'", [req.user.company_id, req.user.id]);
+  if (active) return res.status(400).json({ error: "Ya tienes una caja abierta" });
+  const sessionId = randomUUID();
+  const openingAmount = Number(req.body.openingAmount || 0);
+  if (openingAmount < 0) return res.status(400).json({ error: "El monto inicial no puede ser negativo" });
+  await pg.run(
+    `INSERT INTO cash_sessions (id, company_id, opened_by, opening_amount, status, opened_at)
+     VALUES (?, ?, ?, ?, 'abierta', now())`,
+    [sessionId, req.user.company_id, req.user.id, openingAmount]
+  );
+  res.status(201).json({ session: await pg.get("SELECT * FROM cash_sessions WHERE id = ?", [sessionId]) });
+});
+
+app.post("/api/ventas/cash/movements", requireAuth, async (req, res) => {
+  if (!(await requireSystemAccess("ventas_almacen", req, res))) return;
+  if (!requireVentasRole(req, res, "admin", "ventas_admin", "cajero")) return;
+  await ensureVentasSchema();
+  const session = await pg.get("SELECT * FROM cash_sessions WHERE company_id = ? AND opened_by = ? AND status = 'abierta'", [req.user.company_id, req.user.id]);
+  if (!session) return res.status(400).json({ error: "Abre caja antes de registrar movimientos" });
+  const movement = {
+    id: randomUUID(),
+    type: String(req.body.type || "ingreso").trim(),
+    amount: Number(req.body.amount || 0),
+    reason: String(req.body.reason || "").trim()
+  };
+  if (!["ingreso", "egreso"].includes(movement.type) || movement.amount <= 0 || !movement.reason) {
+    return res.status(400).json({ error: "Movimiento de caja invalido" });
+  }
+  await pg.run(
+    `INSERT INTO cash_movements (id, company_id, session_id, type, amount, reason, created_by, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, now())`,
+    [movement.id, req.user.company_id, session.id, movement.type, movement.amount, movement.reason, req.user.id]
+  );
+  res.status(201).json({ movement: await pg.get("SELECT * FROM cash_movements WHERE id = ?", [movement.id]) });
 });
 
 app.post("/api/ventas/cash/close", requireAuth, async (req, res) => {
@@ -1311,24 +1369,36 @@ app.post("/api/ventas/cash/close", requireAuth, async (req, res) => {
   if (!requireVentasRole(req, res, "admin", "ventas_admin", "cajero")) return;
   await ensureVentasSchema();
   const ownOnly = ventasOwnOnly(req.user.role);
+  const session = await pg.get("SELECT * FROM cash_sessions WHERE company_id = ? AND opened_by = ? AND status = 'abierta'", [req.user.company_id, req.user.id]);
+  if (!session) return res.status(400).json({ error: "No tienes una caja abierta" });
   const pendingSales = await pg.all(
     `SELECT * FROM sales_orders WHERE company_id = ? AND status = 'confirmada' AND cash_closed = false ${ownOnly ? "AND created_by = ?" : ""}`,
     ownOnly ? [req.user.company_id, req.user.id] : [req.user.company_id]
   );
-  if (!pendingSales.length) return res.status(400).json({ error: "No hay ventas pendientes de cierre" });
   const closureId = randomUUID();
   const total = pendingSales.reduce((sum, sale) => sum + Number(sale.total || 0), 0);
+  const movements = await pg.all("SELECT * FROM cash_movements WHERE company_id = ? AND session_id = ?", [req.user.company_id, session.id]);
+  const movementTotal = movements.reduce((sum, item) => sum + (item.type === "ingreso" ? Number(item.amount || 0) : -Number(item.amount || 0)), 0);
+  const openingAmount = Number(session.opening_amount || 0);
+  const expectedAmount = openingAmount + total + movementTotal;
+  const countedAmount = Number(req.body.countedAmount ?? expectedAmount);
+  const differenceAmount = countedAmount - expectedAmount;
+  if (countedAmount < 0) return res.status(400).json({ error: "El efectivo contado no puede ser negativo" });
   const code = await buildNextCashCode(req.user.company_id);
   await pg.tx(async (client) => {
     await client.run(
-      `INSERT INTO cash_closures (id, company_id, code, total_sales, sale_count, created_by, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, now())`,
-      [closureId, req.user.company_id, code, total, pendingSales.length, req.user.id]
+      `INSERT INTO cash_closures (
+         id, company_id, code, opening_amount, total_sales, movement_total, expected_amount,
+         counted_amount, difference_amount, sale_count, created_by, created_at
+       )
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, now())`,
+      [closureId, req.user.company_id, code, openingAmount, total, movementTotal, expectedAmount, countedAmount, differenceAmount, pendingSales.length, req.user.id]
     );
     await client.run(
       `UPDATE sales_orders SET cash_closed = true WHERE company_id = ? AND status = 'confirmada' AND cash_closed = false ${ownOnly ? "AND created_by = ?" : ""}`,
       ownOnly ? [req.user.company_id, req.user.id] : [req.user.company_id]
     );
+    await client.run("UPDATE cash_sessions SET status = 'cerrada', closed_at = now() WHERE id = ? AND company_id = ?", [session.id, req.user.company_id]);
   });
   res.status(201).json({ closure: await pg.get("SELECT * FROM cash_closures WHERE id = ?", [closureId]) });
 });
@@ -1360,9 +1430,26 @@ app.post("/api/ventas/products/:id/movements", requireAuth, async (req, res) => 
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, now())`,
       [randomUUID(), req.user.company_id, product.id, type, quantity, String(req.body.reference || ""), String(req.body.note || ""), req.user.id]
     );
-    await client.run("UPDATE inventory_products SET stock = stock + ?, updated_at = now() WHERE id = ?", [signedQuantity, product.id]);
+    await client.run("UPDATE inventory_products SET stock = stock + ?, updated_at = now() WHERE id = ? AND company_id = ?", [signedQuantity, product.id, req.user.company_id]);
   });
   res.json({ product: await pg.get("SELECT * FROM inventory_products WHERE id = ?", [product.id]) });
+});
+
+app.get("/api/ventas/products/:id/movements", requireAuth, async (req, res) => {
+  if (!(await requireSystemAccess("ventas_almacen", req, res))) return;
+  await ensureVentasSchema();
+  const product = await pg.get("SELECT id FROM inventory_products WHERE id = ? AND company_id = ?", [req.params.id, req.user.company_id]);
+  if (!product) return res.status(404).json({ error: "Producto no encontrado" });
+  const movements = await pg.all(
+    `SELECT inventory_movements.*, users.name AS created_by_name
+     FROM inventory_movements
+     LEFT JOIN users ON users.id = inventory_movements.created_by
+     WHERE inventory_movements.company_id = ? AND inventory_movements.product_id = ?
+     ORDER BY inventory_movements.created_at DESC
+     LIMIT 30`,
+    [req.user.company_id, product.id]
+  );
+  res.json({ movements });
 });
 
 app.patch("/api/companies/:id/status", requireAuth, requireRole("zow_owner"), async (req, res) => {
@@ -1892,11 +1979,39 @@ async function ensureVentasSchema() {
           id text primary key,
           company_id text not null references companies(id) on delete cascade,
           code text not null,
+          opening_amount numeric not null default 0,
           total_sales numeric not null default 0,
+          movement_total numeric not null default 0,
+          expected_amount numeric not null default 0,
+          counted_amount numeric not null default 0,
+          difference_amount numeric not null default 0,
           sale_count integer not null default 0,
           created_by text not null references users(id),
           created_at timestamptz not null default now(),
           unique (company_id, code)
+        )
+      `);
+      await pg.run(`
+        CREATE TABLE IF NOT EXISTS cash_sessions (
+          id text primary key,
+          company_id text not null references companies(id) on delete cascade,
+          opened_by text not null references users(id),
+          opening_amount numeric not null default 0,
+          status text not null default 'abierta',
+          opened_at timestamptz not null default now(),
+          closed_at timestamptz
+        )
+      `);
+      await pg.run(`
+        CREATE TABLE IF NOT EXISTS cash_movements (
+          id text primary key,
+          company_id text not null references companies(id) on delete cascade,
+          session_id text not null references cash_sessions(id) on delete cascade,
+          type text not null,
+          amount numeric not null default 0,
+          reason text not null default '',
+          created_by text not null references users(id),
+          created_at timestamptz not null default now()
         )
       `);
       await pg.run(`
@@ -1915,6 +2030,13 @@ async function ensureVentasSchema() {
       await pg.run("CREATE INDEX IF NOT EXISTS idx_inventory_products_company ON inventory_products(company_id, name)");
       await pg.run("CREATE INDEX IF NOT EXISTS idx_sales_orders_company ON sales_orders(company_id, created_at DESC)");
       await pg.run("CREATE INDEX IF NOT EXISTS idx_inventory_movements_product ON inventory_movements(product_id, created_at DESC)");
+      await pg.run("CREATE INDEX IF NOT EXISTS idx_cash_sessions_company ON cash_sessions(company_id, status, opened_at)");
+      await pg.run("CREATE INDEX IF NOT EXISTS idx_cash_movements_session ON cash_movements(session_id, created_at)");
+      await pg.run("ALTER TABLE cash_closures ADD COLUMN IF NOT EXISTS opening_amount numeric not null default 0");
+      await pg.run("ALTER TABLE cash_closures ADD COLUMN IF NOT EXISTS movement_total numeric not null default 0");
+      await pg.run("ALTER TABLE cash_closures ADD COLUMN IF NOT EXISTS expected_amount numeric not null default 0");
+      await pg.run("ALTER TABLE cash_closures ADD COLUMN IF NOT EXISTS counted_amount numeric not null default 0");
+      await pg.run("ALTER TABLE cash_closures ADD COLUMN IF NOT EXISTS difference_amount numeric not null default 0");
     })();
   }
   await ventasSchemaReady;

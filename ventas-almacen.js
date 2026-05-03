@@ -3,8 +3,6 @@ const API_BASE_URL = window.location.hostname === "localhost" || window.location
   : "/api";
 const TOKEN_KEY = "zowVentasAlmacen.token";
 const SESSION_KEY = "zowVentasAlmacen.session";
-const CASH_SESSION_KEY = "zowVentasAlmacen.cashSession";
-const CASH_MOVEMENTS_KEY = "zowVentasAlmacen.cashMovements";
 const SUSPENDED_SALES_KEY = "zowVentasAlmacen.suspendedSales";
 const LOCAL_SALE_META_KEY = "zowVentasAlmacen.saleMeta";
 
@@ -32,8 +30,9 @@ let productSearch = "";
 let ventasMessage = "";
 let paymentDraft = { method: "efectivo", received: 0 };
 let suspendedSales = loadJson(SUSPENDED_SALES_KEY, []);
-let cashSession = loadJson(CASH_SESSION_KEY, null);
-let cashMovements = loadJson(CASH_MOVEMENTS_KEY, []);
+let cashSession = null;
+let cashMovements = [];
+let selectedKardex = null;
 let localSaleMeta = loadJson(LOCAL_SALE_META_KEY, {});
 let historyFilter = { status: "", method: "", date: "" };
 let storeSettings = { companyName: "", storeName: "", currency: "BOB", taxId: "", phone: "", address: "", ticketNote: "" };
@@ -205,6 +204,8 @@ async function render() {
     users = (usersResponse.users || []).map(normalizeUser);
     units = (unitsResponse.units || []).map(normalizeUnit);
     cash = cashResponse || { pendingSales: [], total: 0 };
+    cashSession = normalizeCashSession(cash.activeSession);
+    cashMovements = (cash.movements || []).map(normalizeCashMovement);
     renderLoggedIn();
   } catch (error) {
     renderLoggedOut();
@@ -424,7 +425,7 @@ function renderFinance() {
             <label>Monto<input id="cashMovementAmount" type="number" min="0.01" step="0.01" required /></label>
             <label class="span-2">Motivo<input id="cashMovementReason" type="text" required placeholder="Cambio, compra menor, retiro, etc." /></label>
           </div>
-          <button class="ghost-button" type="submit">Registrar movimiento</button>
+          <button class="ghost-button" type="submit" ${cashSession?.status === "abierta" ? "" : "disabled"}>Registrar movimiento</button>
         </form>
       </section>
       <section class="admin-panel">
@@ -434,7 +435,7 @@ function renderFinance() {
             <label>Efectivo esperado<input type="text" value="${money(expectedCash)}" readonly /></label>
             <label>Efectivo contado<input id="cashCountedAmount" type="number" min="0" step="0.01" value="${expectedCash.toFixed(2)}" /></label>
           </div>
-          <button class="primary-button" type="submit">Cerrar caja</button>
+          <button class="primary-button" type="submit" ${cashSession?.status === "abierta" ? "" : "disabled"}>Cerrar caja</button>
         </form>
       </section>
     </section>
@@ -569,11 +570,19 @@ function renderInventory() {
       <label class="toolbar-search">Buscar producto<input id="productSearchInput" type="search" value="${escapeHtml(productSearch)}" placeholder="Codigo, nombre o categoria" /></label>
       <div class="admin-list">${inventoryProducts.map(renderInventoryProductRow).join("") || empty("Sin productos con esa busqueda")}</div>
     </section>
+    ${selectedKardex ? renderKardexPanel() : ""}
   `;
   bindProductSearch();
   document.querySelector("#loadStarterProducts")?.addEventListener("click", loadStarterProducts);
   document.querySelectorAll("[data-stock-move]").forEach((button) => {
     button.addEventListener("click", () => openStockMovement(button.dataset.stockMove, button.dataset.type));
+  });
+  document.querySelectorAll("[data-stock-history]").forEach((button) => {
+    button.addEventListener("click", () => viewStockHistory(button.dataset.stockHistory));
+  });
+  document.querySelector("#closeKardex")?.addEventListener("click", () => {
+    selectedKardex = null;
+    renderMain();
   });
 }
 
@@ -631,9 +640,32 @@ function renderInventoryProductRow(product) {
       <span>Costo ${money(product.cost_price)}</span>
       <span>Venta ${money(product.sale_price)}</span>
       <span class="${Number(product.stock || 0) <= Number(product.min_stock || 0) ? "danger-text" : "ok-text"}">${Number(product.stock || 0) <= Number(product.min_stock || 0) ? "Bajo minimo" : "Stock OK"}</span>
-      ${canMoveStock ? `<div class="mini-action-row"><button class="ghost-button" type="button" data-stock-move="${product.id}" data-type="entrada">Entrada</button><button class="ghost-button" type="button" data-stock-move="${product.id}" data-type="salida">Salida</button><button class="ghost-button" type="button" data-stock-move="${product.id}" data-type="ajuste">Ajuste</button></div>` : ""}
+      <div class="mini-action-row">
+        <button class="ghost-button" type="button" data-stock-history="${product.id}">Kardex</button>
+        ${canMoveStock ? `<button class="ghost-button" type="button" data-stock-move="${product.id}" data-type="entrada">Entrada</button><button class="ghost-button" type="button" data-stock-move="${product.id}" data-type="salida">Salida</button><button class="ghost-button" type="button" data-stock-move="${product.id}" data-type="ajuste">Ajuste</button>` : ""}
+      </div>
     </div>
   </article>`;
+}
+
+function renderKardexPanel() {
+  const product = products.find((item) => item.id === selectedKardex.productId);
+  return `
+    <section class="admin-panel">
+      <div class="admin-panel-head">
+        <div><p class="eyebrow">Kardex</p><h3>${escapeHtml(product?.name || "Producto")}</h3></div>
+        <button class="ghost-button" type="button" id="closeKardex">Cerrar</button>
+      </div>
+      <div class="admin-list">
+        ${selectedKardex.movements.map(renderStockMovementRow).join("") || empty("Sin movimientos de inventario")}
+      </div>
+    </section>
+  `;
+}
+
+function renderStockMovementRow(movement) {
+  const sign = movement.type === "salida" ? "-" : "+";
+  return `<article class="admin-row"><div><strong>${escapeHtml(movement.type)} ${sign}${num(movement.quantity)}</strong><span>${escapeHtml(movement.reference || "Sin referencia")} / ${escapeHtml(movement.note || "Sin nota")}</span><span>${formatDateTime(movement.created_at || movement.createdAt)} / ${escapeHtml(movement.created_by_name || movement.user || "Usuario")}</span></div></article>`;
 }
 
 function renderSellProduct(product) {
@@ -977,6 +1009,13 @@ function buildQuickCashAmounts(total) {
 
 async function submitSale(event) {
   event.preventDefault();
+  if (!cashSession || cashSession.status !== "abierta") {
+    ventasMessage = "Abre caja antes de confirmar ventas.";
+    paymentModal.close();
+    activeView = "finance";
+    renderMain();
+    return;
+  }
   const totals = cartTotals();
   if (Number(paymentDraft.received || 0) < totals.total) return;
   const response = await apiRequest("/ventas/sales", {
@@ -1004,27 +1043,33 @@ async function closeCash() {
 
 function openCashSession(event) {
   event.preventDefault();
-  cashSession = { id: crypto.randomUUID(), openedAt: new Date().toISOString(), openedBy: currentUser.name, openingAmount: Number(value("#cashOpeningAmount") || 0), status: "abierta" };
-  persistJson(CASH_SESSION_KEY, cashSession);
-  ventasMessage = "Caja abierta correctamente.";
-  renderMain();
+  apiRequest("/ventas/cash/open", {
+    method: "POST",
+    body: { openingAmount: Number(value("#cashOpeningAmount") || 0) }
+  }).then(async () => {
+    ventasMessage = "Caja abierta correctamente.";
+    await render();
+  }).catch((error) => {
+    ventasMessage = error.message || "No se pudo abrir la caja.";
+    renderMain();
+  });
 }
 
 function addCashMovement(event) {
   event.preventDefault();
   const movement = {
-    id: crypto.randomUUID(),
     type: value("#cashMovementType"),
     amount: Number(value("#cashMovementAmount") || 0),
-    reason: value("#cashMovementReason").trim(),
-    createdAt: new Date().toISOString(),
-    user: currentUser.name
+    reason: value("#cashMovementReason").trim()
   };
   if (!movement.amount || !movement.reason) return;
-  cashMovements = [movement, ...cashMovements].slice(0, 100);
-  persistJson(CASH_MOVEMENTS_KEY, cashMovements);
-  ventasMessage = "Movimiento registrado.";
-  renderMain();
+  apiRequest("/ventas/cash/movements", { method: "POST", body: movement }).then(async () => {
+    ventasMessage = "Movimiento registrado.";
+    await render();
+  }).catch((error) => {
+    ventasMessage = error.message || "No se pudo registrar el movimiento.";
+    renderMain();
+  });
 }
 
 async function closeCashSession(event) {
@@ -1032,11 +1077,14 @@ async function closeCashSession(event) {
   const counted = Number(value("#cashCountedAmount") || 0);
   const expected = cashExpectedTotal();
   if (!confirm(`Cerrar caja? Diferencia: ${money(counted - expected)}`)) return;
-  if (cash.pendingSales?.length) await closeCash();
-  cashSession = cashSession ? { ...cashSession, status: "cerrada", closedAt: new Date().toISOString(), countedAmount: counted, difference: counted - expected } : null;
-  persistJson(CASH_SESSION_KEY, cashSession);
-  ventasMessage = "Caja cerrada correctamente.";
-  await render();
+  try {
+    await apiRequest("/ventas/cash/close", { method: "POST", body: { countedAmount: counted } });
+    ventasMessage = "Caja cerrada correctamente.";
+    await render();
+  } catch (error) {
+    ventasMessage = error.message || "No se pudo cerrar la caja.";
+    renderMain();
+  }
 }
 
 function cashMovementsTotal() {
@@ -1204,6 +1252,17 @@ async function openStockMovement(productId, type) {
   await render();
 }
 
+async function viewStockHistory(productId) {
+  try {
+    const response = await apiRequest(`/ventas/products/${productId}/movements`);
+    selectedKardex = { productId, movements: response.movements || [] };
+    renderMain();
+  } catch (error) {
+    ventasMessage = error.message || "No se pudo cargar el kardex.";
+    renderMain();
+  }
+}
+
 async function loadStarterProducts() {
   ventasMessage = "";
   let created = 0;
@@ -1294,6 +1353,26 @@ function normalizeUnit(unit) {
     code: unit.code || "",
     level: unit.level || "",
     active: unit.active ?? unit.is_active ?? true
+  };
+}
+function normalizeCashSession(session) {
+  if (!session) return null;
+  return {
+    id: session.id,
+    openingAmount: Number(session.opening_amount ?? session.openingAmount ?? 0),
+    openedBy: session.opened_by_name || session.openedBy || currentUser?.name || "",
+    openedAt: session.opened_at || session.openedAt || "",
+    status: session.status || ""
+  };
+}
+function normalizeCashMovement(movement) {
+  return {
+    id: movement.id,
+    type: movement.type,
+    amount: Number(movement.amount || 0),
+    reason: movement.reason || "",
+    createdAt: movement.created_at || movement.createdAt || "",
+    user: movement.created_by_name || movement.user || ""
   };
 }
 function canAccessView(view) { return accessibleViewsForRole(currentUser?.role).includes(view); }

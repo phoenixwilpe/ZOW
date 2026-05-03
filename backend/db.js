@@ -305,12 +305,43 @@ function initDb() {
       id TEXT PRIMARY KEY,
       company_id TEXT NOT NULL,
       code TEXT NOT NULL,
+      opening_amount REAL NOT NULL DEFAULT 0,
       total_sales REAL NOT NULL DEFAULT 0,
+      movement_total REAL NOT NULL DEFAULT 0,
+      expected_amount REAL NOT NULL DEFAULT 0,
+      counted_amount REAL NOT NULL DEFAULT 0,
+      difference_amount REAL NOT NULL DEFAULT 0,
       sale_count INTEGER NOT NULL DEFAULT 0,
       created_by TEXT NOT NULL,
       created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
       UNIQUE (company_id, code),
       FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE,
+      FOREIGN KEY (created_by) REFERENCES users(id)
+    );
+
+    CREATE TABLE IF NOT EXISTS cash_sessions (
+      id TEXT PRIMARY KEY,
+      company_id TEXT NOT NULL,
+      opened_by TEXT NOT NULL,
+      opening_amount REAL NOT NULL DEFAULT 0,
+      status TEXT NOT NULL DEFAULT 'abierta',
+      opened_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      closed_at TEXT NOT NULL DEFAULT '',
+      FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE,
+      FOREIGN KEY (opened_by) REFERENCES users(id)
+    );
+
+    CREATE TABLE IF NOT EXISTS cash_movements (
+      id TEXT PRIMARY KEY,
+      company_id TEXT NOT NULL,
+      session_id TEXT NOT NULL,
+      type TEXT NOT NULL CHECK (type IN ('ingreso', 'egreso')),
+      amount REAL NOT NULL DEFAULT 0,
+      reason TEXT NOT NULL DEFAULT '',
+      created_by TEXT NOT NULL,
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE,
+      FOREIGN KEY (session_id) REFERENCES cash_sessions(id) ON DELETE CASCADE,
       FOREIGN KEY (created_by) REFERENCES users(id)
     );
 
@@ -376,8 +407,15 @@ function migrateSchema() {
   ensureColumn("leads", "next_action", "TEXT NOT NULL DEFAULT ''");
   ensureColumn("leads", "next_action_at", "TEXT NOT NULL DEFAULT ''");
   ensureColumn("leads", "priority", "TEXT NOT NULL DEFAULT 'media'");
+  ensureColumn("cash_closures", "opening_amount", "REAL NOT NULL DEFAULT 0");
+  ensureColumn("cash_closures", "movement_total", "REAL NOT NULL DEFAULT 0");
+  ensureColumn("cash_closures", "expected_amount", "REAL NOT NULL DEFAULT 0");
+  ensureColumn("cash_closures", "counted_amount", "REAL NOT NULL DEFAULT 0");
+  ensureColumn("cash_closures", "difference_amount", "REAL NOT NULL DEFAULT 0");
   db.prepare("CREATE INDEX IF NOT EXISTS idx_leads_priority ON leads(priority, created_at)").run();
   db.prepare("CREATE INDEX IF NOT EXISTS idx_lead_history_lead ON lead_history(lead_id, created_at)").run();
+  db.prepare("CREATE INDEX IF NOT EXISTS idx_cash_sessions_company ON cash_sessions(company_id, status, opened_at)").run();
+  db.prepare("CREATE INDEX IF NOT EXISTS idx_cash_movements_session ON cash_movements(session_id, created_at)").run();
   migrateTenantTables();
   db.prepare("UPDATE units SET company_id = COALESCE(NULLIF(company_id, ''), 'company-default')").run();
   db.prepare("UPDATE users SET company_id = COALESCE(NULLIF(company_id, ''), 'company-default')").run();

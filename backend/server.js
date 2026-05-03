@@ -1480,11 +1480,11 @@ app.post("/api/ventas/sales", requireAuth, requireSystemAccess("ventas_almacen")
       `INSERT INTO inventory_movements (id, company_id, product_id, type, quantity, reference, note, created_by, created_at)
        VALUES (?, ?, ?, 'salida', ?, ?, ?, ?, ?)`
     );
-    const updateStock = db.prepare("UPDATE inventory_products SET stock = stock - ?, updated_at = ? WHERE id = ?");
+    const updateStock = db.prepare("UPDATE inventory_products SET stock = stock - ?, updated_at = ? WHERE id = ? AND company_id = ?");
     preparedItems.forEach((item) => {
       insertItem.run(randomUUID(), req.user.company_id, saleId, item.product.id, item.product.name, item.quantity, item.unitPrice, item.total);
       insertMovement.run(randomUUID(), req.user.company_id, item.product.id, item.quantity, saleCode, "Venta confirmada", req.user.id, now);
-      updateStock.run(item.quantity, now, item.product.id);
+      updateStock.run(item.quantity, now, item.product.id, req.user.company_id);
     });
     db.exec("COMMIT");
   } catch (error) {
@@ -1500,26 +1500,109 @@ app.post("/api/ventas/sales", requireAuth, requireSystemAccess("ventas_almacen")
 
 app.get("/api/ventas/cash", requireAuth, requireSystemAccess("ventas_almacen"), (req, res) => {
   const ownOnly = ventasOwnOnly(req.user.role);
+  const activeSession = db
+    .prepare(
+      `SELECT cash_sessions.*, users.name AS opened_by_name
+       FROM cash_sessions
+       LEFT JOIN users ON users.id = cash_sessions.opened_by
+       WHERE cash_sessions.company_id = ? AND cash_sessions.opened_by = ? AND cash_sessions.status = 'abierta'
+       ORDER BY cash_sessions.opened_at DESC LIMIT 1`
+    )
+    .get(req.user.company_id, req.user.id);
+  const movements = activeSession
+    ? db
+        .prepare(
+          `SELECT cash_movements.*, users.name AS created_by_name
+           FROM cash_movements
+           LEFT JOIN users ON users.id = cash_movements.created_by
+           WHERE cash_movements.company_id = ? AND cash_movements.session_id = ?
+           ORDER BY cash_movements.created_at DESC`
+        )
+        .all(req.user.company_id, activeSession.id)
+    : [];
   const pendingSales = db
     .prepare(`SELECT * FROM sales_orders WHERE company_id = ? AND status = 'confirmada' AND cash_closed = 0 ${ownOnly ? "AND created_by = ?" : ""} ORDER BY created_at DESC`)
     .all(...(ownOnly ? [req.user.company_id, req.user.id] : [req.user.company_id]));
   const total = pendingSales.reduce((sum, sale) => sum + Number(sale.total || 0), 0);
-  res.json({ pendingSales, total });
+  res.json({ pendingSales, total, activeSession, movements });
+});
+
+app.post("/api/ventas/cash/open", requireAuth, requireSystemAccess("ventas_almacen"), requireVentasRole("admin", "ventas_admin", "cajero"), (req, res) => {
+  const active = db
+    .prepare("SELECT id FROM cash_sessions WHERE company_id = ? AND opened_by = ? AND status = 'abierta'")
+    .get(req.user.company_id, req.user.id);
+  if (active) return res.status(400).json({ error: "Ya tienes una caja abierta" });
+  const session = {
+    id: randomUUID(),
+    openingAmount: Number(req.body.openingAmount || 0),
+    openedAt: new Date().toISOString()
+  };
+  if (session.openingAmount < 0) return res.status(400).json({ error: "El monto inicial no puede ser negativo" });
+  db.prepare(
+    `INSERT INTO cash_sessions (id, company_id, opened_by, opening_amount, status, opened_at)
+     VALUES (?, ?, ?, ?, 'abierta', ?)`
+  ).run(session.id, req.user.company_id, req.user.id, session.openingAmount, session.openedAt);
+  res.status(201).json({
+    session: db.prepare("SELECT * FROM cash_sessions WHERE id = ?").get(session.id)
+  });
+});
+
+app.post("/api/ventas/cash/movements", requireAuth, requireSystemAccess("ventas_almacen"), requireVentasRole("admin", "ventas_admin", "cajero"), (req, res) => {
+  const session = db
+    .prepare("SELECT * FROM cash_sessions WHERE company_id = ? AND opened_by = ? AND status = 'abierta'")
+    .get(req.user.company_id, req.user.id);
+  if (!session) return res.status(400).json({ error: "Abre caja antes de registrar movimientos" });
+  const movement = {
+    id: randomUUID(),
+    type: String(req.body.type || "ingreso").trim(),
+    amount: Number(req.body.amount || 0),
+    reason: String(req.body.reason || "").trim(),
+    createdAt: new Date().toISOString()
+  };
+  if (!["ingreso", "egreso"].includes(movement.type) || movement.amount <= 0 || !movement.reason) {
+    return res.status(400).json({ error: "Movimiento de caja invalido" });
+  }
+  db.prepare(
+    `INSERT INTO cash_movements (id, company_id, session_id, type, amount, reason, created_by, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+  ).run(movement.id, req.user.company_id, session.id, movement.type, movement.amount, movement.reason, req.user.id, movement.createdAt);
+  res.status(201).json({ movement: db.prepare("SELECT * FROM cash_movements WHERE id = ?").get(movement.id) });
 });
 
 app.post("/api/ventas/cash/close", requireAuth, requireSystemAccess("ventas_almacen"), requireVentasRole("admin", "ventas_admin", "cajero"), (req, res) => {
   const ownOnly = ventasOwnOnly(req.user.role);
+  const session = db
+    .prepare("SELECT * FROM cash_sessions WHERE company_id = ? AND opened_by = ? AND status = 'abierta'")
+    .get(req.user.company_id, req.user.id);
+  if (!session) return res.status(400).json({ error: "No tienes una caja abierta" });
   const pendingSales = db.prepare(`SELECT * FROM sales_orders WHERE company_id = ? AND status = 'confirmada' AND cash_closed = 0 ${ownOnly ? "AND created_by = ?" : ""}`).all(...(ownOnly ? [req.user.company_id, req.user.id] : [req.user.company_id]));
-  if (!pendingSales.length) return res.status(400).json({ error: "No hay ventas pendientes de cierre" });
   const now = new Date().toISOString();
   const closureId = randomUUID();
   const code = buildNextCashCode(req.user.company_id, now);
   const total = pendingSales.reduce((sum, sale) => sum + Number(sale.total || 0), 0);
+  const movements = db.prepare("SELECT * FROM cash_movements WHERE company_id = ? AND session_id = ?").all(req.user.company_id, session.id);
+  const movementTotal = movements.reduce((sum, item) => sum + (item.type === "ingreso" ? Number(item.amount || 0) : -Number(item.amount || 0)), 0);
+  const openingAmount = Number(session.opening_amount || 0);
+  const expectedAmount = openingAmount + total + movementTotal;
+  const countedAmount = Number(req.body.countedAmount ?? expectedAmount);
+  const differenceAmount = countedAmount - expectedAmount;
+  if (countedAmount < 0) return res.status(400).json({ error: "El efectivo contado no puede ser negativo" });
+  db.exec("BEGIN");
+  try {
   db.prepare(
-    `INSERT INTO cash_closures (id, company_id, code, total_sales, sale_count, created_by, created_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?)`
-  ).run(closureId, req.user.company_id, code, total, pendingSales.length, req.user.id, now);
+    `INSERT INTO cash_closures (
+       id, company_id, code, opening_amount, total_sales, movement_total, expected_amount,
+       counted_amount, difference_amount, sale_count, created_by, created_at
+     )
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+  ).run(closureId, req.user.company_id, code, openingAmount, total, movementTotal, expectedAmount, countedAmount, differenceAmount, pendingSales.length, req.user.id, now);
   db.prepare(`UPDATE sales_orders SET cash_closed = 1 WHERE company_id = ? AND status = 'confirmada' AND cash_closed = 0 ${ownOnly ? "AND created_by = ?" : ""}`).run(...(ownOnly ? [req.user.company_id, req.user.id] : [req.user.company_id]));
+  db.prepare("UPDATE cash_sessions SET status = 'cerrada', closed_at = ? WHERE id = ? AND company_id = ?").run(now, session.id, req.user.company_id);
+  db.exec("COMMIT");
+  } catch (error) {
+    db.exec("ROLLBACK");
+    return res.status(400).json({ error: error.message || "No se pudo cerrar la caja" });
+  }
   res.status(201).json({ closure: db.prepare("SELECT * FROM cash_closures WHERE id = ?").get(closureId) });
 });
 
@@ -1552,8 +1635,24 @@ app.post("/api/ventas/products/:id/movements", requireAuth, requireSystemAccess(
     req.user.id,
     now
   );
-  db.prepare("UPDATE inventory_products SET stock = stock + ?, updated_at = ? WHERE id = ?").run(signedQuantity, now, product.id);
+  db.prepare("UPDATE inventory_products SET stock = stock + ?, updated_at = ? WHERE id = ? AND company_id = ?").run(signedQuantity, now, product.id, req.user.company_id);
   res.json({ product: db.prepare("SELECT * FROM inventory_products WHERE id = ?").get(product.id) });
+});
+
+app.get("/api/ventas/products/:id/movements", requireAuth, requireSystemAccess("ventas_almacen"), (req, res) => {
+  const product = db.prepare("SELECT id FROM inventory_products WHERE id = ? AND company_id = ?").get(req.params.id, req.user.company_id);
+  if (!product) return res.status(404).json({ error: "Producto no encontrado" });
+  const movements = db
+    .prepare(
+      `SELECT inventory_movements.*, users.name AS created_by_name
+       FROM inventory_movements
+       LEFT JOIN users ON users.id = inventory_movements.created_by
+       WHERE inventory_movements.company_id = ? AND inventory_movements.product_id = ?
+       ORDER BY inventory_movements.created_at DESC
+       LIMIT 30`
+    )
+    .all(req.user.company_id, product.id);
+  res.json({ movements });
 });
 
 app.patch("/api/companies/:id/status", requireAuth, requireRole("zow_owner"), (req, res) => {
