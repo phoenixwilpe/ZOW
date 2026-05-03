@@ -2115,6 +2115,12 @@ function renderZowAdmin(mode = "overview") {
     leadFilters = { status: "all", system: "all", plan: "all", follow: "all", sort: "recent", term: "" };
     renderZowAdmin("leads");
   });
+  document.querySelectorAll("[data-lead-quick-filter]").forEach((button) => {
+    button.addEventListener("click", () => {
+      leadFilters = { ...leadFilters, follow: button.dataset.leadQuickFilter || "all", sort: "next_action" };
+      renderZowAdmin("leads");
+    });
+  });
   if (mode === "leads" && commercialLeadsLoaded) bindLeadFilters();
   document.querySelectorAll("[data-lead-convert]").forEach((button) => {
     button.addEventListener("click", () => {
@@ -2312,6 +2318,7 @@ function renderLeadsPanel() {
           <strong>${overdueCount}</strong>
         </article>
       </section>
+      ${renderLeadActivityPanel()}
       <form class="report-filter-grid lead-filter-grid" aria-label="Filtros de leads">
         <label>
           Estado
@@ -2364,6 +2371,57 @@ function renderLeadsPanel() {
       ${commercialLeads.length ? renderLeadPipeline(visibleLeads) : `<div class="empty-state"><strong>Sin solicitudes</strong><span>Las solicitudes del formulario comercial apareceran aqui.</span></div>`}
     </section>
     ${renderLeadFollowDialog()}
+  `;
+}
+
+function renderLeadActivityPanel() {
+  const openLeads = commercialLeads.filter((lead) => !["convertido", "descartado"].includes(lead.status));
+  const priorityLeads = openLeads
+    .filter((lead) => ["overdue", "today", "scheduled"].includes(leadFollowStatus(lead).state))
+    .sort((first, second) => {
+      const firstStatus = leadFollowStatus(first).state;
+      const secondStatus = leadFollowStatus(second).state;
+      const rank = { overdue: 0, today: 1, scheduled: 2 };
+      return (rank[firstStatus] ?? 9) - (rank[secondStatus] ?? 9) || leadTimeValue(first.next_action_at) - leadTimeValue(second.next_action_at);
+    })
+    .slice(0, 5);
+  const staleLeads = openLeads.filter(isLeadWithoutFollowAfter24h).sort((first, second) => leadTimeValue(first.created_at) - leadTimeValue(second.created_at)).slice(0, 5);
+
+  return `
+    <section class="lead-activity-panel">
+      <div class="lead-activity-head">
+        <div>
+          <p class="eyebrow">Actividad comercial</p>
+          <h4>Agenda y alertas de seguimiento</h4>
+        </div>
+        <div class="lead-activity-actions">
+          <button class="ghost-button" type="button" data-lead-quick-filter="overdue">Ver vencidos</button>
+          <button class="ghost-button" type="button" data-lead-quick-filter="missing">Sin seguimiento</button>
+        </div>
+      </div>
+      <div class="lead-activity-grid">
+        <article>
+          <strong>Proximas acciones</strong>
+          ${priorityLeads.length ? priorityLeads.map(renderLeadActivityItem).join("") : `<div class="lead-activity-empty">No hay acciones programadas.</div>`}
+        </article>
+        <article>
+          <strong>Sin seguimiento despues de 24h</strong>
+          ${staleLeads.length ? staleLeads.map(renderLeadActivityItem).join("") : `<div class="lead-activity-empty">Todo lead reciente tiene seguimiento.</div>`}
+        </article>
+      </div>
+    </section>
+  `;
+}
+
+function renderLeadActivityItem(lead) {
+  const followStatus = leadFollowStatus(lead);
+  const nextAction = lead.next_action || "";
+  return `
+    <button class="lead-activity-item" type="button" data-lead-follow="${escapeHtml(lead.id)}">
+      <span class="lead-follow-pill ${followStatus.className}">${escapeHtml(followStatus.label)}</span>
+      <strong>${escapeHtml(lead.company || lead.name || "Lead sin empresa")}</strong>
+      <small>${escapeHtml(nextAction || systemLeadLabel(lead.system_id))} / ${escapeHtml(lead.phone || "Sin celular")}</small>
+    </button>
   `;
 }
 
@@ -2593,6 +2651,14 @@ function leadFollowStatus(lead) {
   if (days !== null && days < 0) return { state: "overdue", label: `Vencido ${Math.abs(days)}d`, className: "is-danger" };
   if (days === 0) return { state: "today", label: "Para hoy", className: "is-warning" };
   return { state: "scheduled", label: `En ${days}d`, className: "is-info" };
+}
+
+function isLeadWithoutFollowAfter24h(lead) {
+  if (!lead || ["convertido", "descartado"].includes(lead.status)) return false;
+  if (lead.next_action || lead.next_action_at || lead.notes) return false;
+  const createdAt = leadTimeValue(lead.created_at);
+  if (!createdAt) return false;
+  return Date.now() - createdAt >= 86400000;
 }
 
 async function loadCommercialLeads() {
