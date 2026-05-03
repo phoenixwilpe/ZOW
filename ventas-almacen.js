@@ -16,6 +16,7 @@ let cash = { pendingSales: [], total: 0 };
 let summary = {};
 let saleCart = [];
 let editingUserId = "";
+let productSearch = "";
 let storeSettings = { companyName: "", storeName: "", currency: "BOB", taxId: "", phone: "", address: "", ticketNote: "" };
 
 const loginScreen = document.querySelector("#loginScreen");
@@ -254,10 +255,12 @@ function renderAlerts() {
 function renderSell() {
   setCount(`${saleCart.length} item${saleCart.length === 1 ? "" : "s"}`);
   const subtotal = saleCart.reduce((sum, item) => sum + item.quantity * item.salePrice, 0);
+  const sellProducts = filteredProducts();
   mainList().innerHTML = `
     <section class="admin-panel">
       <div class="admin-panel-head"><div><p class="eyebrow">Productos</p><h3>Agregar a venta</h3></div></div>
-      <div class="admin-list">${products.map(renderSellProduct).join("") || empty("Registra productos para vender")}</div>
+      <label class="toolbar-search">Buscar producto<input id="productSearchInput" type="search" value="${escapeHtml(productSearch)}" placeholder="Codigo, nombre o categoria" /></label>
+      <div class="admin-list">${sellProducts.map(renderSellProduct).join("") || empty("Sin productos con esa busqueda")}</div>
     </section>
     <section class="admin-panel">
       <div class="admin-panel-head"><div><p class="eyebrow">Venta actual</p><h3>Total ${money(subtotal)}</h3></div></div>
@@ -272,8 +275,11 @@ function renderSell() {
       </form>
     </section>
   `;
+  bindProductSearch();
   document.querySelectorAll("[data-add-product]").forEach((button) => button.addEventListener("click", () => addToCart(button.dataset.addProduct)));
   document.querySelectorAll("[data-remove-cart]").forEach((button) => button.addEventListener("click", () => removeFromCart(button.dataset.removeCart)));
+  document.querySelectorAll("[data-cart-dec]").forEach((button) => button.addEventListener("click", () => updateCartQuantity(button.dataset.cartDec, -1)));
+  document.querySelectorAll("[data-cart-inc]").forEach((button) => button.addEventListener("click", () => updateCartQuantity(button.dataset.cartInc, 1)));
   document.querySelector("#saleForm")?.addEventListener("submit", submitSale);
 }
 
@@ -370,8 +376,16 @@ function renderCustomers() {
 }
 
 function renderInventory() {
+  const inventoryProducts = filteredProducts();
   setCount(`${products.length} producto${products.length === 1 ? "" : "s"}`);
-  mainList().innerHTML = products.map(renderInventoryProductRow).join("") || empty("Sin productos");
+  mainList().innerHTML = `
+    <section class="admin-panel">
+      <div class="admin-panel-head"><div><p class="eyebrow">Control de stock</p><h3>Inventario operativo</h3></div></div>
+      <label class="toolbar-search">Buscar producto<input id="productSearchInput" type="search" value="${escapeHtml(productSearch)}" placeholder="Codigo, nombre o categoria" /></label>
+      <div class="admin-list">${inventoryProducts.map(renderInventoryProductRow).join("") || empty("Sin productos con esa busqueda")}</div>
+    </section>
+  `;
+  bindProductSearch();
   document.querySelectorAll("[data-stock-move]").forEach((button) => {
     button.addEventListener("click", () => openStockMovement(button.dataset.stockMove, button.dataset.type));
   });
@@ -397,11 +411,11 @@ function renderSettings() {
     </section>
     ${currentUser.role === "admin" ? renderVentasUsersPanel() : ""}
     <section class="admin-panel">
-      <div class="admin-panel-head"><div><p class="eyebrow">Roles recomendados</p><h3>Operacion por permisos</h3></div></div>
-      <div class="setup-overview">
-        <article><span>Administrador ventas</span><strong>Todo</strong></article>
-        <article><span>Cajero / vendedor</span><strong>Ventas</strong></article>
-        <article><span>Almacen</span><strong>Stock</strong></article>
+      <div class="admin-panel-head"><div><p class="eyebrow">Modelos de operacion</p><h3>Adaptable a empresa chica o grande</h3></div></div>
+      <div class="operation-model-grid">
+        <article><span>Tienda 1 persona</span><strong>Encargado de sistema</strong><small>Puede configurar, vender, cerrar caja, registrar productos y ajustar stock.</small></article>
+        <article><span>Tienda 2 personas</span><strong>Operador integral + encargado</strong><small>El operador integral atiende venta, caja e inventario diario sin tocar el panel ZOW.</small></article>
+        <article><span>Empresa grande</span><strong>Roles separados</strong><small>Cajero, almacen, vendedor, supervisor y administrador ventas por area o sucursal.</small></article>
       </div>
     </section>
   `;
@@ -419,6 +433,9 @@ function renderSettings() {
   });
   document.querySelectorAll("[data-toggle-user]").forEach((button) => {
     button.addEventListener("click", () => toggleVentasUser(button.dataset.toggleUser));
+  });
+  document.querySelectorAll("[data-role-template]").forEach((button) => {
+    button.addEventListener("click", () => applyRoleTemplate(button.dataset.roleTemplate));
   });
 }
 
@@ -448,7 +465,7 @@ function renderSellProduct(product) {
 }
 
 function renderCartItem(item) {
-  return `<article class="admin-row"><div><strong>${escapeHtml(item.name)}</strong><span>${item.quantity} x ${money(item.salePrice)} = ${money(item.quantity * item.salePrice)}</span></div><button class="ghost-button" type="button" data-remove-cart="${item.productId}">Quitar</button></article>`;
+  return `<article class="admin-row cart-row"><div><strong>${escapeHtml(item.name)}</strong><span>${item.quantity} x ${money(item.salePrice)} = ${money(item.quantity * item.salePrice)}</span></div><div class="cart-actions"><button class="ghost-button" type="button" data-cart-dec="${item.productId}">-</button><strong>${item.quantity}</strong><button class="ghost-button" type="button" data-cart-inc="${item.productId}">+</button><button class="ghost-button" type="button" data-remove-cart="${item.productId}">Quitar</button></div></article>`;
 }
 
 function renderSaleRow(sale) {
@@ -501,6 +518,22 @@ function renderPriceRow(product) {
   return `<article class="price-row"><div><strong>${escapeHtml(product.name)}</strong><span>${escapeHtml(product.code)} / ${escapeHtml(product.category || "Sin categoria")}</span></div><div><span>${money(product.sale_price)}</span><small>Margen ${money(margin)}</small></div></article>`;
 }
 
+function filteredProducts() {
+  const term = productSearch.trim().toLowerCase();
+  if (!term) return products;
+  return products.filter((product) => [product.code, product.name, product.category]
+    .some((value) => String(value || "").toLowerCase().includes(term)));
+}
+
+function bindProductSearch() {
+  const input = document.querySelector("#productSearchInput");
+  if (!input) return;
+  input.addEventListener("input", () => {
+    productSearch = input.value;
+    renderMain();
+  });
+}
+
 function renderVentasUsersPanel() {
   const editing = users.find((user) => user.id === editingUserId);
   const operativeUsers = users.filter((user) => ["ventas_admin", "cajero", "almacen", "vendedor", "supervisor"].includes(user.role));
@@ -509,6 +542,11 @@ function renderVentasUsersPanel() {
       <div class="admin-panel-head">
         <div><p class="eyebrow">Usuarios Ventas-Almacen</p><h3>Credenciales operativas</h3></div>
         <span>${operativeUsers.length} usuario${operativeUsers.length === 1 ? "" : "s"}</span>
+      </div>
+      <div class="role-template-grid" aria-label="Plantillas de roles">
+        <button type="button" data-role-template="integral"><span>1 o 2 personas</span><strong>Operador integral</strong><small>Venta, caja, inventario, rutas y reportes.</small></button>
+        <button type="button" data-role-template="cashier"><span>Mostrador</span><strong>Cajero vendedor</strong><small>Venta, clientes, caja y rutas basicas.</small></button>
+        <button type="button" data-role-template="warehouse"><span>Almacen</span><strong>Responsable stock</strong><small>Inventario, entradas, salidas y alertas.</small></button>
       </div>
       <form class="admin-form" id="ventasUserForm">
         <div class="form-grid">
@@ -520,7 +558,7 @@ function renderVentasUsersPanel() {
           <label>Cargo<input id="ventasUserPosition" type="text" value="${escapeHtml(editing?.position || "")}" placeholder="Cajero, almacen, vendedor" /></label>
           <label>Rol
             <select id="ventasUserRole" required>
-              <option value="ventas_admin" ${editing?.role === "ventas_admin" ? "selected" : ""}>Administrador ventas</option>
+              <option value="ventas_admin" ${editing?.role === "ventas_admin" ? "selected" : ""}>Operador integral / administrador ventas</option>
               <option value="cajero" ${editing?.role === "cajero" ? "selected" : ""}>Cajero</option>
               <option value="almacen" ${editing?.role === "almacen" ? "selected" : ""}>Almacen</option>
               <option value="vendedor" ${editing?.role === "vendedor" ? "selected" : ""}>Vendedor</option>
@@ -569,6 +607,13 @@ function addToCart(productId) {
 
 function removeFromCart(productId) {
   saleCart = saleCart.filter((item) => item.productId !== productId);
+  renderMain();
+}
+
+function updateCartQuantity(productId, delta) {
+  saleCart = saleCart
+    .map((item) => item.productId === productId ? { ...item, quantity: Math.max(0, item.quantity + delta) } : item)
+    .filter((item) => item.quantity > 0);
   renderMain();
 }
 
@@ -664,6 +709,18 @@ async function toggleVentasUser(userId) {
   await render();
 }
 
+function applyRoleTemplate(template) {
+  const templates = {
+    integral: { role: "ventas_admin", position: "Operador integral" },
+    cashier: { role: "cajero", position: "Cajero vendedor" },
+    warehouse: { role: "almacen", position: "Responsable de almacen" }
+  };
+  const selected = templates[template];
+  if (!selected) return;
+  document.querySelector("#ventasUserRole").value = selected.role;
+  document.querySelector("#ventasUserPosition").value = selected.position;
+}
+
 async function openStockMovement(productId, type) {
   const product = products.find((item) => item.id === productId);
   if (!product) return;
@@ -711,7 +768,7 @@ function empty(text) { return `<div class="empty-state"><strong>${escapeHtml(tex
 function money(value) { return `${Number(value || 0).toLocaleString("es-BO", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${storeSettings.currency || "BOB"}`; }
 function num(value) { return Number(value || 0).toLocaleString("es-BO"); }
 function formatDateTime(date) { return new Intl.DateTimeFormat("es-BO", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" }).format(new Date(date)); }
-function roleLabel(role) { return { admin: "Encargado de sistema", recepcion_principal: "Recepcion principal", recepcion_secundaria: "Recepcion secundaria", funcionario: "Funcionario", supervisor: "Secretario / Director", ventas_admin: "Administrador ventas", cajero: "Cajero", almacen: "Almacen", vendedor: "Vendedor" }[role] || role; }
+function roleLabel(role) { return { admin: "Encargado de sistema", recepcion_principal: "Recepcion principal", recepcion_secundaria: "Recepcion secundaria", funcionario: "Funcionario", supervisor: "Supervisor", ventas_admin: "Operador integral", cajero: "Cajero", almacen: "Almacen", vendedor: "Vendedor" }[role] || role; }
 function normalizeUser(user) {
   return {
     id: user.id,

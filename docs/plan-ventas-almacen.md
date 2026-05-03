@@ -8,6 +8,7 @@ Referencia funcional: plataformas de alimentos y bebidas con gestion comercial, 
 - Activar backend Postgres para productos, categorias, clientes, ventas, caja, movimientos y comprobantes.
 - Mantener aislamiento por empresa mediante `company_id` en todas las consultas.
 - Permitir roles iniciales: encargado/admin ventas, cajero, vendedor, almacen y supervisor.
+- Soportar tiendas pequenas de 1 o 2 personas con perfil de operador integral, y empresas grandes con roles separados por funcion.
 
 ## Fase 2 - Gestion comercial
 

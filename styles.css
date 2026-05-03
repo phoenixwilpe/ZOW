@@ -1703,6 +1703,93 @@ h3 {
   font-size: 0.78rem;
 }
 
+.toolbar-search {
+  display: grid;
+  gap: 7px;
+  margin-bottom: 12px;
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-weight: 900;
+}
+
+.toolbar-search input {
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 11px 12px;
+  background: white;
+  color: var(--ink);
+  font: inherit;
+}
+
+.cart-row .cart-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 7px;
+}
+
+.cart-actions .ghost-button {
+  min-height: 32px;
+  min-width: 34px;
+  padding: 0 10px;
+}
+
+.operation-model-grid,
+.role-template-grid {
+  display: grid;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.operation-model-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.role-template-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.operation-model-grid article,
+.role-template-grid button {
+  border: 1px solid color-mix(in srgb, var(--accent) 18%, var(--line));
+  border-radius: 8px;
+  padding: 14px;
+  background:
+    linear-gradient(145deg, #ffffff, color-mix(in srgb, var(--accent-tint) 44%, white));
+  color: var(--ink);
+  text-align: left;
+  display: grid;
+  gap: 6px;
+}
+
+.role-template-grid button {
+  cursor: pointer;
+  transition: transform 160ms ease, border-color 160ms ease, box-shadow 160ms ease;
+}
+
+.role-template-grid button:hover {
+  border-color: color-mix(in srgb, var(--accent) 42%, var(--line));
+  box-shadow: 0 12px 30px rgb(15 23 42 / 7%);
+  transform: translateY(-1px);
+}
+
+.operation-model-grid span,
+.role-template-grid span {
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.operation-model-grid small,
+.role-template-grid small {
+  color: var(--muted);
+  line-height: 1.45;
+}
+
 .admin-action-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -5666,7 +5753,9 @@ body.system-zow-site .lead-form.is-highlighted {
   .promotion-grid,
   .route-grid,
   .report-grid,
-  .service-strip {
+  .service-strip,
+  .operation-model-grid,
+  .role-template-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
@@ -5681,13 +5770,16 @@ body.system-zow-site .lead-form.is-highlighted {
   .promotion-grid,
   .route-grid,
   .report-grid,
-  .service-strip {
+  .service-strip,
+  .operation-model-grid,
+  .role-template-grid {
     grid-template-columns: 1fr;
   }
 
   .route-card-head,
   .route-stats,
-  .price-row {
+  .price-row,
+  .cart-row .cart-actions {
     align-items: flex-start;
     flex-direction: column;
   }
