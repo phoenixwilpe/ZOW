@@ -1124,6 +1124,46 @@ app.post("/api/ventas/products", requireAuth, async (req, res) => {
   res.status(201).json({ product: await pg.get("SELECT * FROM inventory_products WHERE id = ?", [product.id]) });
 });
 
+app.patch("/api/ventas/products/:id", requireAuth, async (req, res) => {
+  if (!(await requireSystemAccess("ventas_almacen", req, res))) return;
+  if (!requireVentasRole(req, res, "admin", "ventas_admin", "almacen")) return;
+  await ensureVentasSchema();
+  const existing = await pg.get("SELECT * FROM inventory_products WHERE id = ? AND company_id = ?", [req.params.id, req.user.company_id]);
+  if (!existing) return res.status(404).json({ error: "Producto no encontrado" });
+  const product = {
+    code: String(req.body.code || "").trim().toUpperCase(),
+    name: String(req.body.name || "").trim(),
+    category: String(req.body.category || "").trim(),
+    unit: String(req.body.unit || "Unidad").trim(),
+    costPrice: Number(req.body.costPrice || 0),
+    salePrice: Number(req.body.salePrice || 0),
+    minStock: Number(req.body.minStock || 0)
+  };
+  if (!product.code || !product.name) return res.status(400).json({ error: "Codigo y nombre son obligatorios" });
+  const duplicate = await pg.get(
+    "SELECT id FROM inventory_products WHERE company_id = ? AND upper(code) = upper(?) AND id <> ?",
+    [req.user.company_id, product.code, existing.id]
+  );
+  if (duplicate) return res.status(400).json({ error: "Ya existe otro producto con ese codigo" });
+  await pg.run(
+    `UPDATE inventory_products
+     SET code = ?, name = ?, category = ?, unit = ?, cost_price = ?, sale_price = ?, min_stock = ?, updated_at = now()
+     WHERE id = ? AND company_id = ?`,
+    [product.code, product.name, product.category, product.unit, product.costPrice, product.salePrice, product.minStock, existing.id, req.user.company_id]
+  );
+  res.json({ product: await pg.get("SELECT * FROM inventory_products WHERE id = ? AND company_id = ?", [existing.id, req.user.company_id]) });
+});
+
+app.patch("/api/ventas/products/:id/status", requireAuth, async (req, res) => {
+  if (!(await requireSystemAccess("ventas_almacen", req, res))) return;
+  if (!requireVentasRole(req, res, "admin", "ventas_admin", "almacen")) return;
+  await ensureVentasSchema();
+  const product = await pg.get("SELECT id, name, is_active FROM inventory_products WHERE id = ? AND company_id = ?", [req.params.id, req.user.company_id]);
+  if (!product) return res.status(404).json({ error: "Producto no encontrado" });
+  await pg.run("UPDATE inventory_products SET is_active = ?, updated_at = now() WHERE id = ? AND company_id = ?", [Boolean(req.body.active), product.id, req.user.company_id]);
+  res.json({ product: await pg.get("SELECT * FROM inventory_products WHERE id = ? AND company_id = ?", [product.id]) });
+});
+
 app.get("/api/ventas/categories", requireAuth, async (req, res) => {
   if (!(await requireSystemAccess("ventas_almacen", req, res))) return;
   await ensureVentasSchema();

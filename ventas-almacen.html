@@ -147,7 +147,7 @@
         <div class="modal-header">
           <div>
             <p class="eyebrow">Inventario</p>
-            <h2>Nuevo producto</h2>
+            <h2 id="productModalTitle">Nuevo producto</h2>
           </div>
           <button class="icon-button" type="button" id="closeProductModal" aria-label="Cerrar">x</button>
         </div>
@@ -181,13 +181,13 @@
             <input id="productMin" type="number" min="0" step="0.01" value="0" />
           </label>
           <label>
-            Stock inicial
+            <span id="productStockLabel">Stock inicial</span>
             <input id="productStock" type="number" min="0" step="0.01" value="0" />
           </label>
         </div>
         <div class="modal-actions">
           <button class="ghost-button" type="button" id="cancelProductModal">Cancelar</button>
-          <button class="primary-button" type="submit">Guardar producto</button>
+          <button class="primary-button" type="submit" id="productSubmitBtn">Guardar producto</button>
         </div>
       </form>
     </dialog>

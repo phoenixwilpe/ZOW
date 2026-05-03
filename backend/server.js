@@ -1323,6 +1323,40 @@ app.post("/api/ventas/products", requireAuth, requireSystemAccess("ventas_almace
   res.status(201).json({ product: db.prepare("SELECT * FROM inventory_products WHERE id = ?").get(product.id) });
 });
 
+app.patch("/api/ventas/products/:id", requireAuth, requireSystemAccess("ventas_almacen"), requireVentasRole("admin", "ventas_admin", "almacen"), (req, res) => {
+  const existing = db.prepare("SELECT * FROM inventory_products WHERE id = ? AND company_id = ?").get(req.params.id, req.user.company_id);
+  if (!existing) return res.status(404).json({ error: "Producto no encontrado" });
+  const now = new Date().toISOString();
+  const product = {
+    code: String(req.body.code || "").trim().toUpperCase(),
+    name: String(req.body.name || "").trim(),
+    category: String(req.body.category || "").trim(),
+    unit: String(req.body.unit || "Unidad").trim(),
+    costPrice: Number(req.body.costPrice || 0),
+    salePrice: Number(req.body.salePrice || 0),
+    minStock: Number(req.body.minStock || 0)
+  };
+  if (!product.code || !product.name) return res.status(400).json({ error: "Codigo y nombre son obligatorios" });
+  const duplicate = db
+    .prepare("SELECT id FROM inventory_products WHERE company_id = ? AND upper(code) = upper(?) AND id <> ?")
+    .get(req.user.company_id, product.code, existing.id);
+  if (duplicate) return res.status(400).json({ error: "Ya existe otro producto con ese codigo" });
+  db.prepare(
+    `UPDATE inventory_products
+     SET code = ?, name = ?, category = ?, unit = ?, cost_price = ?, sale_price = ?, min_stock = ?, updated_at = ?
+     WHERE id = ? AND company_id = ?`
+  ).run(product.code, product.name, product.category, product.unit, product.costPrice, product.salePrice, product.minStock, now, existing.id, req.user.company_id);
+  res.json({ product: db.prepare("SELECT * FROM inventory_products WHERE id = ? AND company_id = ?").get(existing.id, req.user.company_id) });
+});
+
+app.patch("/api/ventas/products/:id/status", requireAuth, requireSystemAccess("ventas_almacen"), requireVentasRole("admin", "ventas_admin", "almacen"), (req, res) => {
+  const product = db.prepare("SELECT id, name, is_active FROM inventory_products WHERE id = ? AND company_id = ?").get(req.params.id, req.user.company_id);
+  if (!product) return res.status(404).json({ error: "Producto no encontrado" });
+  const active = req.body.active ? 1 : 0;
+  db.prepare("UPDATE inventory_products SET is_active = ?, updated_at = ? WHERE id = ? AND company_id = ?").run(active, new Date().toISOString(), product.id, req.user.company_id);
+  res.json({ product: db.prepare("SELECT * FROM inventory_products WHERE id = ? AND company_id = ?").get(product.id, req.user.company_id) });
+});
+
 app.get("/api/ventas/categories", requireAuth, requireSystemAccess("ventas_almacen"), (req, res) => {
   const categories = db.prepare("SELECT * FROM inventory_categories WHERE company_id = ? ORDER BY name").all(req.user.company_id);
   res.json({ categories });

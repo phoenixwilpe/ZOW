@@ -26,6 +26,7 @@ let cash = { pendingSales: [], total: 0 };
 let summary = {};
 let saleCart = [];
 let editingUserId = "";
+let editingProductId = "";
 let productSearch = "";
 let ventasMessage = "";
 let paymentDraft = { method: "efectivo", received: 0 };
@@ -135,21 +136,27 @@ document.addEventListener("keydown", (event) => {
 
 productForm.addEventListener("submit", async (event) => {
   event.preventDefault();
-  await apiRequest("/ventas/products", {
-    method: "POST",
-    body: {
-      code: value("#productCode"),
-      name: value("#productName"),
-      category: value("#productCategory"),
-      unit: value("#productUnit"),
-      costPrice: Number(value("#productCost")),
-      salePrice: Number(value("#productSale")),
-      minStock: Number(value("#productMin")),
-      stock: Number(value("#productStock"))
-    }
+  const productPayload = {
+    code: value("#productCode"),
+    name: value("#productName"),
+    category: value("#productCategory"),
+    unit: value("#productUnit"),
+    costPrice: Number(value("#productCost")),
+    salePrice: Number(value("#productSale")),
+    minStock: Number(value("#productMin"))
+  };
+  if (!editingProductId) productPayload.stock = Number(value("#productStock"));
+  await apiRequest(editingProductId ? `/ventas/products/${editingProductId}` : "/ventas/products", {
+    method: editingProductId ? "PATCH" : "POST",
+    body: productPayload
   });
+  editingProductId = "";
   productModal.close();
   await render();
+});
+
+productModal.addEventListener("close", () => {
+  editingProductId = "";
 });
 
 customerForm.addEventListener("submit", async (event) => {
@@ -315,14 +322,14 @@ function renderSummary() {
 }
 
 function renderAlerts() {
-  const alerts = products.filter((product) => Number(product.stock || 0) <= Number(product.min_stock || 0));
+  const alerts = products.filter((product) => isProductActive(product) && Number(product.stock || 0) <= Number(product.min_stock || 0));
   setCount(`${alerts.length} alerta${alerts.length === 1 ? "" : "s"}`);
   mainList().innerHTML = alerts.map(renderProductRow).join("") || empty("No hay alertas de stock");
 }
 
 function renderSell() {
   setCount(`${saleCart.length} item${saleCart.length === 1 ? "" : "s"}`);
-  const sellProducts = filteredProducts();
+  const sellProducts = filteredProducts().filter(isProductActive);
   const totals = cartTotals();
   const categories = productCategories();
   const cashState = cashSession?.status === "abierta" ? `Caja abierta / ${money(cashExpectedTotal())}` : "Caja sin abrir";
@@ -537,7 +544,7 @@ function renderReports() {
     </section>
     <section class="admin-panel">
       <div class="admin-panel-head"><div><p class="eyebrow">Control</p><h3>Productos que requieren accion</h3></div></div>
-      <div class="admin-list">${products.filter((product) => Number(product.stock || 0) <= Number(product.min_stock || 0)).map(renderProductRow).join("") || empty("Sin riesgos de inventario")}</div>
+      <div class="admin-list">${products.filter((product) => isProductActive(product) && Number(product.stock || 0) <= Number(product.min_stock || 0)).map(renderProductRow).join("") || empty("Sin riesgos de inventario")}</div>
     </section>
   `;
 }
@@ -558,7 +565,7 @@ function renderCustomers() {
 }
 
 function renderInventory() {
-  const inventoryProducts = filteredProducts();
+  const inventoryProducts = filteredProducts({ includeInactive: true });
   setCount(`${products.length} producto${products.length === 1 ? "" : "s"}`);
   mainList().innerHTML = `
     <section class="admin-panel">
@@ -576,6 +583,12 @@ function renderInventory() {
   document.querySelector("#loadStarterProducts")?.addEventListener("click", loadStarterProducts);
   document.querySelectorAll("[data-stock-move]").forEach((button) => {
     button.addEventListener("click", () => openStockMovement(button.dataset.stockMove, button.dataset.type));
+  });
+  document.querySelectorAll("[data-edit-product]").forEach((button) => {
+    button.addEventListener("click", () => openProductModal(button.dataset.editProduct));
+  });
+  document.querySelectorAll("[data-product-status]").forEach((button) => {
+    button.addEventListener("click", () => toggleProductStatus(button.dataset.productStatus));
   });
   document.querySelectorAll("[data-stock-history]").forEach((button) => {
     button.addEventListener("click", () => viewStockHistory(button.dataset.stockHistory));
@@ -630,6 +643,7 @@ function renderProductRow(product) {
 
 function renderInventoryProductRow(product) {
   const canMoveStock = ["admin", "ventas_admin", "almacen"].includes(currentUser?.role);
+  const active = isProductActive(product);
   return `<article class="admin-row inventory-row">
     <div>
       <strong>${escapeHtml(product.name)}</strong>
@@ -639,10 +653,11 @@ function renderInventoryProductRow(product) {
     <div class="admin-row-meta">
       <span>Costo ${money(product.cost_price)}</span>
       <span>Venta ${money(product.sale_price)}</span>
+      <span class="${active ? "ok-text" : "danger-text"}">${active ? "Activo" : "Inactivo"}</span>
       <span class="${Number(product.stock || 0) <= Number(product.min_stock || 0) ? "danger-text" : "ok-text"}">${Number(product.stock || 0) <= Number(product.min_stock || 0) ? "Bajo minimo" : "Stock OK"}</span>
       <div class="mini-action-row">
         <button class="ghost-button" type="button" data-stock-history="${product.id}">Kardex</button>
-        ${canMoveStock ? `<button class="ghost-button" type="button" data-stock-move="${product.id}" data-type="entrada">Entrada</button><button class="ghost-button" type="button" data-stock-move="${product.id}" data-type="salida">Salida</button><button class="ghost-button" type="button" data-stock-move="${product.id}" data-type="ajuste">Ajuste</button>` : ""}
+        ${canMoveStock ? `<button class="ghost-button" type="button" data-edit-product="${product.id}">Editar</button><button class="ghost-button" type="button" data-stock-move="${product.id}" data-type="entrada">Entrada</button><button class="ghost-button" type="button" data-stock-move="${product.id}" data-type="salida">Salida</button><button class="ghost-button" type="button" data-stock-move="${product.id}" data-type="ajuste">Ajuste</button><button class="ghost-button ${active ? "danger-action" : ""}" type="button" data-product-status="${product.id}">${active ? "Desactivar" : "Reactivar"}</button>` : ""}
       </div>
     </div>
   </article>`;
@@ -761,10 +776,11 @@ function renderPriceRow(product) {
   return `<article class="price-row"><div><strong>${escapeHtml(product.name)}</strong><span>${escapeHtml(product.code)} / ${escapeHtml(product.category || "Sin categoria")}</span></div><div><span>${money(product.sale_price)}</span><small>Margen ${money(margin)}</small></div></article>`;
 }
 
-function filteredProducts() {
+function filteredProducts(options = {}) {
   const term = productSearch.trim().toLowerCase();
-  if (!term) return products;
-  return products.filter((product) => [product.code, product.name, product.category]
+  const source = options.includeInactive ? products : products.filter(isProductActive);
+  if (!term) return source;
+  return source.filter((product) => [product.code, product.name, product.category]
     .some((value) => String(value || "").toLowerCase().includes(term)));
 }
 
@@ -1096,9 +1112,24 @@ function cashExpectedTotal() {
   return opening + Number(cash.total || 0) + cashMovementsTotal();
 }
 
-function openProductModal() {
+function openProductModal(productId = "") {
+  const product = productId ? products.find((item) => item.id === productId) : null;
+  editingProductId = product?.id || "";
   productForm.reset();
-  document.querySelector("#productUnit").value = "Unidad";
+  document.querySelector("#productModalTitle").textContent = product ? "Editar producto" : "Nuevo producto";
+  document.querySelector("#productSubmitBtn").textContent = product ? "Guardar cambios" : "Guardar producto";
+  document.querySelector("#productStockLabel").textContent = product ? "Stock actual" : "Stock inicial";
+  document.querySelector("#productStock").disabled = Boolean(product);
+  document.querySelector("#productUnit").value = product?.unit || "Unidad";
+  if (product) {
+    document.querySelector("#productCode").value = product.code || "";
+    document.querySelector("#productName").value = product.name || "";
+    document.querySelector("#productCategory").value = product.category || "";
+    document.querySelector("#productCost").value = Number(product.cost_price || 0);
+    document.querySelector("#productSale").value = Number(product.sale_price || 0);
+    document.querySelector("#productMin").value = Number(product.min_stock || 0);
+    document.querySelector("#productStock").value = Number(product.stock || 0);
+  }
   productModal.showModal();
 }
 
@@ -1263,6 +1294,21 @@ async function viewStockHistory(productId) {
   }
 }
 
+async function toggleProductStatus(productId) {
+  const product = products.find((item) => item.id === productId);
+  if (!product) return;
+  const active = isProductActive(product);
+  if (!confirm(`${active ? "Desactivar" : "Reactivar"} ${product.name}?`)) return;
+  try {
+    await apiRequest(`/ventas/products/${product.id}/status`, { method: "PATCH", body: { active: !active } });
+    ventasMessage = active ? "Producto desactivado. Ya no aparecera en caja." : "Producto reactivado para venta.";
+    await render();
+  } catch (error) {
+    ventasMessage = error.message || "No se pudo cambiar el estado del producto.";
+    renderMain();
+  }
+}
+
 async function loadStarterProducts() {
   ventasMessage = "";
   let created = 0;
@@ -1390,6 +1436,9 @@ function accessibleViewsForRole(role) {
   return views[role] || ["summary"];
 }
 function canSeeAllSales() { return ["admin", "ventas_admin", "supervisor"].includes(currentUser?.role); }
+function isProductActive(product) {
+  return product?.active ?? product?.is_active ?? true;
+}
 function closeVentasMenu() {
   appShell.classList.remove("ventas-menu-open");
   ventasMenuToggle?.setAttribute("aria-expanded", "false");
