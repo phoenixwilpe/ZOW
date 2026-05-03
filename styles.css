@@ -4350,3 +4350,70 @@ body.system-zow-site .lead-form {
     height: 46%;
   }
 }
+
+/* SYSTEM ZOW direct contact block */
+body.system-zow-site .contact-copy {
+  display: grid;
+  gap: 18px;
+}
+
+body.system-zow-site .contact-copy > p {
+  margin: 0;
+}
+
+body.system-zow-site .contact-direct {
+  display: grid;
+  gap: 10px;
+  margin-top: 4px;
+}
+
+body.system-zow-site .contact-direct article {
+  display: grid;
+  gap: 5px;
+  border: 1px solid rgb(37 99 235 / 10%);
+  border-radius: 18px;
+  padding: 14px 16px;
+  background:
+    linear-gradient(145deg, rgb(255 255 255 / 86%), rgb(255 255 255 / 58%)),
+    linear-gradient(135deg, rgb(37 99 235 / 5%), transparent);
+  box-shadow: 0 16px 38px rgb(17 31 49 / 7%);
+}
+
+body.system-zow-site .contact-direct span {
+  color: var(--zow-muted);
+  font-size: 0.76rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+body.system-zow-site .contact-direct strong,
+body.system-zow-site .contact-direct a {
+  color: var(--zow-ink);
+  font-size: 0.98rem;
+  line-height: 1.35;
+  text-decoration: none;
+}
+
+body.system-zow-site .contact-direct a:hover {
+  color: var(--zow-blue);
+}
+
+body.system-zow-site .contact-actions {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+body.system-zow-site .contact-actions .primary-button,
+body.system-zow-site .contact-actions .ghost-button {
+  min-height: 42px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+@media (max-width: 720px) {
+  body.system-zow-site .contact-actions {
+    flex-direction: column;
+  }
+}
