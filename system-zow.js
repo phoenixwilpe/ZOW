@@ -4,9 +4,18 @@ const siteApiBase = window.location.hostname === "localhost" || window.location.
 
 const leadForm = document.querySelector("#leadForm");
 const leadMessage = document.querySelector("#leadMessage");
+const planSelect = leadForm?.querySelector('select[name="plan"]');
+const leadMessageField = leadForm?.querySelector('textarea[name="message"]');
+const leadNameField = leadForm?.querySelector('input[name="name"]');
 const siteHeader = document.querySelector(".site-header");
 const scrollProgress = document.querySelector(".site-scroll-progress");
 const navLinks = [...document.querySelectorAll("[data-nav-link]")];
+const planLabels = {
+  mensual: "Mensual",
+  trimestral: "Trimestral",
+  semestral: "Semestral",
+  anual: "Anual"
+};
 const navSections = navLinks
   .map((link) => ({ link, target: document.querySelector(link.getAttribute("href")) }))
   .filter((item) => item.target);
@@ -37,6 +46,22 @@ const revealObserver = "IntersectionObserver" in window
 document.querySelectorAll(".site-section, .product-card, .plan-grid article, .operation-grid article, .lead-form").forEach((item) => {
   item.classList.add("reveal-item");
   revealObserver?.observe(item);
+});
+
+document.querySelectorAll("[data-plan-request]").forEach((button) => {
+  button.addEventListener("click", (event) => {
+    const plan = button.dataset.plan;
+    const contactSection = document.querySelector("#contacto");
+    event.preventDefault();
+    if (planSelect && plan) planSelect.value = plan;
+    if (leadMessageField && !leadMessageField.value.trim()) {
+      leadMessageField.value = `Me interesa el plan ${planLabels[plan] || plan} para mi empresa.`;
+    }
+    contactSection?.scrollIntoView({ behavior: "smooth", block: "start" });
+    leadForm?.classList.add("is-highlighted");
+    window.setTimeout(() => leadForm?.classList.remove("is-highlighted"), 1400);
+    window.setTimeout(() => leadNameField?.focus({ preventScroll: true }), 520);
+  });
 });
 
 function updateNavigationState() {
