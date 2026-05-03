@@ -148,6 +148,9 @@ function initDb() {
       system_id TEXT NOT NULL DEFAULT '',
       plan TEXT NOT NULL DEFAULT '',
       message TEXT NOT NULL DEFAULT '',
+      notes TEXT NOT NULL DEFAULT '',
+      next_action TEXT NOT NULL DEFAULT '',
+      next_action_at TEXT NOT NULL DEFAULT '',
       status TEXT NOT NULL DEFAULT 'nuevo',
       created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
       updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
@@ -354,6 +357,9 @@ function migrateSchema() {
   ensureColumn("audit_events", "metadata", "TEXT NOT NULL DEFAULT ''");
   ensureColumn("audit_events", "ip_address", "TEXT NOT NULL DEFAULT ''");
   ensureColumn("leads", "status", "TEXT NOT NULL DEFAULT 'nuevo'");
+  ensureColumn("leads", "notes", "TEXT NOT NULL DEFAULT ''");
+  ensureColumn("leads", "next_action", "TEXT NOT NULL DEFAULT ''");
+  ensureColumn("leads", "next_action_at", "TEXT NOT NULL DEFAULT ''");
   migrateTenantTables();
   db.prepare("UPDATE units SET company_id = COALESCE(NULLIF(company_id, ''), 'company-default')").run();
   db.prepare("UPDATE users SET company_id = COALESCE(NULLIF(company_id, ''), 'company-default')").run();

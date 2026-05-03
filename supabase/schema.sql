@@ -221,6 +221,9 @@ create table if not exists leads (
   system_id text not null default '',
   plan text not null default '',
   message text not null default '',
+  notes text not null default '',
+  next_action text not null default '',
+  next_action_at text not null default '',
   status text not null default 'nuevo',
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()

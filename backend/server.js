@@ -872,6 +872,27 @@ app.patch("/api/leads/:id/status", requireAuth, requireRole("zow_owner"), (req, 
   res.json({ ok: true });
 });
 
+app.patch("/api/leads/:id", requireAuth, requireRole("zow_owner"), (req, res) => {
+  const status = String(req.body.status || "").trim();
+  if (status && !["nuevo", "contactado", "demo_agendada", "propuesta_enviada", "convertido", "descartado"].includes(status)) return res.status(400).json({ error: "Estado invalido" });
+  const lead = db.prepare("SELECT id, company FROM leads WHERE id = ?").get(req.params.id);
+  if (!lead) return res.status(404).json({ error: "Lead no encontrado" });
+  const notes = String(req.body.notes || "").trim().slice(0, 1200);
+  const nextAction = String(req.body.nextAction || req.body.next_action || "").trim().slice(0, 220);
+  const nextActionAt = normalizeDateInput(req.body.nextActionAt || req.body.next_action_at);
+  db.prepare(
+    `UPDATE leads
+     SET status = COALESCE(NULLIF(?, ''), status),
+         notes = ?,
+         next_action = ?,
+         next_action_at = ?,
+         updated_at = CURRENT_TIMESTAMP
+     WHERE id = ?`
+  ).run(status, notes, nextAction, nextActionAt, lead.id);
+  recordAuditEvent({ req, action: "lead_update", entityType: "lead", entityId: lead.id, description: `Actualizo seguimiento de lead ${lead.company}` });
+  res.json({ lead: db.prepare("SELECT * FROM leads WHERE id = ?").get(lead.id) });
+});
+
 app.get("/api/audit", requireAuth, requireRole("admin", "zow_owner"), (req, res) => {
   const params = [];
   const companyFilter = req.user.role === "zow_owner" ? "" : "WHERE audit_events.company_id = ?";

@@ -2124,6 +2124,11 @@ function renderZowAdmin(mode = "overview") {
       renderZowAdmin("new");
     });
   });
+  document.querySelectorAll("[data-lead-follow]").forEach((button) => {
+    button.addEventListener("click", () => openLeadFollowDialog(button.dataset.leadFollow));
+  });
+  document.querySelector("#leadFollowForm")?.addEventListener("submit", handleLeadFollowSubmit);
+  document.querySelector("#closeLeadFollow")?.addEventListener("click", () => document.querySelector("#leadFollowDialog")?.close());
   document.querySelectorAll("[data-lead-status]").forEach((button) => {
     button.addEventListener("click", async () => {
       await apiRequest(`/leads/${button.dataset.leadId}/status`, {
@@ -2272,13 +2277,15 @@ function renderLeadsPanel() {
 
   const visibleLeads = getFilteredLeads();
   const newCount = commercialLeads.filter((lead) => lead.status === "nuevo").length;
+  const openCount = commercialLeads.filter((lead) => !["convertido", "descartado"].includes(lead.status)).length;
+  const nextCount = commercialLeads.filter((lead) => lead.next_action || lead.next_action_at).length;
   return `
     <section class="admin-panel">
       <div class="admin-panel-head">
         <div>
           <p class="eyebrow">Comercial</p>
           <h3>Leads y solicitudes</h3>
-          <span>${newCount} solicitud(es) nueva(s)</span>
+          <span>${newCount} nueva(s) / ${openCount} abierta(s) / ${nextCount} con seguimiento</span>
         </div>
         <div class="panel-actions">
           <button class="ghost-button" type="button" id="exportLeadsCsv">Exportar CSV</button>
@@ -2315,8 +2322,61 @@ function renderLeadsPanel() {
         </label>
         <button class="ghost-button" type="button" id="clearLeadFilters">Limpiar</button>
       </form>
-      ${commercialLeads.length ? renderLeadRows(visibleLeads) : `<div class="empty-state"><strong>Sin solicitudes</strong><span>Las solicitudes del formulario comercial apareceran aqui.</span></div>`}
+      ${commercialLeads.length ? renderLeadPipeline(visibleLeads) : `<div class="empty-state"><strong>Sin solicitudes</strong><span>Las solicitudes del formulario comercial apareceran aqui.</span></div>`}
     </section>
+    ${renderLeadFollowDialog()}
+  `;
+}
+
+function renderLeadPipeline(leads = getFilteredLeads()) {
+  if (!leads.length) {
+    return `<div class="empty-state"><strong>Sin resultados</strong><span>Ajusta los filtros para ver mas solicitudes comerciales.</span></div>`;
+  }
+  return `
+    <div class="lead-pipeline">
+      ${leadStatuses()
+        .map((status) => {
+          const columnLeads = leads.filter((lead) => lead.status === status);
+          return `
+            <section class="lead-column">
+              <header>
+                <strong>${escapeHtml(leadStatusLabel(status))}</strong>
+                <span>${columnLeads.length}</span>
+              </header>
+              <div class="lead-column-body">
+                ${columnLeads.length ? columnLeads.map(renderLeadCard).join("") : `<div class="lead-empty">Sin leads</div>`}
+              </div>
+            </section>
+          `;
+        })
+        .join("")}
+    </div>
+  `;
+}
+
+function renderLeadCard(lead) {
+  const nextAction = lead.next_action || lead.nextAction || "";
+  const nextActionAt = lead.next_action_at || lead.nextActionAt || "";
+  return `
+    <article class="lead-card">
+      <div class="lead-card-head">
+        <strong>${escapeHtml(lead.company || "Sin empresa")}</strong>
+        <span>${escapeHtml(systemLeadLabel(lead.system_id))}</span>
+      </div>
+      <p>${escapeHtml(lead.name)} / ${escapeHtml(lead.phone || "Sin celular")}</p>
+      <small>${escapeHtml(lead.email || "Sin correo")} / ${escapeHtml(billingPeriodLabel(lead.plan))}</small>
+      <div class="lead-card-message">${escapeHtml(lead.message || "Sin mensaje")}</div>
+      ${
+        nextAction || nextActionAt
+          ? `<div class="lead-next"><strong>Proxima accion</strong><span>${escapeHtml(nextAction || "Seguimiento pendiente")} ${nextActionAt ? `/ ${formatDateOnly(nextActionAt)}` : ""}</span></div>`
+          : ""
+      }
+      ${lead.notes ? `<div class="lead-note">${escapeHtml(lead.notes)}</div>` : ""}
+      <div class="lead-actions">
+        <button class="ghost-button" type="button" data-lead-follow="${lead.id}">Seguimiento</button>
+        ${lead.status !== "convertido" ? `<button class="primary-button small-action" type="button" data-lead-convert="${lead.id}">Crear empresa</button>` : ""}
+      </div>
+    </article>
   `;
 }
 
@@ -2354,6 +2414,76 @@ function renderLeadRows(leads = getFilteredLeads()) {
   `;
 }
 
+function renderLeadFollowDialog() {
+  return `
+    <dialog id="leadFollowDialog">
+      <form class="modal-body" id="leadFollowForm">
+        <div class="modal-title">
+          <div>
+            <p class="eyebrow">Seguimiento comercial</p>
+            <h3 id="leadFollowTitle">Lead</h3>
+          </div>
+          <button class="ghost-button" type="button" id="closeLeadFollow">Cerrar</button>
+        </div>
+        <input id="leadFollowId" type="hidden" />
+        <div class="form-grid">
+          <label>
+            Estado
+            <select id="leadFollowStatus">
+              ${leadStatusOptions("nuevo")}
+            </select>
+          </label>
+          <label>
+            Fecha proxima accion
+            <input id="leadFollowNextAt" type="date" />
+          </label>
+          <label class="span-2">
+            Proxima accion
+            <input id="leadFollowNext" type="text" maxlength="220" placeholder="Llamar, agendar demo, enviar propuesta..." />
+          </label>
+          <label class="span-2">
+            Notas
+            <textarea id="leadFollowNotes" rows="5" maxlength="1200" placeholder="Resumen de llamada, interes, decision pendiente..."></textarea>
+          </label>
+        </div>
+        <div class="modal-actions">
+          <button class="primary-button" type="submit">Guardar seguimiento</button>
+        </div>
+      </form>
+    </dialog>
+  `;
+}
+
+function openLeadFollowDialog(leadId) {
+  const lead = commercialLeads.find((item) => item.id === leadId);
+  const dialog = document.querySelector("#leadFollowDialog");
+  if (!lead || !dialog) return;
+  document.querySelector("#leadFollowTitle").textContent = lead.company || lead.name || "Lead";
+  document.querySelector("#leadFollowId").value = lead.id;
+  document.querySelector("#leadFollowStatus").value = lead.status || "nuevo";
+  document.querySelector("#leadFollowNext").value = lead.next_action || "";
+  document.querySelector("#leadFollowNextAt").value = normalizeDateForInput(lead.next_action_at || "");
+  document.querySelector("#leadFollowNotes").value = lead.notes || "";
+  dialog.showModal();
+}
+
+async function handleLeadFollowSubmit(event) {
+  event.preventDefault();
+  const leadId = documentWindowValue("#leadFollowId");
+  await apiRequest(`/leads/${leadId}`, {
+    method: "PATCH",
+    body: {
+      status: documentWindowValue("#leadFollowStatus"),
+      nextAction: documentWindowValue("#leadFollowNext").trim(),
+      nextActionAt: documentWindowValue("#leadFollowNextAt"),
+      notes: documentWindowValue("#leadFollowNotes").trim()
+    }
+  });
+  document.querySelector("#leadFollowDialog")?.close();
+  commercialLeadsLoaded = false;
+  renderZowAdmin("leads");
+}
+
 function bindLeadFilters() {
   ["#leadStatusFilter", "#leadSystemFilter", "#leadPlanFilter", "#leadTermFilter"].forEach((selector) => {
     const eventName = selector === "#leadTermFilter" ? "input" : "change";
@@ -2375,7 +2505,7 @@ function getFilteredLeads() {
     if (leadFilters.system !== "all" && lead.system_id !== leadFilters.system) return false;
     if (leadFilters.plan !== "all" && lead.plan !== leadFilters.plan) return false;
     if (leadFilters.term) {
-      const haystack = [lead.name, lead.company, lead.phone, lead.email, lead.message, lead.system_id, lead.plan, lead.status]
+      const haystack = [lead.name, lead.company, lead.phone, lead.email, lead.message, lead.notes, lead.next_action, lead.system_id, lead.plan, lead.status]
         .join(" ")
         .toLowerCase();
       if (!haystack.includes(leadFilters.term)) return false;
@@ -2439,9 +2569,12 @@ function exportLeadsCsv() {
     lead.email,
     systemLeadLabel(lead.system_id),
     billingPeriodLabel(lead.plan),
-    lead.message
+    lead.message,
+    lead.next_action,
+    lead.next_action_at,
+    lead.notes
   ]);
-  const header = ["Fecha", "Estado", "Empresa", "Contacto", "Telefono", "Correo", "Sistema", "Periodo", "Mensaje"];
+  const header = ["Fecha", "Estado", "Empresa", "Contacto", "Telefono", "Correo", "Sistema", "Periodo", "Mensaje", "Proxima accion", "Fecha accion", "Notas"];
   const csv = [header, ...rows].map((row) => row.map(csvCell).join(",")).join("\n");
   const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
   const url = URL.createObjectURL(blob);
@@ -3474,6 +3607,7 @@ function auditActionLabel(action) {
     company_status: "Estado de empresa",
     company_systems_update: "Accesos SaaS",
     lead_status: "Estado de lead",
+    lead_update: "Seguimiento de lead",
     lead_convert: "Lead convertido"
   };
   return labels[action] || action || "Evento";

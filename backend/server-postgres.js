@@ -744,6 +744,29 @@ app.patch("/api/leads/:id/status", requireAuth, requireRole("zow_owner"), async 
   res.json({ ok: true });
 });
 
+app.patch("/api/leads/:id", requireAuth, requireRole("zow_owner"), async (req, res) => {
+  await ensureLeadsSchema();
+  const status = String(req.body.status || "").trim();
+  if (status && !["nuevo", "contactado", "demo_agendada", "propuesta_enviada", "convertido", "descartado"].includes(status)) return res.status(400).json({ error: "Estado invalido" });
+  const lead = await pg.get("SELECT id, company FROM leads WHERE id = ?", [req.params.id]);
+  if (!lead) return res.status(404).json({ error: "Lead no encontrado" });
+  const notes = String(req.body.notes || "").trim().slice(0, 1200);
+  const nextAction = String(req.body.nextAction || req.body.next_action || "").trim().slice(0, 220);
+  const nextActionAt = normalizeDateInput(req.body.nextActionAt || req.body.next_action_at);
+  await pg.run(
+    `UPDATE leads
+     SET status = COALESCE(NULLIF(?, ''), status),
+         notes = ?,
+         next_action = ?,
+         next_action_at = ?,
+         updated_at = now()
+     WHERE id = ?`,
+    [status, notes, nextAction, nextActionAt, lead.id]
+  );
+  await recordAuditEvent({ req, action: "lead_update", entityType: "lead", entityId: lead.id, description: `Actualizo seguimiento de lead ${lead.company}` });
+  res.json({ lead: await pg.get("SELECT * FROM leads WHERE id = ?", [lead.id]) });
+});
+
 app.get("/api/audit", requireAuth, requireRole("admin", "zow_owner"), async (req, res) => {
   await ensureAuditSchema();
   const params = [];
@@ -1243,12 +1266,18 @@ async function ensureLeadsSchema() {
           system_id text not null default '',
           plan text not null default '',
           message text not null default '',
+          notes text not null default '',
+          next_action text not null default '',
+          next_action_at text not null default '',
           status text not null default 'nuevo',
           created_at timestamptz not null default now(),
           updated_at timestamptz not null default now()
         )
       `);
       await pg.run("CREATE INDEX IF NOT EXISTS idx_leads_status ON leads(status, created_at DESC)");
+      await pg.run("ALTER TABLE leads ADD COLUMN IF NOT EXISTS notes text NOT NULL DEFAULT ''");
+      await pg.run("ALTER TABLE leads ADD COLUMN IF NOT EXISTS next_action text NOT NULL DEFAULT ''");
+      await pg.run("ALTER TABLE leads ADD COLUMN IF NOT EXISTS next_action_at text NOT NULL DEFAULT ''");
     })();
   }
   await leadsSchemaReady;
