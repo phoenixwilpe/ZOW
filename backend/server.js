@@ -1391,6 +1391,43 @@ app.get("/api/ventas/sales/:id", requireAuth, requireSystemAccess("ventas_almace
   res.json({ sale, items });
 });
 
+app.post("/api/ventas/sales/:id/void", requireAuth, requireSystemAccess("ventas_almacen"), requireVentasRole("admin", "ventas_admin", "supervisor", "cajero", "vendedor"), (req, res) => {
+  const sale = db.prepare("SELECT * FROM sales_orders WHERE id = ? AND company_id = ?").get(req.params.id, req.user.company_id);
+  if (!sale) return res.status(404).json({ error: "Venta no encontrada" });
+  if (ventasOwnOnly(req.user.role) && sale.created_by !== req.user.id) {
+    return res.status(403).json({ error: "Permiso insuficiente" });
+  }
+  if (sale.status === "anulada") return res.status(400).json({ error: "La venta ya fue anulada" });
+  if (Number(sale.cash_closed || 0)) return res.status(400).json({ error: "No se puede anular una venta con caja cerrada" });
+
+  const items = db.prepare("SELECT * FROM sales_order_items WHERE sale_id = ? AND company_id = ?").all(sale.id, req.user.company_id);
+  const now = new Date().toISOString();
+  db.exec("BEGIN");
+  try {
+    db.prepare("UPDATE sales_orders SET status = 'anulada' WHERE id = ? AND company_id = ?").run(sale.id, req.user.company_id);
+    const restoreStock = db.prepare("UPDATE inventory_products SET stock = stock + ?, updated_at = ? WHERE id = ? AND company_id = ?");
+    const insertMovement = db.prepare(
+      `INSERT INTO inventory_movements (id, company_id, product_id, type, quantity, reference, note, created_by, created_at)
+       VALUES (?, ?, ?, 'entrada', ?, ?, ?, ?, ?)`
+    );
+    items.forEach((item) => {
+      const quantity = Number(item.quantity || 0);
+      if (!item.product_id || quantity <= 0) return;
+      restoreStock.run(quantity, now, item.product_id, req.user.company_id);
+      insertMovement.run(randomUUID(), req.user.company_id, item.product_id, quantity, sale.code, "Anulacion de venta: stock devuelto", req.user.id, now);
+    });
+    db.exec("COMMIT");
+  } catch (error) {
+    db.exec("ROLLBACK");
+    return res.status(400).json({ error: error.message || "No se pudo anular la venta" });
+  }
+
+  res.json({
+    sale: db.prepare("SELECT * FROM sales_orders WHERE id = ? AND company_id = ?").get(sale.id, req.user.company_id),
+    items
+  });
+});
+
 app.post("/api/ventas/sales", requireAuth, requireSystemAccess("ventas_almacen"), requireVentasRole("admin", "ventas_admin", "cajero", "vendedor"), (req, res) => {
   const items = Array.isArray(req.body.items) ? req.body.items : [];
   if (!items.length) return res.status(400).json({ error: "Agrega al menos un producto a la venta" });
@@ -1402,18 +1439,23 @@ app.post("/api/ventas/sales", requireAuth, requireSystemAccess("ventas_almacen")
   const customer = customerId ? db.prepare("SELECT * FROM sales_customers WHERE id = ? AND company_id = ?").get(customerId, req.user.company_id) : null;
   const customerName = customer?.name || String(req.body.customerName || "Cliente sin registrar").trim();
 
-  const preparedItems = items.map((item) => {
-    const product = db.prepare("SELECT * FROM inventory_products WHERE id = ? AND company_id = ? AND is_active = 1").get(String(item.productId || ""), req.user.company_id);
-    const quantity = Number(item.quantity || 0);
-    if (!product || quantity <= 0) throw new Error("Producto o cantidad invalida");
-    if (Number(product.stock) < quantity) throw new Error(`Stock insuficiente para ${product.name}`);
-    return {
-      product,
-      quantity,
-      unitPrice: Number(item.unitPrice || product.sale_price || 0),
-      total: quantity * Number(item.unitPrice || product.sale_price || 0)
-    };
-  });
+  let preparedItems;
+  try {
+    preparedItems = items.map((item) => {
+      const product = db.prepare("SELECT * FROM inventory_products WHERE id = ? AND company_id = ? AND is_active = 1").get(String(item.productId || ""), req.user.company_id);
+      const quantity = Number(item.quantity || 0);
+      if (!product || quantity <= 0) throw new Error("Producto o cantidad invalida");
+      if (Number(product.stock) < quantity) throw new Error(`Stock insuficiente para ${product.name}`);
+      return {
+        product,
+        quantity,
+        unitPrice: Number(item.unitPrice || product.sale_price || 0),
+        total: quantity * Number(item.unitPrice || product.sale_price || 0)
+      };
+    });
+  } catch (error) {
+    return res.status(400).json({ error: error.message || "No se pudo preparar la venta" });
+  }
 
   const subtotal = preparedItems.reduce((total, item) => total + item.total, 0);
   const discount = Number(req.body.discount || 0);

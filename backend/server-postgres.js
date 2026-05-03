@@ -1198,6 +1198,43 @@ app.get("/api/ventas/sales/:id", requireAuth, async (req, res) => {
   res.json({ sale, items });
 });
 
+app.post("/api/ventas/sales/:id/void", requireAuth, async (req, res) => {
+  if (!(await requireSystemAccess("ventas_almacen", req, res))) return;
+  if (!requireVentasRole(req, res, "admin", "ventas_admin", "supervisor", "cajero", "vendedor")) return;
+  await ensureVentasSchema();
+  const sale = await pg.get("SELECT * FROM sales_orders WHERE id = ? AND company_id = ?", [req.params.id, req.user.company_id]);
+  if (!sale) return res.status(404).json({ error: "Venta no encontrada" });
+  if (ventasOwnOnly(req.user.role) && sale.created_by !== req.user.id) return res.status(403).json({ error: "Permiso insuficiente" });
+  if (sale.status === "anulada") return res.status(400).json({ error: "La venta ya fue anulada" });
+  if (sale.cash_closed) return res.status(400).json({ error: "No se puede anular una venta con caja cerrada" });
+  const items = await pg.all("SELECT * FROM sales_order_items WHERE sale_id = ? AND company_id = ?", [sale.id, req.user.company_id]);
+  try {
+    await pg.tx(async (client) => {
+      await client.run("UPDATE sales_orders SET status = 'anulada' WHERE id = ? AND company_id = ?", [sale.id, req.user.company_id]);
+      for (const item of items) {
+        if (!item.product_id) continue;
+        const quantity = Number(item.quantity || 0);
+        if (quantity <= 0) continue;
+        await client.run(
+          "UPDATE inventory_products SET stock = stock + ?, updated_at = now() WHERE id = ? AND company_id = ?",
+          [quantity, item.product_id, req.user.company_id]
+        );
+        await client.run(
+          `INSERT INTO inventory_movements (id, company_id, product_id, type, quantity, reference, note, created_by, created_at)
+           VALUES (?, ?, ?, 'entrada', ?, ?, ?, ?, now())`,
+          [randomUUID(), req.user.company_id, item.product_id, quantity, sale.code, "Anulacion de venta: stock devuelto", req.user.id]
+        );
+      }
+    });
+    res.json({
+      sale: await pg.get("SELECT * FROM sales_orders WHERE id = ? AND company_id = ?", [sale.id, req.user.company_id]),
+      items
+    });
+  } catch (error) {
+    res.status(400).json({ error: error.message || "No se pudo anular la venta" });
+  }
+});
+
 app.post("/api/ventas/sales", requireAuth, async (req, res) => {
   if (!(await requireSystemAccess("ventas_almacen", req, res))) return;
   if (!requireVentasRole(req, res, "admin", "ventas_admin", "cajero", "vendedor")) return;
@@ -1243,7 +1280,7 @@ app.post("/api/ventas/sales", requireAuth, async (req, res) => {
            VALUES (?, ?, ?, 'salida', ?, ?, ?, ?, now())`,
           [randomUUID(), req.user.company_id, item.product.id, item.quantity, saleCode, "Venta confirmada", req.user.id]
         );
-        await client.run("UPDATE inventory_products SET stock = stock - ?, updated_at = now() WHERE id = ?", [item.quantity, item.product.id]);
+        await client.run("UPDATE inventory_products SET stock = stock - ?, updated_at = now() WHERE id = ? AND company_id = ?", [item.quantity, item.product.id, req.user.company_id]);
       }
       return { saleCode };
     });

@@ -421,7 +421,7 @@ function renderFinance() {
 function renderHistory() {
   const visibleSales = sales.filter((sale) => {
     const meta = localSaleMeta[sale.id] || {};
-    const status = meta.status || (sale.cash_closed ? "pagada" : "pendiente");
+    const status = saleStatus(sale);
     if (historyFilter.status && status !== historyFilter.status) return false;
     if (historyFilter.method && meta.method !== historyFilter.method) return false;
     if (historyFilter.date && !String(sale.created_at || "").startsWith(historyFilter.date)) return false;
@@ -622,16 +622,25 @@ function renderCartItem(item) {
 }
 
 function renderSaleRow(sale) {
-  return `<article class="admin-row"><div><strong>${escapeHtml(sale.code)}</strong><span>${escapeHtml(sale.customer_name || "Cliente sin registrar")} / ${escapeHtml(sale.seller_name || "Vendedor")}</span><span>${formatDateTime(sale.created_at)}</span></div><div class="admin-row-meta"><span>Total ${money(sale.total)}</span><span>${sale.cash_closed ? "Caja cerrada" : "Pendiente caja"}</span></div></article>`;
+  const status = saleStatus(sale);
+  const label = status === "anulada" ? "Anulada" : sale.cash_closed ? "Caja cerrada" : "Pendiente caja";
+  return `<article class="admin-row"><div><strong>${escapeHtml(sale.code)}</strong><span>${escapeHtml(sale.customer_name || "Cliente sin registrar")} / ${escapeHtml(sale.seller_name || "Vendedor")}</span><span>${formatDateTime(sale.created_at)}</span></div><div class="admin-row-meta"><span>Total ${money(sale.total)}</span><span class="${status === "anulada" ? "danger-text" : status === "pagada" ? "ok-text" : "warn-text"}">${label}</span></div></article>`;
 }
 
 function renderHistorySaleRow(sale) {
   const meta = localSaleMeta[sale.id] || {};
-  const status = meta.status || (sale.cash_closed ? "pagada" : "pendiente");
+  const status = saleStatus(sale);
+  const canVoid = status !== "anulada" && !sale.cash_closed;
   return `<article class="admin-row">
     <div><strong>${escapeHtml(sale.code)}</strong><span>${escapeHtml(sale.customer_name || "Cliente sin registrar")} / ${formatDateTime(sale.created_at)}</span><span>Metodo: ${escapeHtml(paymentLabel(meta.method || "efectivo"))}</span></div>
-    <div class="admin-row-meta"><span>Total ${money(sale.total)}</span><span class="${status === "anulada" ? "danger-text" : status === "pagada" ? "ok-text" : "warn-text"}">${status}</span><button class="ghost-button" type="button" data-reprint-sale="${sale.id}">Reimprimir</button><button class="ghost-button danger-action" type="button" data-void-sale="${sale.id}">Anular</button></div>
+    <div class="admin-row-meta"><span>Total ${money(sale.total)}</span><span class="${status === "anulada" ? "danger-text" : status === "pagada" ? "ok-text" : "warn-text"}">${status}</span><button class="ghost-button" type="button" data-reprint-sale="${sale.id}">Reimprimir</button>${canVoid ? `<button class="ghost-button danger-action" type="button" data-void-sale="${sale.id}">Anular</button>` : `<span class="muted-text">${status === "anulada" ? "Stock devuelto" : "Caja cerrada"}</span>`}</div>
   </article>`;
+}
+
+function saleStatus(sale) {
+  if (sale.status === "anulada") return "anulada";
+  const meta = localSaleMeta[sale.id] || {};
+  return meta.status || (sale.cash_closed ? "pagada" : "pendiente");
 }
 
 function renderCashMovementRow(movement) {
@@ -1002,19 +1011,29 @@ function printDraftTicket() {
   printTicket(sale, items);
 }
 
-function reprintSale(saleId) {
-  const sale = sales.find((item) => item.id === saleId);
-  if (!sale) return;
-  printTicket(sale, [{ product_name: "Detalle no disponible en historial local", quantity: 1, total: sale.total }]);
+async function reprintSale(saleId) {
+  try {
+    const response = await apiRequest(`/ventas/sales/${saleId}`);
+    printTicket(response.sale, response.items);
+  } catch (error) {
+    ventasMessage = error.message || "No se pudo recuperar el comprobante.";
+    renderMain();
+  }
 }
 
-function voidSale(saleId) {
+async function voidSale(saleId) {
   const sale = sales.find((item) => item.id === saleId);
   if (!sale || !confirm(`Anular venta ${sale.code}?`)) return;
-  localSaleMeta[sale.id] = { ...(localSaleMeta[sale.id] || {}), status: "anulada", voidedAt: new Date().toISOString() };
-  persistJson(LOCAL_SALE_META_KEY, localSaleMeta);
-  ventasMessage = "Venta marcada como anulada en historial local.";
-  renderMain();
+  try {
+    const response = await apiRequest(`/ventas/sales/${saleId}/void`, { method: "POST", body: {} });
+    localSaleMeta[sale.id] = { ...(localSaleMeta[sale.id] || {}), status: "anulada", voidedAt: new Date().toISOString() };
+    persistJson(LOCAL_SALE_META_KEY, localSaleMeta);
+    ventasMessage = `Venta ${response.sale.code} anulada. El stock fue devuelto al inventario.`;
+    await render();
+  } catch (error) {
+    ventasMessage = error.message || "No se pudo anular la venta.";
+    renderMain();
+  }
 }
 
 async function saveStoreSettings(event) {

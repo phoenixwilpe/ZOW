@@ -4292,6 +4292,14 @@ h3 {
   color: var(--danger) !important;
 }
 
+.warn-text {
+  color: #b7791f !important;
+}
+
+.muted-text {
+  color: var(--muted) !important;
+}
+
 .section-heading,
 .detail-header,
 .modal-header {
