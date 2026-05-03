@@ -43,7 +43,7 @@ const revealObserver = "IntersectionObserver" in window
     )
   : null;
 
-document.querySelectorAll(".site-section, .product-card, .plan-grid article, .operation-grid article, .trust-grid article, .faq-shell, .lead-form").forEach((item) => {
+document.querySelectorAll(".site-section, .product-card, .plan-grid article, .operation-grid article, .trust-grid article, .faq-shell, .implementation-flow article, .launch-cta, .lead-form").forEach((item) => {
   item.classList.add("reveal-item");
   revealObserver?.observe(item);
 });
