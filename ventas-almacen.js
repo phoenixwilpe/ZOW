@@ -225,6 +225,7 @@ function renderLoggedIn() {
 
 function renderMain() {
   if (!canAccessView(activeView)) activeView = defaultViewForRole();
+  appShell.dataset.activeView = activeView;
   document.querySelectorAll("[data-view]").forEach((button) => {
     const allowed = canAccessView(button.dataset.view);
     button.hidden = !allowed;
@@ -264,7 +265,7 @@ function renderWorkflow() {
   const actions = {
     summary: [`<strong>Resumen operativo</strong><span>Consulta ventas, ingresos, productos y alertas de stock.</span>`, ""],
     alerts: [`<strong>Alertas de stock</strong><span>Repone productos agotados o por debajo del minimo.</span>`, ""],
-    sell: [`<strong>Nueva venta</strong><span>Agrega productos, cliente, descuento y efectivo recibido.</span>`, ""],
+    sell: [`<strong>Nueva venta</strong><span>Productos, cliente, descuento y cobro en un solo flujo.</span>`, ""],
     finance: [`<strong>Caja</strong><span>Controla ventas pendientes de cierre y procesa cortes.</span>`, `<button class="primary-button" type="button" id="closeCashBtn">Procesar caja</button>`],
     history: [`<strong>Historial del turno</strong><span>Consulta, reimprime o marca operaciones anuladas.</span>`, ""],
     routes: [`<strong>Operacion en ruta</strong><span>Organiza clientes, entrega, despacho y seguimiento de vendedores.</span>`, ""],
@@ -277,6 +278,7 @@ function renderWorkflow() {
     settings: [`<strong>Configuracion comercial</strong><span>Define datos de tienda, moneda y textos del comprobante.</span>`, ""]
   };
   panel.innerHTML = `<div>${actions[activeView][0]}</div><div class="admin-actions">${actions[activeView][1]}</div>`;
+  document.querySelector("#showProductForm")?.addEventListener("click", openProductModal);
   document.querySelector("#newProductBtn")?.addEventListener("click", openProductModal);
   document.querySelector("#newProductInventoryBtn")?.addEventListener("click", openProductModal);
   document.querySelector("#newCategoryBtn")?.addEventListener("click", openCategoryModal);
