@@ -1392,7 +1392,7 @@ h3 {
 
 .setup-overview {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
   gap: 12px;
   margin-bottom: 14px;
 }
@@ -1407,6 +1407,16 @@ h3 {
 
 .setup-overview article {
   padding: 14px;
+}
+
+.setup-overview article.is-warning {
+  border-color: rgb(255 186 73 / 34%);
+  background: #fff8eb;
+}
+
+.setup-overview article.is-danger {
+  border-color: rgb(198 61 61 / 28%);
+  background: #fff1f1;
 }
 
 .setup-overview span,
@@ -1548,8 +1558,19 @@ h3 {
     var(--panel);
 }
 
+.membership-note.is-danger {
+  border-color: rgb(198 61 61 / 30%);
+  background:
+    linear-gradient(120deg, #fff1f1, white),
+    var(--panel);
+}
+
 .membership-note strong {
   color: var(--accent-dark);
+}
+
+.membership-note.is-danger strong {
+  color: #9d2f2f;
 }
 
 .membership-note span {
@@ -2984,6 +3005,127 @@ h3 {
   background: linear-gradient(90deg, var(--accent), #62d2c9);
 }
 
+.renewal-panel {
+  display: grid;
+  gap: 14px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  padding: 16px;
+  background:
+    linear-gradient(145deg, #ffffff, #f8fbfc),
+    radial-gradient(circle at 100% 0%, rgb(255 186 73 / 14%), transparent 34%);
+  box-shadow: 0 18px 44px rgb(20 34 38 / 7%);
+}
+
+.renewal-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.renewal-head h3 {
+  margin: 4px 0 6px;
+  color: var(--ink);
+}
+
+.renewal-head span {
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-weight: 850;
+}
+
+.renewal-head > strong {
+  border-radius: 999px;
+  padding: 8px 12px;
+  background: rgb(36 117 109 / 10%);
+  color: #17695f;
+  font-size: 0.82rem;
+}
+
+.renewal-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.renewal-grid article {
+  border: 1px solid rgb(20 34 38 / 8%);
+  border-radius: 14px;
+  padding: 12px;
+  background: rgb(255 255 255 / 76%);
+}
+
+.renewal-grid article.is-warning {
+  border-color: rgb(255 186 73 / 34%);
+  background: #fff8eb;
+}
+
+.renewal-grid article.is-danger {
+  border-color: rgb(198 61 61 / 28%);
+  background: #fff1f1;
+}
+
+.renewal-grid span,
+.renewal-list span {
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 850;
+}
+
+.renewal-grid strong {
+  display: block;
+  margin-top: 4px;
+  color: var(--ink);
+  font-size: 1.5rem;
+}
+
+.renewal-list {
+  display: grid;
+  gap: 9px;
+}
+
+.renewal-list article {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: 10px;
+  align-items: center;
+  border: 1px solid rgb(20 34 38 / 8%);
+  border-radius: 14px;
+  padding: 10px;
+  background: #ffffff;
+}
+
+.renewal-list strong {
+  color: var(--ink);
+}
+
+.renewal-pill {
+  border-radius: 999px;
+  padding: 6px 9px;
+  background: rgb(82 103 109 / 12%);
+  color: #52676d;
+  white-space: nowrap;
+}
+
+.renewal-pill.is-warning,
+.admin-row-meta .is-warning {
+  background: rgb(255 186 73 / 18%);
+  color: #8a5300;
+}
+
+.renewal-pill.is-danger,
+.admin-row-meta .is-danger {
+  background: rgb(198 61 61 / 14%);
+  color: #9d2f2f;
+}
+
+.renewal-pill.is-ok,
+.admin-row-meta .is-ok {
+  background: rgb(36 117 109 / 10%);
+  color: #17695f;
+}
+
 .lead-activity-panel {
   display: grid;
   gap: 14px;
@@ -4309,6 +4451,8 @@ dialog::backdrop {
   .lead-insight-grid,
   .lead-distribution-grid,
   .lead-insight-main,
+  .renewal-grid,
+  .renewal-head,
   .lead-activity-grid,
   .content-grid,
   .admin-grid,
@@ -4327,6 +4471,7 @@ dialog::backdrop {
   }
 
   .admin-row,
+  .renewal-list article,
   .compact-audit-list .admin-row {
     grid-template-columns: 1fr;
   }

@@ -2053,6 +2053,7 @@ function renderZowAdmin(mode = "overview") {
   const activeCompanies = companies.filter((company) => company.status === "active").length;
   const suspendedCompanies = companies.filter((company) => company.status === "suspended").length;
   const totalUsers = companies.reduce((total, company) => total + Number(company.user_count || 0), 0);
+  const renewalSummary = companyRenewalSummary();
 
   listEl.innerHTML = `
     <section class="setup-overview">
@@ -2067,6 +2068,14 @@ function renderZowAdmin(mode = "overview") {
       <article>
         <span>Usuarios creados</span>
         <strong>${totalUsers}</strong>
+      </article>
+      <article class="${renewalSummary.warningCount ? "is-warning" : ""}">
+        <span>Renuevan pronto</span>
+        <strong>${renewalSummary.warningCount}</strong>
+      </article>
+      <article class="${renewalSummary.expiredCount ? "is-danger" : ""}">
+        <span>Vencidas</span>
+        <strong>${renewalSummary.expiredCount}</strong>
       </article>
     </section>
 
@@ -2222,6 +2231,7 @@ function renderCompanyListPanel() {
   }
 
   return `
+    ${renderRenewalPanel()}
     <section class="admin-panel">
       <div class="admin-panel-head">
         <div>
@@ -2232,8 +2242,10 @@ function renderCompanyListPanel() {
       <div class="admin-list">
         ${companies
           .map(
-            (company) => `
-              <article class="admin-row">
+            (company) => {
+              const renewal = companyRenewalStatus(company);
+              return `
+              <article class="admin-row ${renewal.className}">
                 <div>
                   <strong>${escapeHtml(company.name)}</strong>
                   <span>${escapeHtml(company.contact_name || "Sin contacto")} / ${escapeHtml(company.contact_email || "Sin email")}</span>
@@ -2244,6 +2256,7 @@ function renderCompanyListPanel() {
                 <div class="admin-row-meta">
                   <span>${escapeHtml(company.slug)}</span>
                   <span class="${company.status === "active" ? "ok-text" : "danger-text"}">${companyStatusLabel(company.status)}</span>
+                  <span class="${renewal.className}">${escapeHtml(renewal.label)}</span>
                   <span>Vence: ${escapeHtml(formatDateOnly(company.ends_at))}</span>
                   <span>${company.document_count || 0} documentos</span>
                 </div>
@@ -2257,10 +2270,71 @@ function renderCompanyListPanel() {
                   Sistemas
                 </button>
               </article>
-            `
+            `;
+            }
           )
           .join("")}
       </div>
+    </section>
+  `;
+}
+
+function renderRenewalPanel() {
+  const summary = companyRenewalSummary();
+  const attentionCompanies = companies
+    .map((company) => ({ company, renewal: companyRenewalStatus(company) }))
+    .filter((item) => ["expired", "today", "warning"].includes(item.renewal.state))
+    .sort((first, second) => (first.renewal.days ?? 9999) - (second.renewal.days ?? 9999))
+    .slice(0, 8);
+
+  return `
+    <section class="renewal-panel">
+      <div class="renewal-head">
+        <div>
+          <p class="eyebrow">Renovaciones</p>
+          <h3>Empresas por vencer</h3>
+          <span>${summary.expiredCount} vencida(s) / ${summary.warningCount} por renovar en 15 dias</span>
+        </div>
+        <strong>${summary.healthyCount} al dia</strong>
+      </div>
+      <div class="renewal-grid">
+        <article class="${summary.expiredCount ? "is-danger" : ""}">
+          <span>Vencidas</span>
+          <strong>${summary.expiredCount}</strong>
+        </article>
+        <article class="${summary.todayCount ? "is-warning" : ""}">
+          <span>Vencen hoy</span>
+          <strong>${summary.todayCount}</strong>
+        </article>
+        <article class="${summary.warningCount ? "is-warning" : ""}">
+          <span>Proximos 15 dias</span>
+          <strong>${summary.warningCount}</strong>
+        </article>
+        <article>
+          <span>Sin vencimiento</span>
+          <strong>${summary.noDateCount}</strong>
+        </article>
+      </div>
+      ${
+        attentionCompanies.length
+          ? `<div class="renewal-list">
+              ${attentionCompanies
+                .map(
+                  ({ company, renewal }) => `
+                    <article>
+                      <div>
+                        <strong>${escapeHtml(company.name)}</strong>
+                        <span>${escapeHtml(company.contact_name || "Sin contacto")} / ${escapeHtml(company.contact_phone || company.contact_email || "Sin dato")}</span>
+                      </div>
+                      <span class="renewal-pill ${renewal.className}">${escapeHtml(renewal.label)}</span>
+                      <button class="ghost-button" type="button" data-company-edit="${company.id}">Renovar</button>
+                    </article>
+                  `
+                )
+                .join("")}
+            </div>`
+          : `<div class="lead-activity-empty">No hay empresas con renovacion urgente.</div>`
+      }
     </section>
   `;
 }
@@ -3397,6 +3471,30 @@ function membershipRemainingLabel(endDate) {
   return `Faltan ${days} dia(s)`;
 }
 
+function companyRenewalStatus(company) {
+  const days = daysUntil(company?.ends_at || company?.membershipEndsAt);
+  if (days === null) return { state: "none", className: "is-muted", label: "Sin vencimiento", days: null };
+  if (days < 0) return { state: "expired", className: "is-danger", label: `Vencida hace ${Math.abs(days)} dia(s)`, days };
+  if (days === 0) return { state: "today", className: "is-warning", label: "Vence hoy", days };
+  if (days <= 15) return { state: "warning", className: "is-warning", label: `Renovar en ${days} dia(s)`, days };
+  return { state: "healthy", className: "is-ok", label: `${days} dia(s) restantes`, days };
+}
+
+function companyRenewalSummary() {
+  return companies.reduce(
+    (summary, company) => {
+      const renewal = companyRenewalStatus(company);
+      if (renewal.state === "expired") summary.expiredCount += 1;
+      else if (renewal.state === "today") summary.todayCount += 1;
+      else if (renewal.state === "warning") summary.warningCount += 1;
+      else if (renewal.state === "none") summary.noDateCount += 1;
+      else summary.healthyCount += 1;
+      return summary;
+    },
+    { expiredCount: 0, todayCount: 0, warningCount: 0, healthyCount: 0, noDateCount: 0 }
+  );
+}
+
 function formatDateOnly(value) {
   const normalized = normalizeDateForInput(value);
   if (!normalized) return "Sin fecha";
@@ -3583,12 +3681,14 @@ function renderAdminOverview(operativeUnits, activeUsers) {
 function renderMembershipNotice() {
   if (!isAdmin() || !currentUser?.membershipEndsAt) return "";
   const days = daysUntil(currentUser.membershipEndsAt);
-  const tone = days !== null && days <= 7 ? "is-warning" : "";
+  const tone = days !== null && days < 0 ? "is-danger" : days !== null && days <= 15 ? "is-warning" : "";
+  const title = days !== null && days < 0 ? "Membresia vencida" : days === 0 ? "Membresia vence hoy" : days !== null && days <= 15 ? "Membresia por vencer" : "Membresia activa";
+  const action = days !== null && days <= 15 ? "Coordina la renovacion con SYSTEM ZOW para evitar suspension del servicio." : "Tu empresa esta habilitada para operar con normalidad.";
   return `
     <section class="membership-note ${tone}">
       <div>
-        <strong>Membresia ${escapeHtml(billingPeriodLabel(currentUser.billingPeriod))}</strong>
-        <span>Plan ${escapeHtml(planLabel(currentUser.companyPlan))}. ${escapeHtml(membershipRemainingLabel(currentUser.membershipEndsAt))}. Vence: ${escapeHtml(formatDateOnly(currentUser.membershipEndsAt))}.</span>
+        <strong>${escapeHtml(title)} / ${escapeHtml(billingPeriodLabel(currentUser.billingPeriod))}</strong>
+        <span>Plan ${escapeHtml(planLabel(currentUser.companyPlan))}. ${escapeHtml(membershipRemainingLabel(currentUser.membershipEndsAt))}. Vence: ${escapeHtml(formatDateOnly(currentUser.membershipEndsAt))}. ${escapeHtml(action)}</span>
       </div>
     </section>
   `;
