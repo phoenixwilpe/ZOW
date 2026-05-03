@@ -17,7 +17,21 @@ let summary = {};
 let saleCart = [];
 let editingUserId = "";
 let productSearch = "";
+let ventasMessage = "";
 let storeSettings = { companyName: "", storeName: "", currency: "BOB", taxId: "", phone: "", address: "", ticketNote: "" };
+
+const starterProducts = [
+  { code: "AB-001", name: "Agua mineral 600 ml", category: "Bebidas", unit: "Botella", costPrice: 2.1, salePrice: 4, minStock: 24, stock: 96 },
+  { code: "REF-002", name: "Refresco cola 2 L", category: "Bebidas", unit: "Botella", costPrice: 8.5, salePrice: 13, minStock: 12, stock: 36 },
+  { code: "ARR-003", name: "Arroz grano largo 1 kg", category: "Abarrotes", unit: "Bolsa", costPrice: 6.2, salePrice: 9, minStock: 20, stock: 60 },
+  { code: "AZ-004", name: "Azucar blanca 1 kg", category: "Abarrotes", unit: "Bolsa", costPrice: 5.8, salePrice: 8.5, minStock: 20, stock: 50 },
+  { code: "ACE-005", name: "Aceite vegetal 900 ml", category: "Abarrotes", unit: "Botella", costPrice: 11.5, salePrice: 16, minStock: 10, stock: 30 },
+  { code: "DET-006", name: "Detergente en polvo 800 g", category: "Limpieza", unit: "Bolsa", costPrice: 10, salePrice: 15, minStock: 8, stock: 24 },
+  { code: "PAN-007", name: "Pan molde familiar", category: "Panaderia", unit: "Unidad", costPrice: 7, salePrice: 11, minStock: 8, stock: 20 },
+  { code: "CAF-008", name: "Cafe instantaneo 170 g", category: "Abarrotes", unit: "Frasco", costPrice: 18, salePrice: 26, minStock: 6, stock: 18 },
+  { code: "LEC-009", name: "Leche entera 1 L", category: "Lacteos", unit: "Caja", costPrice: 5.7, salePrice: 8, minStock: 18, stock: 48 },
+  { code: "GAL-010", name: "Galletas surtidas 400 g", category: "Snacks", unit: "Paquete", costPrice: 8, salePrice: 12, minStock: 12, stock: 32 }
+];
 
 const loginScreen = document.querySelector("#loginScreen");
 const appShell = document.querySelector("#appShell");
@@ -190,12 +204,13 @@ function renderMain() {
     catalog: ["Catalogos", "Articulos y categorias"],
     customers: ["Clientes", "Base de clientes"],
     inventory: ["Inventario", "Stock y reabastecimiento"],
+    users: ["Usuarios", "Credenciales y roles de Ventas-Almacen"],
     settings: ["Configuracion", "Tienda, moneda y datos de impresion"]
   };
   document.querySelector("#viewEyebrow").textContent = titles[activeView][0];
   document.querySelector("#viewTitle").textContent = titles[activeView][1];
   renderWorkflow();
-  const renderers = { summary: renderSummary, alerts: renderAlerts, sell: renderSell, finance: renderFinance, routes: renderRoutes, promotions: renderPromotions, reports: renderReports, catalog: renderCatalog, customers: renderCustomers, inventory: renderInventory, settings: renderSettings };
+  const renderers = { summary: renderSummary, alerts: renderAlerts, sell: renderSell, finance: renderFinance, routes: renderRoutes, promotions: renderPromotions, reports: renderReports, catalog: renderCatalog, customers: renderCustomers, inventory: renderInventory, users: renderUsers, settings: renderSettings };
   renderers[activeView]();
   document.querySelectorAll("[data-module-view]").forEach((button) => {
     button.addEventListener("click", () => {
@@ -219,6 +234,7 @@ function renderWorkflow() {
     catalog: [`<strong>Catalogos</strong><span>Administra articulos y categorias.</span>`, `<button class="ghost-button" type="button" id="newCategoryBtn">Nueva categoria</button><button class="primary-button" type="button" id="newProductBtn">Nuevo producto</button>`],
     customers: [`<strong>Clientes</strong><span>Registra compradores frecuentes para ventas y tienda virtual.</span>`, `<button class="primary-button" type="button" id="newCustomerBtn">Nuevo cliente</button>`],
     inventory: [`<strong>Inventario</strong><span>Controla stock actual y regulariza entradas o salidas.</span>`, `<button class="primary-button" type="button" id="newProductInventoryBtn">Nuevo producto</button>`],
+    users: [`<strong>Usuarios operativos</strong><span>Crea cajeros, vendedores, almacen y operador integral para la empresa.</span>`, ""],
     settings: [`<strong>Configuracion comercial</strong><span>Define datos de tienda, moneda y textos del comprobante.</span>`, ""]
   };
   panel.innerHTML = `<div>${actions[activeView][0]}</div><div class="admin-actions">${actions[activeView][1]}</div>`;
@@ -384,15 +400,28 @@ function renderInventory() {
   setCount(`${products.length} producto${products.length === 1 ? "" : "s"}`);
   mainList().innerHTML = `
     <section class="admin-panel">
-      <div class="admin-panel-head"><div><p class="eyebrow">Control de stock</p><h3>Inventario operativo</h3></div></div>
+      <div class="admin-panel-head">
+        <div><p class="eyebrow">Control de stock</p><h3>Inventario operativo</h3></div>
+        ${["admin", "ventas_admin", "almacen"].includes(currentUser?.role) ? `<button class="ghost-button" type="button" id="loadStarterProducts">Cargar productos de prueba</button>` : ""}
+      </div>
+      ${ventasMessage ? `<div class="cloud-safe-note"><strong>${escapeHtml(ventasMessage)}</strong><span>La accion se ejecuto sobre los datos de esta empresa.</span></div>` : ""}
       <label class="toolbar-search">Buscar producto<input id="productSearchInput" type="search" value="${escapeHtml(productSearch)}" placeholder="Codigo, nombre o categoria" /></label>
       <div class="admin-list">${inventoryProducts.map(renderInventoryProductRow).join("") || empty("Sin productos con esa busqueda")}</div>
     </section>
   `;
   bindProductSearch();
+  document.querySelector("#loadStarterProducts")?.addEventListener("click", loadStarterProducts);
   document.querySelectorAll("[data-stock-move]").forEach((button) => {
     button.addEventListener("click", () => openStockMovement(button.dataset.stockMove, button.dataset.type));
   });
+}
+
+function renderUsers() {
+  setCount(`${users.length} usuario${users.length === 1 ? "" : "s"}`);
+  mainList().innerHTML = currentUser.role === "admin"
+    ? renderVentasUsersPanel()
+    : empty("Solo el encargado de sistema puede administrar usuarios");
+  bindVentasUsersPanel();
 }
 
 function renderSettings() {
@@ -413,7 +442,6 @@ function renderSettings() {
         <div class="modal-actions"><button class="primary-button" type="submit">Guardar configuracion</button></div>
       </form>
     </section>
-    ${currentUser.role === "admin" ? renderVentasUsersPanel() : ""}
     <section class="admin-panel">
       <div class="admin-panel-head"><div><p class="eyebrow">Modelos de operacion</p><h3>Adaptable a empresa chica o grande</h3></div></div>
       <div class="operation-model-grid">
@@ -424,23 +452,6 @@ function renderSettings() {
     </section>
   `;
   document.querySelector("#storeSettingsForm")?.addEventListener("submit", saveStoreSettings);
-  document.querySelector("#ventasUserForm")?.addEventListener("submit", saveVentasUser);
-  document.querySelector("#cancelVentasUserEdit")?.addEventListener("click", () => {
-    editingUserId = "";
-    renderMain();
-  });
-  document.querySelectorAll("[data-edit-user]").forEach((button) => {
-    button.addEventListener("click", () => {
-      editingUserId = button.dataset.editUser;
-      renderMain();
-    });
-  });
-  document.querySelectorAll("[data-toggle-user]").forEach((button) => {
-    button.addEventListener("click", () => toggleVentasUser(button.dataset.toggleUser));
-  });
-  document.querySelectorAll("[data-role-template]").forEach((button) => {
-    button.addEventListener("click", () => applyRoleTemplate(button.dataset.roleTemplate));
-  });
 }
 
 function renderProductRow(product) {
@@ -547,6 +558,7 @@ function renderVentasUsersPanel() {
         <div><p class="eyebrow">Usuarios Ventas-Almacen</p><h3>Credenciales operativas</h3></div>
         <span>${operativeUsers.length} usuario${operativeUsers.length === 1 ? "" : "s"}</span>
       </div>
+      ${ventasMessage ? `<div class="cloud-safe-note"><strong>${escapeHtml(ventasMessage)}</strong><span>Si algo no se guarda, revisa que la contrasena tenga mayuscula, minuscula, numero y 10 caracteres como minimo.</span></div>` : ""}
       <div class="role-template-grid" aria-label="Plantillas de roles">
         <button type="button" data-role-template="integral"><span>1 o 2 personas</span><strong>Operador integral</strong><small>Venta, caja, inventario, rutas y reportes.</small></button>
         <button type="button" data-role-template="cashier"><span>Mostrador</span><strong>Cajero vendedor</strong><small>Venta, clientes, caja y rutas basicas.</small></button>
@@ -583,6 +595,28 @@ function renderVentasUsersPanel() {
       <div class="admin-list">${operativeUsers.map(renderVentasUserRow).join("") || empty("Aun no hay usuarios operativos de ventas")}</div>
     </section>
   `;
+}
+
+function bindVentasUsersPanel() {
+  document.querySelector("#ventasUserForm")?.addEventListener("submit", saveVentasUser);
+  document.querySelector("#cancelVentasUserEdit")?.addEventListener("click", () => {
+    editingUserId = "";
+    ventasMessage = "";
+    renderMain();
+  });
+  document.querySelectorAll("[data-edit-user]").forEach((button) => {
+    button.addEventListener("click", () => {
+      editingUserId = button.dataset.editUser;
+      ventasMessage = "Editando usuario. Deja la contrasena vacia si no deseas cambiarla.";
+      renderMain();
+    });
+  });
+  document.querySelectorAll("[data-toggle-user]").forEach((button) => {
+    button.addEventListener("click", () => toggleVentasUser(button.dataset.toggleUser));
+  });
+  document.querySelectorAll("[data-role-template]").forEach((button) => {
+    button.addEventListener("click", () => applyRoleTemplate(button.dataset.roleTemplate));
+  });
 }
 
 function renderVentasUserRow(user) {
@@ -687,6 +721,7 @@ async function saveStoreSettings(event) {
 
 async function saveVentasUser(event) {
   event.preventDefault();
+  ventasMessage = "";
   const payload = {
     name: value("#ventasUserName").trim(),
     username: value("#ventasUsername").trim().toLowerCase(),
@@ -698,19 +733,33 @@ async function saveVentasUser(event) {
     phone: value("#ventasUserPhone").trim()
   };
   if (editingUserId && !payload.password) delete payload.password;
-  await apiRequest(editingUserId ? `/users/${editingUserId}` : "/users", {
-    method: editingUserId ? "PATCH" : "POST",
-    body: payload
-  });
-  editingUserId = "";
-  await render();
+  try {
+    await apiRequest(editingUserId ? `/users/${editingUserId}` : "/users", {
+      method: editingUserId ? "PATCH" : "POST",
+      body: payload
+    });
+    ventasMessage = editingUserId ? "Usuario actualizado correctamente." : "Usuario creado correctamente.";
+    editingUserId = "";
+    activeView = "users";
+    await render();
+  } catch (error) {
+    ventasMessage = error.message || "No se pudo guardar el usuario.";
+    renderMain();
+  }
 }
 
 async function toggleVentasUser(userId) {
   const user = users.find((item) => item.id === userId);
   if (!user || user.protected || user.id === currentUser.id) return;
-  await apiRequest(`/users/${user.id}/status`, { method: "PATCH", body: { active: !user.active } });
-  await render();
+  try {
+    await apiRequest(`/users/${user.id}/status`, { method: "PATCH", body: { active: !user.active } });
+    ventasMessage = `Usuario ${user.active ? "desactivado" : "activado"} correctamente.`;
+    activeView = "users";
+    await render();
+  } catch (error) {
+    ventasMessage = error.message || "No se pudo cambiar el estado del usuario.";
+    renderMain();
+  }
 }
 
 function applyRoleTemplate(template) {
@@ -741,6 +790,31 @@ async function openStockMovement(productId, type) {
     method: "POST",
     body: { type, quantity, reference, note }
   });
+  await render();
+}
+
+async function loadStarterProducts() {
+  ventasMessage = "";
+  let created = 0;
+  let skipped = 0;
+  try {
+    for (const product of starterProducts) {
+      try {
+        await apiRequest("/ventas/products", { method: "POST", body: product });
+        created += 1;
+      } catch (error) {
+        if (String(error.message || "").toLowerCase().includes("codigo")) skipped += 1;
+        else throw error;
+      }
+    }
+    ventasMessage = created
+      ? `Inventario de prueba cargado: ${created} producto${created === 1 ? "" : "s"}.`
+      : `Los productos de prueba ya estaban registrados.`;
+    if (skipped && created) ventasMessage += ` ${skipped} ya existian.`;
+  } catch (error) {
+    ventasMessage = error.message || "No se pudo cargar el inventario de prueba.";
+  }
+  activeView = "inventory";
   await render();
 }
 
@@ -801,7 +875,7 @@ function canAccessView(view) { return accessibleViewsForRole(currentUser?.role).
 function defaultViewForRole() { return accessibleViewsForRole(currentUser?.role)[0] || "summary"; }
 function accessibleViewsForRole(role) {
   const views = {
-    admin: ["summary", "alerts", "sell", "finance", "routes", "promotions", "reports", "catalog", "customers", "inventory", "settings"],
+    admin: ["summary", "alerts", "sell", "finance", "routes", "promotions", "reports", "catalog", "customers", "inventory", "users", "settings"],
     ventas_admin: ["summary", "alerts", "sell", "finance", "routes", "promotions", "reports", "catalog", "customers", "inventory", "settings"],
     cajero: ["summary", "sell", "finance", "customers"],
     vendedor: ["summary", "sell", "customers"],
