@@ -17,7 +17,7 @@ const LOCAL_SALE_META_KEY = "zowVentasAlmacen.saleMeta";
  */
 
 let currentUser = loadSession();
-let activeView = "summary";
+let activeView = "sell";
 let products = [];
 let customers = [];
 let categories = [];
@@ -313,39 +313,58 @@ function renderSell() {
   setCount(`${saleCart.length} item${saleCart.length === 1 ? "" : "s"}`);
   const sellProducts = filteredProducts();
   const totals = cartTotals();
+  const categories = productCategories();
   mainList().innerHTML = `
-    <section class="pos-shell">
-      <section class="admin-panel pos-products">
-        <div class="admin-panel-head"><div><p class="eyebrow">POS</p><h3>Productos y busqueda</h3></div><span>F2 buscar</span></div>
+    <section class="pos-shell touch-pos-shell">
+      <section class="admin-panel pos-products touch-panel">
+        <div class="touch-pos-head">
+          <div>
+            <p class="eyebrow">Venta rapida</p>
+            <h3>Productos</h3>
+          </div>
+          <div class="touch-shortcuts"><span>F2 Buscar</span><span>F4 Cobrar</span></div>
+        </div>
+        ${ventasMessage ? `<div class="pos-toast">${escapeHtml(ventasMessage)}</div>` : ""}
         <div class="pos-search-row">
-          <label class="toolbar-search">Buscar por nombre, codigo o barras<input id="productSearchInput" type="search" value="${escapeHtml(productSearch)}" placeholder="Escanea o escribe codigo / producto" /></label>
-          <button class="primary-button" type="button" id="scanAddBtn">Escanear/agregar</button>
+          <label class="toolbar-search touch-search">Buscar o escanear<input id="productSearchInput" type="search" value="${escapeHtml(productSearch)}" placeholder="Codigo, barras o nombre del producto" /></label>
+          <button class="primary-button touch-action" type="button" id="scanAddBtn">Agregar</button>
         </div>
-        <div class="quick-action-row">
-          <button class="ghost-button" type="button" id="newSaleBtn">Nueva venta</button>
-          <button class="ghost-button" type="button" id="suspendSaleBtn">Suspender</button>
-          <button class="ghost-button" type="button" id="recoverSaleBtn">Recuperar (${suspendedSales.length})</button>
-          <button class="ghost-button danger-action" type="button" id="cancelSaleBtn">Cancelar</button>
+        <div class="pos-category-rail">
+          <button class="${productSearch ? "" : "is-active"}" type="button" data-product-filter="">Todos</button>
+          ${categories.slice(0, 10).map((category) => `<button class="${productSearch === category ? "is-active" : ""}" type="button" data-product-filter="${escapeHtml(category)}">${escapeHtml(category)}</button>`).join("")}
         </div>
-        <div class="product-suggestion-grid">${sellProducts.slice(0, 18).map(renderSellProduct).join("") || empty("Sin productos con esa busqueda")}</div>
+        <div class="product-suggestion-grid touch-product-grid">${sellProducts.slice(0, 24).map(renderSellProduct).join("") || empty("Sin productos con esa busqueda")}</div>
       </section>
-      <section class="admin-panel pos-cart">
-        <div class="admin-panel-head"><div><p class="eyebrow">Carrito</p><h3>Total ${money(totals.total)}</h3></div><span>F4 cobrar</span></div>
+      <section class="admin-panel pos-cart touch-cart-panel">
+        <div class="touch-cart-head">
+          <div><p class="eyebrow">Carrito actual</p><h3>${saleCart.length} producto${saleCart.length === 1 ? "" : "s"}</h3></div>
+          <strong>${money(totals.total)}</strong>
+        </div>
         <form class="admin-form" id="saleForm">
-          <label>Cliente<select id="saleCustomer"><option value="">Cliente sin registrar</option>${customers.map((c) => `<option value="${c.id}">${escapeHtml(c.name)}</option>`).join("")}</select></label>
-          <div class="pos-cart-list">${saleCart.map(renderCartItem).join("") || empty("Agrega productos a la venta")}</div>
+          <label class="touch-customer-select">Cliente<select id="saleCustomer"><option value="">Cliente sin registrar</option>${customers.map((c) => `<option value="${c.id}">${escapeHtml(c.name)}</option>`).join("")}</select></label>
+          <div class="pos-cart-list touch-cart-list">${saleCart.map(renderCartItem).join("") || empty("Toca un producto para agregarlo")}</div>
           <div class="sale-total-card">
             <div><span>Subtotal</span><strong>${money(totals.subtotal)}</strong></div>
             <div><span>Descuentos</span><strong>${money(totals.discount)}</strong></div>
             <div><span>Impuestos</span><strong>${money(totals.tax)}</strong></div>
             <div class="is-total"><span>Total</span><strong>${money(totals.total)}</strong></div>
           </div>
-          <div class="modal-actions"><button class="primary-button" type="button" id="chargeSaleBtn">Cobrar</button></div>
+          <div class="quick-action-row touch-sale-actions">
+            <button class="ghost-button" type="button" id="newSaleBtn">Nueva</button>
+            <button class="ghost-button" type="button" id="suspendSaleBtn">Suspender</button>
+            <button class="ghost-button" type="button" id="recoverSaleBtn">Recuperar (${suspendedSales.length})</button>
+            <button class="ghost-button danger-action" type="button" id="cancelSaleBtn">Cancelar</button>
+          </div>
+          <button class="primary-button touch-charge-button" type="button" id="chargeSaleBtn" ${saleCart.length ? "" : "disabled"}>Cobrar ${money(totals.total)}</button>
         </form>
       </section>
     </section>
   `;
   bindProductSearch();
+  document.querySelectorAll("[data-product-filter]").forEach((button) => button.addEventListener("click", () => {
+    productSearch = button.dataset.productFilter || "";
+    renderMain();
+  }));
   document.querySelector("#scanAddBtn")?.addEventListener("click", scanAddProduct);
   document.querySelector("#newSaleBtn")?.addEventListener("click", newSale);
   document.querySelector("#suspendSaleBtn")?.addEventListener("click", suspendCurrentSale);
@@ -607,17 +626,23 @@ function renderInventoryProductRow(product) {
 }
 
 function renderSellProduct(product) {
-  return `<article class="pos-product-card"><div><strong>${escapeHtml(product.name)}</strong><span>${escapeHtml(product.code)} / ${escapeHtml(product.category || "Sin categoria")}</span><small>Stock ${num(product.stock)}</small></div><button class="primary-button" type="button" data-add-product="${product.id}" ${Number(product.stock || 0) <= 0 ? "disabled" : ""}>Agregar</button><strong>${money(product.sale_price)}</strong></article>`;
+  const stock = Number(product.stock || 0);
+  return `<button class="pos-product-card touch-product-card" type="button" data-add-product="${product.id}" ${stock <= 0 ? "disabled" : ""}>
+    <span class="product-code">${escapeHtml(product.code)}</span>
+    <strong>${escapeHtml(product.name)}</strong>
+    <span class="product-meta"><span>${escapeHtml(product.category || "Sin categoria")}</span><small class="${stock <= Number(product.min_stock || 0) ? "warn-text" : ""}">Stock ${num(stock)}</small></span>
+    <b>${money(product.sale_price)}</b>
+  </button>`;
 }
 
 function renderCartItem(item) {
   const lineSubtotal = item.quantity * item.salePrice;
-  return `<article class="cart-line">
-    <div><strong>${escapeHtml(item.name)}</strong><span>${money(item.salePrice)} c/u</span></div>
-    <div class="cart-qty"><button class="ghost-button" type="button" data-cart-dec="${item.productId}">-</button><strong>${item.quantity}</strong><button class="ghost-button" type="button" data-cart-inc="${item.productId}">+</button></div>
-    <label>Desc.<input type="number" min="0" step="0.01" value="${Number(item.discount || 0)}" data-cart-discount="${item.productId}" /></label>
+  return `<article class="cart-line touch-cart-line">
+    <div class="cart-item-name"><strong>${escapeHtml(item.name)}</strong><span>${money(item.salePrice)} c/u</span></div>
+    <div class="cart-qty touch-qty"><button class="ghost-button" type="button" data-cart-dec="${item.productId}">-</button><strong>${item.quantity}</strong><button class="ghost-button" type="button" data-cart-inc="${item.productId}">+</button></div>
+    <label>Descuento<input type="number" min="0" step="0.01" value="${Number(item.discount || 0)}" data-cart-discount="${item.productId}" /></label>
     <strong>${money(Math.max(lineSubtotal - Number(item.discount || 0), 0))}</strong>
-    <button class="ghost-button danger-action" type="button" data-remove-cart="${item.productId}">Eliminar</button>
+    <button class="ghost-button danger-action" type="button" data-remove-cart="${item.productId}">Quitar</button>
   </article>`;
 }
 
@@ -698,6 +723,10 @@ function filteredProducts() {
   if (!term) return products;
   return products.filter((product) => [product.code, product.name, product.category]
     .some((value) => String(value || "").toLowerCase().includes(term)));
+}
+
+function productCategories() {
+  return [...new Set(products.map((product) => String(product.category || "").trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b, "es"));
 }
 
 function bindProductSearch() {
@@ -798,6 +827,13 @@ function addToCart(productId) {
   const product = products.find((item) => item.id === productId);
   if (!product) return;
   const existing = saleCart.find((item) => item.productId === productId);
+  const stock = Number(product.stock || 0);
+  const currentQuantity = Number(existing?.quantity || 0);
+  if (currentQuantity + 1 > stock) {
+    ventasMessage = `Stock insuficiente para ${product.name}. Disponible: ${num(stock)}.`;
+    return renderMain();
+  }
+  ventasMessage = "";
   if (existing) existing.quantity += 1;
   else saleCart.push({ productId, name: product.name, quantity: 1, salePrice: Number(product.sale_price || 0), discount: 0 });
   renderMain();
@@ -809,8 +845,19 @@ function removeFromCart(productId) {
 }
 
 function updateCartQuantity(productId, delta) {
+  const product = products.find((item) => item.id === productId);
+  const stock = Number(product?.stock || 0);
   saleCart = saleCart
-    .map((item) => item.productId === productId ? { ...item, quantity: Math.max(0, item.quantity + delta) } : item)
+    .map((item) => {
+      if (item.productId !== productId) return item;
+      const nextQuantity = Math.max(0, item.quantity + delta);
+      if (delta > 0 && nextQuantity > stock) {
+        ventasMessage = `No hay mas stock disponible para ${item.name}.`;
+        return item;
+      }
+      ventasMessage = "";
+      return { ...item, quantity: nextQuantity };
+    })
     .filter((item) => item.quantity > 0);
   renderMain();
 }
@@ -875,15 +922,19 @@ function renderPaymentModal() {
   const totals = cartTotals();
   const change = Math.max(Number(paymentDraft.received || 0) - totals.total, 0);
   const insufficient = Number(paymentDraft.received || 0) < totals.total;
+  const quickAmounts = buildQuickCashAmounts(totals.total);
   paymentModalContent.innerHTML = `
-    <div class="payment-total"><span>Total a pagar</span><strong>${money(totals.total)}</strong></div>
-    <div class="payment-method-grid">${paymentMethods().map((method) => `<button class="${paymentDraft.method === method.id ? "is-active" : ""}" type="button" data-payment-method="${method.id}">${method.label}</button>`).join("")}</div>
-    <div class="form-grid">
-      <label>Monto recibido<input id="paymentReceived" type="number" min="0" step="0.01" value="${Number(paymentDraft.received || 0).toFixed(2)}" /></label>
-      <label>Vuelto<input type="text" value="${money(change)}" readonly /></label>
+    <div class="touch-payment-layout">
+      <div class="payment-total touch-payment-total"><span>Total a pagar</span><strong>${money(totals.total)}</strong><small>${saleCart.length} item${saleCart.length === 1 ? "" : "s"} en carrito</small></div>
+      <div class="payment-method-grid touch-payment-methods">${paymentMethods().map((method) => `<button class="${paymentDraft.method === method.id ? "is-active" : ""}" type="button" data-payment-method="${method.id}">${method.label}</button>`).join("")}</div>
+      <div class="quick-cash-grid">${quickAmounts.map((amount) => `<button type="button" data-quick-cash="${amount}">${money(amount)}</button>`).join("")}</div>
+      <div class="form-grid touch-payment-fields">
+        <label>Monto recibido<input id="paymentReceived" type="number" min="0" step="0.01" value="${Number(paymentDraft.received || 0).toFixed(2)}" /></label>
+        <label>Vuelto<input type="text" value="${money(change)}" readonly /></label>
+      </div>
+      ${insufficient ? `<p class="form-error">Pago insuficiente. Falta ${money(totals.total - Number(paymentDraft.received || 0))}.</p>` : ""}
+      <div class="modal-actions touch-payment-actions"><button class="ghost-button" type="button" id="printDraftBtn">Precomprobante</button><button class="primary-button" type="submit" id="confirmPaymentBtn" ${insufficient ? "disabled" : ""}>Confirmar pago</button></div>
     </div>
-    ${insufficient ? `<p class="form-error">Pago insuficiente. Falta ${money(totals.total - Number(paymentDraft.received || 0))}.</p>` : ""}
-    <div class="modal-actions"><button class="ghost-button" type="button" id="printDraftBtn">Generar comprobante</button><button class="primary-button" type="submit" id="confirmPaymentBtn" ${insufficient ? "disabled" : ""}>Confirmar pago</button></div>
   `;
   paymentModalContent.querySelectorAll("[data-payment-method]").forEach((button) => {
     button.addEventListener("click", () => {
@@ -895,8 +946,22 @@ function renderPaymentModal() {
     paymentDraft.received = Number(event.target.value || 0);
     renderPaymentModal();
   });
+  paymentModalContent.querySelectorAll("[data-quick-cash]").forEach((button) => {
+    button.addEventListener("click", () => {
+      paymentDraft.received = Number(button.dataset.quickCash || totals.total);
+      renderPaymentModal();
+    });
+  });
   paymentModalContent.querySelector("#printDraftBtn")?.addEventListener("click", printDraftTicket);
   paymentForm.onsubmit = submitSale;
+}
+
+function buildQuickCashAmounts(total) {
+  const base = Math.ceil(Number(total || 0));
+  const rounded5 = Math.ceil(base / 5) * 5;
+  const rounded10 = Math.ceil(base / 10) * 10;
+  const rounded20 = Math.ceil(base / 20) * 20;
+  return [...new Set([total, rounded5, rounded10, rounded20].filter((amount) => amount >= total))].slice(0, 4);
 }
 
 async function submitSale(event) {
@@ -1224,13 +1289,13 @@ function canAccessView(view) { return accessibleViewsForRole(currentUser?.role).
 function defaultViewForRole() { return accessibleViewsForRole(currentUser?.role)[0] || "summary"; }
 function accessibleViewsForRole(role) {
   const views = {
-    admin: ["summary", "alerts", "sell", "finance", "routes", "promotions", "reports", "catalog", "customers", "inventory", "users", "settings"],
-    ventas_admin: ["summary", "alerts", "sell", "finance", "routes", "promotions", "reports", "catalog", "customers", "inventory", "settings"],
-    cajero: ["summary", "sell", "finance", "history", "customers"],
-    vendedor: ["summary", "sell", "customers"],
-    almacen: ["summary", "alerts", "routes", "reports", "catalog", "inventory"],
-    supervisor: ["summary", "alerts", "sell", "finance", "routes", "promotions", "reports", "catalog", "customers", "inventory"],
-    funcionario: ["summary", "sell", "routes", "customers"]
+    admin: ["sell", "summary", "alerts", "finance", "history", "routes", "promotions", "reports", "catalog", "customers", "inventory", "users", "settings"],
+    ventas_admin: ["sell", "summary", "alerts", "finance", "history", "routes", "promotions", "reports", "catalog", "customers", "inventory", "settings"],
+    cajero: ["sell", "finance", "history", "customers", "summary"],
+    vendedor: ["sell", "customers", "summary"],
+    almacen: ["inventory", "alerts", "routes", "reports", "catalog", "summary"],
+    supervisor: ["sell", "summary", "alerts", "finance", "history", "routes", "promotions", "reports", "catalog", "customers", "inventory"],
+    funcionario: ["sell", "routes", "customers", "summary"]
   };
   return views[role] || ["summary"];
 }
