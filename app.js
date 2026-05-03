@@ -2323,6 +2323,7 @@ function renderLeadsPanel() {
           <strong>${urgentCount}</strong>
         </article>
       </section>
+      ${renderLeadInsightsPanel()}
       ${renderLeadActivityPanel()}
       <form class="report-filter-grid lead-filter-grid" aria-label="Filtros de leads">
         <label>
@@ -2385,6 +2386,111 @@ function renderLeadsPanel() {
     </section>
     ${renderLeadFollowDialog()}
   `;
+}
+
+function renderLeadInsightsPanel() {
+  const total = commercialLeads.length;
+  const converted = commercialLeads.filter((lead) => lead.status === "convertido").length;
+  const discarded = commercialLeads.filter((lead) => lead.status === "descartado").length;
+  const active = commercialLeads.filter((lead) => !["convertido", "descartado"].includes(lead.status)).length;
+  const conversionRate = total ? Math.round((converted / total) * 100) : 0;
+  const discardRate = total ? Math.round((discarded / total) * 100) : 0;
+  const weekNow = countLeadsInRange(0, 7);
+  const weekBefore = countLeadsInRange(7, 14);
+  const weekDelta = weekNow - weekBefore;
+  const systems = aggregateLeadValues(commercialLeads, (lead) => systemLeadLabel(lead.system_id));
+  const plans = aggregateLeadValues(commercialLeads, (lead) => billingPeriodLabel(lead.plan));
+  const topSystem = systems[0];
+  const topPlan = plans[0];
+
+  return `
+    <section class="lead-insights-panel">
+      <div class="lead-insight-main">
+        <div>
+          <p class="eyebrow">Metricas comerciales</p>
+          <h4>Conversion y demanda</h4>
+          <span>${total} lead(s) registrados / ${active} en gestion</span>
+        </div>
+        <div class="lead-conversion-ring" style="--conversion:${conversionRate}">
+          <strong>${conversionRate}%</strong>
+          <span>conversion</span>
+        </div>
+      </div>
+      <div class="lead-insight-grid">
+        <article>
+          <span>Esta semana</span>
+          <strong>${weekNow}</strong>
+          <small class="${weekDelta >= 0 ? "ok-text" : "danger-text"}">${weekDelta >= 0 ? "+" : ""}${weekDelta} vs semana anterior</small>
+        </article>
+        <article>
+          <span>Sistema con mas interes</span>
+          <strong>${escapeHtml(topSystem?.label || "Sin datos")}</strong>
+          <small>${topSystem?.count || 0} solicitud(es)</small>
+        </article>
+        <article>
+          <span>Periodo mas pedido</span>
+          <strong>${escapeHtml(topPlan?.label || "Sin datos")}</strong>
+          <small>${topPlan?.count || 0} solicitud(es)</small>
+        </article>
+        <article>
+          <span>Descartados</span>
+          <strong>${discardRate}%</strong>
+          <small>${discarded} lead(s) sin cierre</small>
+        </article>
+      </div>
+      <div class="lead-distribution-grid">
+        <article>
+          <strong>Por sistema</strong>
+          ${renderLeadDistributionBars(systems)}
+        </article>
+        <article>
+          <strong>Por periodo</strong>
+          ${renderLeadDistributionBars(plans)}
+        </article>
+      </div>
+    </section>
+  `;
+}
+
+function renderLeadDistributionBars(items) {
+  const max = Math.max(...items.map((item) => item.count), 1);
+  if (!items.length) return `<div class="lead-activity-empty">Sin datos suficientes.</div>`;
+  return `
+    <div class="lead-bars">
+      ${items
+        .map(
+          (item) => `
+            <div>
+              <span>${escapeHtml(item.label)}</span>
+              <strong>${item.count}</strong>
+              <i style="--bar:${Math.max(6, Math.round((item.count / max) * 100))}%"></i>
+            </div>
+          `
+        )
+        .join("")}
+    </div>
+  `;
+}
+
+function aggregateLeadValues(leads, getLabel) {
+  const counts = leads.reduce((map, lead) => {
+    const label = getLabel(lead) || "Sin datos";
+    map[label] = (map[label] || 0) + 1;
+    return map;
+  }, {});
+  return Object.entries(counts)
+    .map(([label, count]) => ({ label, count }))
+    .sort((first, second) => second.count - first.count || first.label.localeCompare(second.label, "es"));
+}
+
+function countLeadsInRange(startDaysAgo, endDaysAgo) {
+  const now = Date.now();
+  const start = now - endDaysAgo * 86400000;
+  const end = now - startDaysAgo * 86400000;
+  return commercialLeads.filter((lead) => {
+    const createdAt = leadTimeValue(lead.created_at);
+    return createdAt >= start && createdAt < end;
+  }).length;
 }
 
 function renderLeadActivityPanel() {
