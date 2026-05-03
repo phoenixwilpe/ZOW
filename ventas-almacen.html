@@ -101,6 +101,7 @@
           <button type="button" data-view="alerts">Alertas</button>
           <button type="button" data-view="sell">Vender</button>
           <button type="button" data-view="finance">Finanzas</button>
+          <button type="button" data-view="history">Historial</button>
           <button type="button" data-view="routes">Rutas</button>
           <button type="button" data-view="promotions">Promociones</button>
           <button type="button" data-view="reports">Reportes</button>
@@ -224,6 +225,19 @@
           <button class="ghost-button" type="button" id="cancelCategoryModal">Cancelar</button>
           <button class="primary-button" type="submit">Guardar categoria</button>
         </div>
+      </form>
+    </dialog>
+
+    <dialog id="paymentModal">
+      <form id="paymentForm" method="dialog" class="modal-body payment-modal-body">
+        <div class="modal-header">
+          <div>
+            <p class="eyebrow">Cobro</p>
+            <h2>Confirmar pago</h2>
+          </div>
+          <button class="icon-button" type="button" id="closePaymentModal" aria-label="Cerrar">x</button>
+        </div>
+        <div id="paymentModalContent"></div>
       </form>
     </dialog>
 

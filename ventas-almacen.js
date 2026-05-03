@@ -3,6 +3,18 @@ const API_BASE_URL = window.location.hostname === "localhost" || window.location
   : "/api";
 const TOKEN_KEY = "zowVentasAlmacen.token";
 const SESSION_KEY = "zowVentasAlmacen.session";
+const CASH_SESSION_KEY = "zowVentasAlmacen.cashSession";
+const CASH_MOVEMENTS_KEY = "zowVentasAlmacen.cashMovements";
+const SUSPENDED_SALES_KEY = "zowVentasAlmacen.suspendedSales";
+const LOCAL_SALE_META_KEY = "zowVentasAlmacen.saleMeta";
+
+/**
+ * @typedef {{ id:string, code:string, name:string, category:string, stock:number, sale_price:number, cost_price:number }} Product
+ * @typedef {{ productId:string, name:string, quantity:number, salePrice:number, discount:number }} CartItem
+ * @typedef {{ id:string, openedAt:string, openedBy:string, openingAmount:number, status:"abierta"|"cerrada" }} CashSession
+ * @typedef {{ id:string, type:"ingreso"|"egreso", amount:number, reason:string, createdAt:string, user:string }} CashMovement
+ * @typedef {{ method:"efectivo"|"tarjeta"|"transferencia"|"qr"|"mixto", received:number }} PaymentDraft
+ */
 
 let currentUser = loadSession();
 let activeView = "summary";
@@ -18,6 +30,12 @@ let saleCart = [];
 let editingUserId = "";
 let productSearch = "";
 let ventasMessage = "";
+let paymentDraft = { method: "efectivo", received: 0 };
+let suspendedSales = loadJson(SUSPENDED_SALES_KEY, []);
+let cashSession = loadJson(CASH_SESSION_KEY, null);
+let cashMovements = loadJson(CASH_MOVEMENTS_KEY, []);
+let localSaleMeta = loadJson(LOCAL_SALE_META_KEY, {});
+let historyFilter = { status: "", method: "", date: "" };
 let storeSettings = { companyName: "", storeName: "", currency: "BOB", taxId: "", phone: "", address: "", ticketNote: "" };
 
 const starterProducts = [
@@ -43,6 +61,9 @@ const customerModal = document.querySelector("#customerModal");
 const customerForm = document.querySelector("#customerForm");
 const categoryModal = document.querySelector("#categoryModal");
 const categoryForm = document.querySelector("#categoryForm");
+const paymentModal = document.querySelector("#paymentModal");
+const paymentForm = document.querySelector("#paymentForm");
+const paymentModalContent = document.querySelector("#paymentModalContent");
 
 loginForm.addEventListener("submit", async (event) => {
   event.preventDefault();
@@ -89,6 +110,22 @@ document.querySelector("#closeCustomerModal").addEventListener("click", () => cu
 document.querySelector("#cancelCustomerModal").addEventListener("click", () => customerModal.close());
 document.querySelector("#closeCategoryModal").addEventListener("click", () => categoryModal.close());
 document.querySelector("#cancelCategoryModal").addEventListener("click", () => categoryModal.close());
+document.querySelector("#closePaymentModal").addEventListener("click", () => paymentModal.close());
+
+document.addEventListener("keydown", (event) => {
+  if (!currentUser || activeView !== "sell") return;
+  if (event.key === "F2") {
+    event.preventDefault();
+    document.querySelector("#productSearchInput")?.focus();
+  }
+  if (event.key === "F4") {
+    event.preventDefault();
+    openPaymentModal();
+  }
+  if (event.key === "Escape" && saleCart.length && confirm("Cancelar la venta actual?")) {
+    cancelCurrentSale();
+  }
+});
 
 productForm.addEventListener("submit", async (event) => {
   event.preventDefault();
@@ -198,6 +235,7 @@ function renderMain() {
     alerts: ["Alertas", "Productos sin stock o bajo minimo"],
     sell: ["Vender", "Registrar venta y emitir ticket"],
     finance: ["Finanzas", "Ventas y caja"],
+    history: ["Historial", "Operaciones del turno"],
     routes: ["Rutas", "Venta en ruta y despacho"],
     promotions: ["Promociones", "Lista de precios y ofertas"],
     reports: ["Reportes", "Auditoria comercial"],
@@ -210,7 +248,7 @@ function renderMain() {
   document.querySelector("#viewEyebrow").textContent = titles[activeView][0];
   document.querySelector("#viewTitle").textContent = titles[activeView][1];
   renderWorkflow();
-  const renderers = { summary: renderSummary, alerts: renderAlerts, sell: renderSell, finance: renderFinance, routes: renderRoutes, promotions: renderPromotions, reports: renderReports, catalog: renderCatalog, customers: renderCustomers, inventory: renderInventory, users: renderUsers, settings: renderSettings };
+  const renderers = { summary: renderSummary, alerts: renderAlerts, sell: renderSell, finance: renderFinance, history: renderHistory, routes: renderRoutes, promotions: renderPromotions, reports: renderReports, catalog: renderCatalog, customers: renderCustomers, inventory: renderInventory, users: renderUsers, settings: renderSettings };
   renderers[activeView]();
   document.querySelectorAll("[data-module-view]").forEach((button) => {
     button.addEventListener("click", () => {
@@ -228,6 +266,7 @@ function renderWorkflow() {
     alerts: [`<strong>Alertas de stock</strong><span>Repone productos agotados o por debajo del minimo.</span>`, ""],
     sell: [`<strong>Nueva venta</strong><span>Agrega productos, cliente, descuento y efectivo recibido.</span>`, ""],
     finance: [`<strong>Caja</strong><span>Controla ventas pendientes de cierre y procesa cortes.</span>`, `<button class="primary-button" type="button" id="closeCashBtn">Procesar caja</button>`],
+    history: [`<strong>Historial del turno</strong><span>Consulta, reimprime o marca operaciones anuladas.</span>`, ""],
     routes: [`<strong>Operacion en ruta</strong><span>Organiza clientes, entrega, despacho y seguimiento de vendedores.</span>`, ""],
     promotions: [`<strong>Politica comercial</strong><span>Prepara listas de precios, paquetes y promociones por temporada.</span>`, ""],
     reports: [`<strong>Auditoria comercial</strong><span>Revisa ventas, caja, inventario critico y valor de almacen.</span>`, ""],
@@ -272,47 +311,139 @@ function renderAlerts() {
 
 function renderSell() {
   setCount(`${saleCart.length} item${saleCart.length === 1 ? "" : "s"}`);
-  const subtotal = saleCart.reduce((sum, item) => sum + item.quantity * item.salePrice, 0);
   const sellProducts = filteredProducts();
+  const totals = cartTotals();
   mainList().innerHTML = `
-    <section class="admin-panel">
-      <div class="admin-panel-head"><div><p class="eyebrow">Productos</p><h3>Agregar a venta</h3></div></div>
-      <label class="toolbar-search">Buscar producto<input id="productSearchInput" type="search" value="${escapeHtml(productSearch)}" placeholder="Codigo, nombre o categoria" /></label>
-      <div class="admin-list">${sellProducts.map(renderSellProduct).join("") || empty("Sin productos con esa busqueda")}</div>
-    </section>
-    <section class="admin-panel">
-      <div class="admin-panel-head"><div><p class="eyebrow">Venta actual</p><h3>Total ${money(subtotal)}</h3></div></div>
-      <form class="admin-form" id="saleForm">
-        <div class="admin-list">${saleCart.map(renderCartItem).join("") || empty("Agrega productos a la venta")}</div>
-        <div class="form-grid">
-          <label>Cliente<select id="saleCustomer"><option value="">Cliente sin registrar</option>${customers.map((c) => `<option value="${c.id}">${escapeHtml(c.name)}</option>`).join("")}</select></label>
-          <label>Descuento<input id="saleDiscount" type="number" min="0" step="0.01" value="0" /></label>
-          <label>Efectivo<input id="saleCash" type="number" min="0" step="0.01" value="${subtotal.toFixed(2)}" /></label>
+    <section class="pos-shell">
+      <section class="admin-panel pos-products">
+        <div class="admin-panel-head"><div><p class="eyebrow">POS</p><h3>Productos y busqueda</h3></div><span>F2 buscar</span></div>
+        <div class="pos-search-row">
+          <label class="toolbar-search">Buscar por nombre, codigo o barras<input id="productSearchInput" type="search" value="${escapeHtml(productSearch)}" placeholder="Escanea o escribe codigo / producto" /></label>
+          <button class="primary-button" type="button" id="scanAddBtn">Escanear/agregar</button>
         </div>
-        <div class="modal-actions"><button class="primary-button" type="submit">Confirmar venta</button></div>
-      </form>
+        <div class="quick-action-row">
+          <button class="ghost-button" type="button" id="newSaleBtn">Nueva venta</button>
+          <button class="ghost-button" type="button" id="suspendSaleBtn">Suspender</button>
+          <button class="ghost-button" type="button" id="recoverSaleBtn">Recuperar (${suspendedSales.length})</button>
+          <button class="ghost-button danger-action" type="button" id="cancelSaleBtn">Cancelar</button>
+        </div>
+        <div class="product-suggestion-grid">${sellProducts.slice(0, 18).map(renderSellProduct).join("") || empty("Sin productos con esa busqueda")}</div>
+      </section>
+      <section class="admin-panel pos-cart">
+        <div class="admin-panel-head"><div><p class="eyebrow">Carrito</p><h3>Total ${money(totals.total)}</h3></div><span>F4 cobrar</span></div>
+        <form class="admin-form" id="saleForm">
+          <label>Cliente<select id="saleCustomer"><option value="">Cliente sin registrar</option>${customers.map((c) => `<option value="${c.id}">${escapeHtml(c.name)}</option>`).join("")}</select></label>
+          <div class="pos-cart-list">${saleCart.map(renderCartItem).join("") || empty("Agrega productos a la venta")}</div>
+          <div class="sale-total-card">
+            <div><span>Subtotal</span><strong>${money(totals.subtotal)}</strong></div>
+            <div><span>Descuentos</span><strong>${money(totals.discount)}</strong></div>
+            <div><span>Impuestos</span><strong>${money(totals.tax)}</strong></div>
+            <div class="is-total"><span>Total</span><strong>${money(totals.total)}</strong></div>
+          </div>
+          <div class="modal-actions"><button class="primary-button" type="button" id="chargeSaleBtn">Cobrar</button></div>
+        </form>
+      </section>
     </section>
   `;
   bindProductSearch();
+  document.querySelector("#scanAddBtn")?.addEventListener("click", scanAddProduct);
+  document.querySelector("#newSaleBtn")?.addEventListener("click", newSale);
+  document.querySelector("#suspendSaleBtn")?.addEventListener("click", suspendCurrentSale);
+  document.querySelector("#recoverSaleBtn")?.addEventListener("click", recoverSuspendedSale);
+  document.querySelector("#cancelSaleBtn")?.addEventListener("click", () => {
+    if (saleCart.length && confirm("Cancelar la venta actual?")) cancelCurrentSale();
+  });
+  document.querySelector("#chargeSaleBtn")?.addEventListener("click", openPaymentModal);
   document.querySelectorAll("[data-add-product]").forEach((button) => button.addEventListener("click", () => addToCart(button.dataset.addProduct)));
   document.querySelectorAll("[data-remove-cart]").forEach((button) => button.addEventListener("click", () => removeFromCart(button.dataset.removeCart)));
   document.querySelectorAll("[data-cart-dec]").forEach((button) => button.addEventListener("click", () => updateCartQuantity(button.dataset.cartDec, -1)));
   document.querySelectorAll("[data-cart-inc]").forEach((button) => button.addEventListener("click", () => updateCartQuantity(button.dataset.cartInc, 1)));
-  document.querySelector("#saleForm")?.addEventListener("submit", submitSale);
+  document.querySelectorAll("[data-cart-discount]").forEach((input) => input.addEventListener("change", () => updateCartDiscount(input.dataset.cartDiscount, Number(input.value || 0))));
+  document.querySelector("#saleForm")?.addEventListener("submit", (event) => {
+    event.preventDefault();
+    openPaymentModal();
+  });
 }
 
 function renderFinance() {
   setCount(`${sales.length} venta${sales.length === 1 ? "" : "s"}`);
   const cashLabel = canSeeAllSales() ? "Pendiente caja" : "Mi caja pendiente";
   const totalLabel = canSeeAllSales() ? "Monto pendiente" : "Mi monto pendiente";
+  const expectedCash = cashExpectedTotal();
+  const movementsTotal = cashMovementsTotal();
   mainList().innerHTML = `
     <section class="setup-overview">
       <article><span>${cashLabel}</span><strong>${cash.pendingSales?.length || 0}</strong></article>
       <article><span>${totalLabel}</span><strong>${money(cash.total || 0)}</strong></article>
-      <article><span>Ingreso total</span><strong>${money(summary.income || 0)}</strong></article>
+      <article><span>Efectivo esperado</span><strong>${money(expectedCash)}</strong></article>
     </section>
-    <section class="admin-panel"><div class="admin-list">${sales.map(renderSaleRow).join("") || empty("Sin ventas")}</div></section>
+    <section class="cashier-grid">
+      <section class="admin-panel">
+        <div class="admin-panel-head"><div><p class="eyebrow">Apertura</p><h3>${cashSession?.status === "abierta" ? "Caja abierta" : "Abrir caja"}</h3></div></div>
+        ${cashSession?.status === "abierta" ? `
+          <div class="cash-status-card"><strong>${money(cashSession.openingAmount)}</strong><span>Apertura por ${escapeHtml(cashSession.openedBy)} / ${formatDateTime(cashSession.openedAt)}</span></div>
+        ` : `
+          <form class="admin-form" id="cashOpenForm"><label>Monto inicial<input id="cashOpeningAmount" type="number" min="0" step="0.01" value="0" /></label><button class="primary-button" type="submit">Abrir caja</button></form>
+        `}
+      </section>
+      <section class="admin-panel">
+        <div class="admin-panel-head"><div><p class="eyebrow">Movimientos</p><h3>Ingresos y egresos</h3></div><span>${money(movementsTotal)}</span></div>
+        <form class="admin-form" id="cashMovementForm">
+          <div class="form-grid">
+            <label>Tipo<select id="cashMovementType"><option value="ingreso">Ingreso manual</option><option value="egreso">Egreso manual</option></select></label>
+            <label>Monto<input id="cashMovementAmount" type="number" min="0.01" step="0.01" required /></label>
+            <label class="span-2">Motivo<input id="cashMovementReason" type="text" required placeholder="Cambio, compra menor, retiro, etc." /></label>
+          </div>
+          <button class="ghost-button" type="submit">Registrar movimiento</button>
+        </form>
+      </section>
+      <section class="admin-panel">
+        <div class="admin-panel-head"><div><p class="eyebrow">Cierre</p><h3>Cuadre de caja</h3></div></div>
+        <form class="admin-form" id="cashCloseForm">
+          <div class="form-grid">
+            <label>Efectivo esperado<input type="text" value="${money(expectedCash)}" readonly /></label>
+            <label>Efectivo contado<input id="cashCountedAmount" type="number" min="0" step="0.01" value="${expectedCash.toFixed(2)}" /></label>
+          </div>
+          <button class="primary-button" type="submit">Cerrar caja</button>
+        </form>
+      </section>
+    </section>
+    <section class="admin-panel">
+      <div class="admin-panel-head"><div><p class="eyebrow">Historial movimientos</p><h3>Turno actual</h3></div></div>
+      <div class="admin-list">${cashMovements.slice(0, 8).map(renderCashMovementRow).join("") || empty("Sin movimientos manuales")}</div>
+    </section>
   `;
+  document.querySelector("#cashOpenForm")?.addEventListener("submit", openCashSession);
+  document.querySelector("#cashMovementForm")?.addEventListener("submit", addCashMovement);
+  document.querySelector("#cashCloseForm")?.addEventListener("submit", closeCashSession);
+}
+
+function renderHistory() {
+  const visibleSales = sales.filter((sale) => {
+    const meta = localSaleMeta[sale.id] || {};
+    const status = meta.status || (sale.cash_closed ? "pagada" : "pendiente");
+    if (historyFilter.status && status !== historyFilter.status) return false;
+    if (historyFilter.method && meta.method !== historyFilter.method) return false;
+    if (historyFilter.date && !String(sale.created_at || "").startsWith(historyFilter.date)) return false;
+    return true;
+  });
+  setCount(`${visibleSales.length} venta${visibleSales.length === 1 ? "" : "s"}`);
+  mainList().innerHTML = `
+    <section class="admin-panel">
+      <div class="admin-panel-head"><div><p class="eyebrow">Historial</p><h3>Ventas del turno</h3></div></div>
+      <div class="history-filters">
+        <label>Fecha<input id="historyDate" type="date" value="${escapeHtml(historyFilter.date)}" /></label>
+        <label>Metodo<select id="historyMethod"><option value="">Todos</option>${paymentMethods().map((method) => `<option value="${method.id}" ${historyFilter.method === method.id ? "selected" : ""}>${method.label}</option>`).join("")}</select></label>
+        <label>Estado<select id="historyStatus"><option value="">Todos</option><option value="pagada" ${historyFilter.status === "pagada" ? "selected" : ""}>Pagada</option><option value="pendiente" ${historyFilter.status === "pendiente" ? "selected" : ""}>Pendiente</option><option value="anulada" ${historyFilter.status === "anulada" ? "selected" : ""}>Anulada</option></select></label>
+      </div>
+      <div class="admin-list">${visibleSales.map(renderHistorySaleRow).join("") || empty("Sin ventas con esos filtros")}</div>
+    </section>
+  `;
+  document.querySelector("#historyDate")?.addEventListener("change", (event) => { historyFilter.date = event.target.value; renderMain(); });
+  document.querySelector("#historyMethod")?.addEventListener("change", (event) => { historyFilter.method = event.target.value; renderMain(); });
+  document.querySelector("#historyStatus")?.addEventListener("change", (event) => { historyFilter.status = event.target.value; renderMain(); });
+  document.querySelectorAll("[data-reprint-sale]").forEach((button) => button.addEventListener("click", () => reprintSale(button.dataset.reprintSale)));
+  document.querySelectorAll("[data-void-sale]").forEach((button) => button.addEventListener("click", () => voidSale(button.dataset.voidSale)));
 }
 
 function renderRoutes() {
@@ -476,15 +607,35 @@ function renderInventoryProductRow(product) {
 }
 
 function renderSellProduct(product) {
-  return `<article class="admin-row"><div><strong>${escapeHtml(product.name)}</strong><span>${escapeHtml(product.code)} / Stock ${num(product.stock)} / ${money(product.sale_price)}</span></div><button class="primary-button" type="button" data-add-product="${product.id}" ${Number(product.stock || 0) <= 0 ? "disabled" : ""}>+</button></article>`;
+  return `<article class="pos-product-card"><div><strong>${escapeHtml(product.name)}</strong><span>${escapeHtml(product.code)} / ${escapeHtml(product.category || "Sin categoria")}</span><small>Stock ${num(product.stock)}</small></div><button class="primary-button" type="button" data-add-product="${product.id}" ${Number(product.stock || 0) <= 0 ? "disabled" : ""}>Agregar</button><strong>${money(product.sale_price)}</strong></article>`;
 }
 
 function renderCartItem(item) {
-  return `<article class="admin-row cart-row"><div><strong>${escapeHtml(item.name)}</strong><span>${item.quantity} x ${money(item.salePrice)} = ${money(item.quantity * item.salePrice)}</span></div><div class="cart-actions"><button class="ghost-button" type="button" data-cart-dec="${item.productId}">-</button><strong>${item.quantity}</strong><button class="ghost-button" type="button" data-cart-inc="${item.productId}">+</button><button class="ghost-button" type="button" data-remove-cart="${item.productId}">Quitar</button></div></article>`;
+  const lineSubtotal = item.quantity * item.salePrice;
+  return `<article class="cart-line">
+    <div><strong>${escapeHtml(item.name)}</strong><span>${money(item.salePrice)} c/u</span></div>
+    <div class="cart-qty"><button class="ghost-button" type="button" data-cart-dec="${item.productId}">-</button><strong>${item.quantity}</strong><button class="ghost-button" type="button" data-cart-inc="${item.productId}">+</button></div>
+    <label>Desc.<input type="number" min="0" step="0.01" value="${Number(item.discount || 0)}" data-cart-discount="${item.productId}" /></label>
+    <strong>${money(Math.max(lineSubtotal - Number(item.discount || 0), 0))}</strong>
+    <button class="ghost-button danger-action" type="button" data-remove-cart="${item.productId}">Eliminar</button>
+  </article>`;
 }
 
 function renderSaleRow(sale) {
   return `<article class="admin-row"><div><strong>${escapeHtml(sale.code)}</strong><span>${escapeHtml(sale.customer_name || "Cliente sin registrar")} / ${escapeHtml(sale.seller_name || "Vendedor")}</span><span>${formatDateTime(sale.created_at)}</span></div><div class="admin-row-meta"><span>Total ${money(sale.total)}</span><span>${sale.cash_closed ? "Caja cerrada" : "Pendiente caja"}</span></div></article>`;
+}
+
+function renderHistorySaleRow(sale) {
+  const meta = localSaleMeta[sale.id] || {};
+  const status = meta.status || (sale.cash_closed ? "pagada" : "pendiente");
+  return `<article class="admin-row">
+    <div><strong>${escapeHtml(sale.code)}</strong><span>${escapeHtml(sale.customer_name || "Cliente sin registrar")} / ${formatDateTime(sale.created_at)}</span><span>Metodo: ${escapeHtml(paymentLabel(meta.method || "efectivo"))}</span></div>
+    <div class="admin-row-meta"><span>Total ${money(sale.total)}</span><span class="${status === "anulada" ? "danger-text" : status === "pagada" ? "ok-text" : "warn-text"}">${status}</span><button class="ghost-button" type="button" data-reprint-sale="${sale.id}">Reimprimir</button><button class="ghost-button danger-action" type="button" data-void-sale="${sale.id}">Anular</button></div>
+  </article>`;
+}
+
+function renderCashMovementRow(movement) {
+  return `<article class="admin-row"><div><strong>${movement.type === "ingreso" ? "Ingreso" : "Egreso"} ${money(movement.amount)}</strong><span>${escapeHtml(movement.reason)}</span><span>${formatDateTime(movement.createdAt)} / ${escapeHtml(movement.user)}</span></div></article>`;
 }
 
 function renderVentasCommandCenter() {
@@ -639,7 +790,7 @@ function addToCart(productId) {
   if (!product) return;
   const existing = saleCart.find((item) => item.productId === productId);
   if (existing) existing.quantity += 1;
-  else saleCart.push({ productId, name: product.name, quantity: 1, salePrice: Number(product.sale_price || 0) });
+  else saleCart.push({ productId, name: product.name, quantity: 1, salePrice: Number(product.sale_price || 0), discount: 0 });
   renderMain();
 }
 
@@ -655,18 +806,107 @@ function updateCartQuantity(productId, delta) {
   renderMain();
 }
 
+function updateCartDiscount(productId, discount) {
+  saleCart = saleCart.map((item) => item.productId === productId ? { ...item, discount: Math.max(discount, 0) } : item);
+  renderMain();
+}
+
+function cartTotals() {
+  const subtotal = saleCart.reduce((sum, item) => sum + item.quantity * item.salePrice, 0);
+  const discount = saleCart.reduce((sum, item) => sum + Number(item.discount || 0), 0);
+  const tax = 0;
+  return { subtotal, discount, tax, total: Math.max(subtotal - discount + tax, 0) };
+}
+
+function scanAddProduct() {
+  const term = productSearch.trim().toLowerCase();
+  const product = products.find((item) => [item.code, item.name].some((value) => String(value || "").toLowerCase() === term)) || filteredProducts()[0];
+  if (product) addToCart(product.id);
+}
+
+function newSale() {
+  saleCart = [];
+  productSearch = "";
+  renderMain();
+}
+
+function cancelCurrentSale() {
+  saleCart = [];
+  ventasMessage = "Venta cancelada.";
+  renderMain();
+}
+
+function suspendCurrentSale() {
+  if (!saleCart.length) return;
+  suspendedSales = [{ id: crypto.randomUUID(), items: saleCart, createdAt: new Date().toISOString() }, ...suspendedSales].slice(0, 10);
+  persistJson(SUSPENDED_SALES_KEY, suspendedSales);
+  saleCart = [];
+  ventasMessage = "Venta suspendida.";
+  renderMain();
+}
+
+function recoverSuspendedSale() {
+  if (!suspendedSales.length) return;
+  const recovered = suspendedSales.shift();
+  saleCart = recovered.items || [];
+  persistJson(SUSPENDED_SALES_KEY, suspendedSales);
+  ventasMessage = "Venta recuperada.";
+  renderMain();
+}
+
+function openPaymentModal() {
+  if (!saleCart.length) return;
+  const total = cartTotals().total;
+  paymentDraft.received = paymentDraft.method === "efectivo" ? total : total;
+  renderPaymentModal();
+  paymentModal.showModal();
+}
+
+function renderPaymentModal() {
+  const totals = cartTotals();
+  const change = Math.max(Number(paymentDraft.received || 0) - totals.total, 0);
+  const insufficient = Number(paymentDraft.received || 0) < totals.total;
+  paymentModalContent.innerHTML = `
+    <div class="payment-total"><span>Total a pagar</span><strong>${money(totals.total)}</strong></div>
+    <div class="payment-method-grid">${paymentMethods().map((method) => `<button class="${paymentDraft.method === method.id ? "is-active" : ""}" type="button" data-payment-method="${method.id}">${method.label}</button>`).join("")}</div>
+    <div class="form-grid">
+      <label>Monto recibido<input id="paymentReceived" type="number" min="0" step="0.01" value="${Number(paymentDraft.received || 0).toFixed(2)}" /></label>
+      <label>Vuelto<input type="text" value="${money(change)}" readonly /></label>
+    </div>
+    ${insufficient ? `<p class="form-error">Pago insuficiente. Falta ${money(totals.total - Number(paymentDraft.received || 0))}.</p>` : ""}
+    <div class="modal-actions"><button class="ghost-button" type="button" id="printDraftBtn">Generar comprobante</button><button class="primary-button" type="submit" id="confirmPaymentBtn" ${insufficient ? "disabled" : ""}>Confirmar pago</button></div>
+  `;
+  paymentModalContent.querySelectorAll("[data-payment-method]").forEach((button) => {
+    button.addEventListener("click", () => {
+      paymentDraft.method = button.dataset.paymentMethod;
+      renderPaymentModal();
+    });
+  });
+  paymentModalContent.querySelector("#paymentReceived")?.addEventListener("input", (event) => {
+    paymentDraft.received = Number(event.target.value || 0);
+    renderPaymentModal();
+  });
+  paymentModalContent.querySelector("#printDraftBtn")?.addEventListener("click", printDraftTicket);
+  paymentForm.onsubmit = submitSale;
+}
+
 async function submitSale(event) {
   event.preventDefault();
+  const totals = cartTotals();
+  if (Number(paymentDraft.received || 0) < totals.total) return;
   const response = await apiRequest("/ventas/sales", {
     method: "POST",
     body: {
       customerId: value("#saleCustomer"),
-      discount: Number(value("#saleDiscount")),
-      cashReceived: Number(value("#saleCash")),
+      discount: totals.discount,
+      cashReceived: Number(paymentDraft.received || totals.total),
       items: saleCart.map((item) => ({ productId: item.productId, quantity: item.quantity, unitPrice: item.salePrice }))
     }
   });
+  localSaleMeta[response.sale.id] = { method: paymentDraft.method, status: "pagada", received: Number(paymentDraft.received || totals.total), createdAt: new Date().toISOString() };
+  persistJson(LOCAL_SALE_META_KEY, localSaleMeta);
   saleCart = [];
+  paymentModal.close();
   await render();
   printTicket(response.sale, response.items);
 }
@@ -675,6 +915,52 @@ async function closeCash() {
   if (!cash.pendingSales?.length) return;
   await apiRequest("/ventas/cash/close", { method: "POST", body: {} });
   await render();
+}
+
+function openCashSession(event) {
+  event.preventDefault();
+  cashSession = { id: crypto.randomUUID(), openedAt: new Date().toISOString(), openedBy: currentUser.name, openingAmount: Number(value("#cashOpeningAmount") || 0), status: "abierta" };
+  persistJson(CASH_SESSION_KEY, cashSession);
+  ventasMessage = "Caja abierta correctamente.";
+  renderMain();
+}
+
+function addCashMovement(event) {
+  event.preventDefault();
+  const movement = {
+    id: crypto.randomUUID(),
+    type: value("#cashMovementType"),
+    amount: Number(value("#cashMovementAmount") || 0),
+    reason: value("#cashMovementReason").trim(),
+    createdAt: new Date().toISOString(),
+    user: currentUser.name
+  };
+  if (!movement.amount || !movement.reason) return;
+  cashMovements = [movement, ...cashMovements].slice(0, 100);
+  persistJson(CASH_MOVEMENTS_KEY, cashMovements);
+  ventasMessage = "Movimiento registrado.";
+  renderMain();
+}
+
+async function closeCashSession(event) {
+  event.preventDefault();
+  const counted = Number(value("#cashCountedAmount") || 0);
+  const expected = cashExpectedTotal();
+  if (!confirm(`Cerrar caja? Diferencia: ${money(counted - expected)}`)) return;
+  if (cash.pendingSales?.length) await closeCash();
+  cashSession = cashSession ? { ...cashSession, status: "cerrada", closedAt: new Date().toISOString(), countedAmount: counted, difference: counted - expected } : null;
+  persistJson(CASH_SESSION_KEY, cashSession);
+  ventasMessage = "Caja cerrada correctamente.";
+  await render();
+}
+
+function cashMovementsTotal() {
+  return cashMovements.reduce((sum, item) => sum + (item.type === "ingreso" ? Number(item.amount || 0) : -Number(item.amount || 0)), 0);
+}
+
+function cashExpectedTotal() {
+  const opening = cashSession?.status === "abierta" ? Number(cashSession.openingAmount || 0) : 0;
+  return opening + Number(cash.total || 0) + cashMovementsTotal();
 }
 
 function openProductModal() {
@@ -699,6 +985,36 @@ function printTicket(sale, items) {
   printable.document.write(`<!doctype html><html><head><meta charset="UTF-8"><title>Ticket ${escapeHtml(sale.code)}</title><style>body{font-family:Arial,sans-serif;padding:18px;max-width:320px;color:#111}h1{font-size:18px;text-align:center;margin:0 0 6px}p{line-height:1.4}table{width:100%;border-collapse:collapse}td{padding:5px 0;border-bottom:1px dashed #aaa}.total{font-weight:800;font-size:18px}.center{text-align:center}.muted{color:#555;font-size:12px}button{margin-bottom:12px}</style></head><body><button onclick="window.print()">Imprimir</button><h1>${escapeHtml(storeSettings.storeName || storeSettings.companyName || currentUser.companyName || "Zow Ventas-Almacen")}</h1><p class="center muted">${escapeHtml(storeSettings.taxId ? `NIT ${storeSettings.taxId}` : "")}<br>${escapeHtml(storeSettings.address || "")}<br>${escapeHtml(storeSettings.phone || "")}</p><p>${escapeHtml(sale.code)}<br>${formatDateTime(sale.created_at)}<br>Cajero: ${escapeHtml(currentUser.name || "")}</p><table>${items.map((item) => `<tr><td>${escapeHtml(item.product_name)} x ${item.quantity}</td><td>${money(item.total)}</td></tr>`).join("")}</table><p>Subtotal ${money(sale.subtotal)}<br>Descuento ${money(sale.discount)}</p><p class="total">Total ${money(sale.total)}</p><p>Efectivo ${money(sale.cash_received)}<br>Cambio ${money(sale.change_amount)}</p><p class="center muted">${escapeHtml(storeSettings.ticketNote || "Gracias por su compra")}</p></body></html>`);
   printable.document.close();
   printable.focus();
+}
+
+function printDraftTicket() {
+  const totals = cartTotals();
+  const sale = {
+    code: "PREVENTA",
+    subtotal: totals.subtotal,
+    discount: totals.discount,
+    total: totals.total,
+    cash_received: Number(paymentDraft.received || totals.total),
+    change_amount: Math.max(Number(paymentDraft.received || 0) - totals.total, 0),
+    created_at: new Date().toISOString()
+  };
+  const items = saleCart.map((item) => ({ product_name: item.name, quantity: item.quantity, total: item.quantity * item.salePrice - Number(item.discount || 0) }));
+  printTicket(sale, items);
+}
+
+function reprintSale(saleId) {
+  const sale = sales.find((item) => item.id === saleId);
+  if (!sale) return;
+  printTicket(sale, [{ product_name: "Detalle no disponible en historial local", quantity: 1, total: sale.total }]);
+}
+
+function voidSale(saleId) {
+  const sale = sales.find((item) => item.id === saleId);
+  if (!sale || !confirm(`Anular venta ${sale.code}?`)) return;
+  localSaleMeta[sale.id] = { ...(localSaleMeta[sale.id] || {}), status: "anulada", voidedAt: new Date().toISOString() };
+  persistJson(LOCAL_SALE_META_KEY, localSaleMeta);
+  ventasMessage = "Venta marcada como anulada en historial local.";
+  renderMain();
 }
 
 async function saveStoreSettings(event) {
@@ -847,6 +1163,20 @@ function money(value) { return `${Number(value || 0).toLocaleString("es-BO", { m
 function num(value) { return Number(value || 0).toLocaleString("es-BO"); }
 function formatDateTime(date) { return new Intl.DateTimeFormat("es-BO", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" }).format(new Date(date)); }
 function roleLabel(role) { return { admin: "Encargado de sistema", recepcion_principal: "Recepcion principal", recepcion_secundaria: "Recepcion secundaria", funcionario: "Funcionario", supervisor: "Supervisor", ventas_admin: "Operador integral", cajero: "Cajero", almacen: "Almacen", vendedor: "Vendedor" }[role] || role; }
+function paymentMethods() {
+  return [
+    { id: "efectivo", label: "Efectivo" },
+    { id: "tarjeta", label: "Tarjeta" },
+    { id: "transferencia", label: "Transferencia" },
+    { id: "qr", label: "QR" },
+    { id: "mixto", label: "Pago mixto" }
+  ];
+}
+function paymentLabel(id) { return paymentMethods().find((method) => method.id === id)?.label || "Efectivo"; }
+function loadJson(key, fallback) {
+  try { return JSON.parse(localStorage.getItem(key)) ?? fallback; } catch { return fallback; }
+}
+function persistJson(key, value) { localStorage.setItem(key, JSON.stringify(value)); }
 function normalizeUser(user) {
   return {
     id: user.id,
@@ -877,7 +1207,7 @@ function accessibleViewsForRole(role) {
   const views = {
     admin: ["summary", "alerts", "sell", "finance", "routes", "promotions", "reports", "catalog", "customers", "inventory", "users", "settings"],
     ventas_admin: ["summary", "alerts", "sell", "finance", "routes", "promotions", "reports", "catalog", "customers", "inventory", "settings"],
-    cajero: ["summary", "sell", "finance", "customers"],
+    cajero: ["summary", "sell", "finance", "history", "customers"],
     vendedor: ["summary", "sell", "customers"],
     almacen: ["summary", "alerts", "routes", "reports", "catalog", "inventory"],
     supervisor: ["summary", "alerts", "sell", "finance", "routes", "promotions", "reports", "catalog", "customers", "inventory"],
