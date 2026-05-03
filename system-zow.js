@@ -5,6 +5,11 @@ const siteApiBase = window.location.hostname === "localhost" || window.location.
 const leadForm = document.querySelector("#leadForm");
 const leadMessage = document.querySelector("#leadMessage");
 const siteHeader = document.querySelector(".site-header");
+const scrollProgress = document.querySelector(".site-scroll-progress");
+const navLinks = [...document.querySelectorAll("[data-nav-link]")];
+const navSections = navLinks
+  .map((link) => ({ link, target: document.querySelector(link.getAttribute("href")) }))
+  .filter((item) => item.target);
 
 document.querySelectorAll('a[href^="#"]').forEach((link) => {
   link.addEventListener("click", (event) => {
@@ -34,9 +39,30 @@ document.querySelectorAll(".site-section, .product-card, .plan-grid article, .op
   revealObserver?.observe(item);
 });
 
-window.addEventListener("scroll", () => {
+function updateNavigationState() {
+  const maxScroll = Math.max(document.documentElement.scrollHeight - window.innerHeight, 1);
+  const progress = Math.min(Math.max(window.scrollY / maxScroll, 0), 1);
+  scrollProgress?.style.setProperty("--scroll-progress", progress);
   siteHeader?.classList.toggle("is-scrolled", window.scrollY > 16);
-}, { passive: true });
+
+  const marker = window.scrollY + Math.round(window.innerHeight * 0.35);
+  let activeItem = navSections[0];
+  navSections.forEach((item) => {
+    if (item.target.offsetTop <= marker) activeItem = item;
+  });
+  navLinks.forEach((link) => link.classList.toggle("is-active", link === activeItem?.link));
+}
+
+updateNavigationState();
+window.addEventListener("scroll", updateNavigationState, { passive: true });
+
+navLinks.forEach((link) => {
+  link.addEventListener("pointermove", (event) => {
+    const rect = link.getBoundingClientRect();
+    link.style.setProperty("--mx", `${event.clientX - rect.left}px`);
+    link.style.setProperty("--my", `${event.clientY - rect.top}px`);
+  });
+});
 
 document.querySelector(".holo-panel")?.addEventListener("pointermove", (event) => {
   const panel = event.currentTarget;
