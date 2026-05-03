@@ -414,7 +414,7 @@ let systemHealth = null;
 let systemHealthLoaded = false;
 let commercialLeads = [];
 let commercialLeadsLoaded = false;
-let leadFilters = { status: "all", system: "all", plan: "all", term: "" };
+let leadFilters = { status: "all", system: "all", plan: "all", follow: "all", sort: "recent", term: "" };
 let leadConversionDraft = null;
 
 const loginScreen = document.querySelector("#loginScreen");
@@ -2112,7 +2112,7 @@ function renderZowAdmin(mode = "overview") {
   });
   document.querySelector("#exportLeadsCsv")?.addEventListener("click", exportLeadsCsv);
   document.querySelector("#clearLeadFilters")?.addEventListener("click", () => {
-    leadFilters = { status: "all", system: "all", plan: "all", term: "" };
+    leadFilters = { status: "all", system: "all", plan: "all", follow: "all", sort: "recent", term: "" };
     renderZowAdmin("leads");
   });
   if (mode === "leads" && commercialLeadsLoaded) bindLeadFilters();
@@ -2279,6 +2279,8 @@ function renderLeadsPanel() {
   const newCount = commercialLeads.filter((lead) => lead.status === "nuevo").length;
   const openCount = commercialLeads.filter((lead) => !["convertido", "descartado"].includes(lead.status)).length;
   const nextCount = commercialLeads.filter((lead) => lead.next_action || lead.next_action_at).length;
+  const dueTodayCount = commercialLeads.filter((lead) => leadFollowStatus(lead).state === "today").length;
+  const overdueCount = commercialLeads.filter((lead) => leadFollowStatus(lead).state === "overdue").length;
   return `
     <section class="admin-panel">
       <div class="admin-panel-head">
@@ -2292,6 +2294,24 @@ function renderLeadsPanel() {
           <button class="ghost-button" type="button" id="refreshLeads">Actualizar</button>
         </div>
       </div>
+      <section class="lead-dashboard">
+        <article>
+          <span>Nuevos</span>
+          <strong>${newCount}</strong>
+        </article>
+        <article>
+          <span>Abiertos</span>
+          <strong>${openCount}</strong>
+        </article>
+        <article class="${dueTodayCount ? "is-warning" : ""}">
+          <span>Para hoy</span>
+          <strong>${dueTodayCount}</strong>
+        </article>
+        <article class="${overdueCount ? "is-danger" : ""}">
+          <span>Vencidos</span>
+          <strong>${overdueCount}</strong>
+        </article>
+      </section>
       <form class="report-filter-grid lead-filter-grid" aria-label="Filtros de leads">
         <label>
           Estado
@@ -2314,6 +2334,25 @@ function renderLeadsPanel() {
           <select id="leadPlanFilter">
             <option value="all" ${leadFilters.plan === "all" ? "selected" : ""}>Todos</option>
             ${renderBillingPeriodOptions(leadFilters.plan)}
+          </select>
+        </label>
+        <label>
+          Seguimiento
+          <select id="leadFollowFilter">
+            <option value="all" ${leadFilters.follow === "all" ? "selected" : ""}>Todos</option>
+            <option value="overdue" ${leadFilters.follow === "overdue" ? "selected" : ""}>Vencidos</option>
+            <option value="today" ${leadFilters.follow === "today" ? "selected" : ""}>Para hoy</option>
+            <option value="scheduled" ${leadFilters.follow === "scheduled" ? "selected" : ""}>Programados</option>
+            <option value="missing" ${leadFilters.follow === "missing" ? "selected" : ""}>Sin seguimiento</option>
+          </select>
+        </label>
+        <label>
+          Ordenar
+          <select id="leadSortFilter">
+            <option value="recent" ${leadFilters.sort === "recent" ? "selected" : ""}>Mas recientes</option>
+            <option value="oldest" ${leadFilters.sort === "oldest" ? "selected" : ""}>Mas antiguos</option>
+            <option value="next_action" ${leadFilters.sort === "next_action" ? "selected" : ""}>Proxima accion</option>
+            <option value="company" ${leadFilters.sort === "company" ? "selected" : ""}>Empresa A-Z</option>
           </select>
         </label>
         <label class="span-2">
@@ -2357,14 +2396,19 @@ function renderLeadPipeline(leads = getFilteredLeads()) {
 function renderLeadCard(lead) {
   const nextAction = lead.next_action || lead.nextAction || "";
   const nextActionAt = lead.next_action_at || lead.nextActionAt || "";
+  const followStatus = leadFollowStatus(lead);
   return `
-    <article class="lead-card">
+    <article class="lead-card ${followStatus.className}">
       <div class="lead-card-head">
         <strong>${escapeHtml(lead.company || "Sin empresa")}</strong>
         <span>${escapeHtml(systemLeadLabel(lead.system_id))}</span>
       </div>
       <p>${escapeHtml(lead.name)} / ${escapeHtml(lead.phone || "Sin celular")}</p>
       <small>${escapeHtml(lead.email || "Sin correo")} / ${escapeHtml(billingPeriodLabel(lead.plan))}</small>
+      <div class="lead-meta-line">
+        <span>${escapeHtml(formatDateTime(lead.created_at))}</span>
+        <span class="lead-follow-pill ${followStatus.className}">${escapeHtml(followStatus.label)}</span>
+      </div>
       <div class="lead-card-message">${escapeHtml(lead.message || "Sin mensaje")}</div>
       ${
         nextAction || nextActionAt
@@ -2375,6 +2419,7 @@ function renderLeadCard(lead) {
       <div class="lead-actions">
         <button class="ghost-button" type="button" data-lead-follow="${lead.id}">Seguimiento</button>
         ${lead.status !== "convertido" ? `<button class="primary-button small-action" type="button" data-lead-convert="${lead.id}">Crear empresa</button>` : ""}
+        ${lead.status !== "descartado" ? `<button class="ghost-button" type="button" data-lead-id="${lead.id}" data-lead-status="descartado">Descartar</button>` : ""}
       </div>
     </article>
   `;
@@ -2485,13 +2530,15 @@ async function handleLeadFollowSubmit(event) {
 }
 
 function bindLeadFilters() {
-  ["#leadStatusFilter", "#leadSystemFilter", "#leadPlanFilter", "#leadTermFilter"].forEach((selector) => {
+  ["#leadStatusFilter", "#leadSystemFilter", "#leadPlanFilter", "#leadFollowFilter", "#leadSortFilter", "#leadTermFilter"].forEach((selector) => {
     const eventName = selector === "#leadTermFilter" ? "input" : "change";
     document.querySelector(selector)?.addEventListener(eventName, () => {
       leadFilters = {
         status: document.querySelector("#leadStatusFilter")?.value || "all",
         system: document.querySelector("#leadSystemFilter")?.value || "all",
         plan: document.querySelector("#leadPlanFilter")?.value || "all",
+        follow: document.querySelector("#leadFollowFilter")?.value || "all",
+        sort: document.querySelector("#leadSortFilter")?.value || "recent",
         term: document.querySelector("#leadTermFilter")?.value.trim().toLowerCase() || ""
       };
       renderZowAdmin("leads");
@@ -2500,18 +2547,52 @@ function bindLeadFilters() {
 }
 
 function getFilteredLeads() {
-  return commercialLeads.filter((lead) => {
-    if (leadFilters.status !== "all" && lead.status !== leadFilters.status) return false;
-    if (leadFilters.system !== "all" && lead.system_id !== leadFilters.system) return false;
-    if (leadFilters.plan !== "all" && lead.plan !== leadFilters.plan) return false;
-    if (leadFilters.term) {
-      const haystack = [lead.name, lead.company, lead.phone, lead.email, lead.message, lead.notes, lead.next_action, lead.system_id, lead.plan, lead.status]
-        .join(" ")
-        .toLowerCase();
-      if (!haystack.includes(leadFilters.term)) return false;
-    }
-    return true;
-  });
+  return commercialLeads
+    .filter((lead) => {
+      if (leadFilters.status !== "all" && lead.status !== leadFilters.status) return false;
+      if (leadFilters.system !== "all" && lead.system_id !== leadFilters.system) return false;
+      if (leadFilters.plan !== "all" && lead.plan !== leadFilters.plan) return false;
+      if (leadFilters.follow !== "all" && leadFollowStatus(lead).state !== leadFilters.follow) return false;
+      if (leadFilters.term) {
+        const haystack = [lead.name, lead.company, lead.phone, lead.email, lead.message, lead.notes, lead.next_action, lead.system_id, lead.plan, lead.status]
+          .join(" ")
+          .toLowerCase();
+        if (!haystack.includes(leadFilters.term)) return false;
+      }
+      return true;
+    })
+    .sort(sortLeadsForPanel);
+}
+
+function sortLeadsForPanel(first, second) {
+  const sort = leadFilters.sort || "recent";
+  if (sort === "oldest") return leadTimeValue(first.created_at) - leadTimeValue(second.created_at);
+  if (sort === "company") return String(first.company || "").localeCompare(String(second.company || ""), "es");
+  if (sort === "next_action") {
+    const firstNext = leadTimeValue(first.next_action_at || first.created_at);
+    const secondNext = leadTimeValue(second.next_action_at || second.created_at);
+    return firstNext - secondNext;
+  }
+  return leadTimeValue(second.created_at) - leadTimeValue(first.created_at);
+}
+
+function leadTimeValue(value) {
+  const time = new Date(value || 0).getTime();
+  return Number.isFinite(time) ? time : 0;
+}
+
+function leadFollowStatus(lead) {
+  if (["convertido", "descartado"].includes(lead?.status)) {
+    return { state: "closed", label: "Cerrado", className: "is-closed" };
+  }
+  const nextAction = lead?.next_action || lead?.nextAction || "";
+  const nextActionAt = normalizeDateForInput(lead?.next_action_at || lead?.nextActionAt || "");
+  if (!nextAction && !nextActionAt) return { state: "missing", label: "Sin seguimiento", className: "is-muted" };
+  if (!nextActionAt) return { state: "scheduled", label: "Accion pendiente", className: "is-info" };
+  const days = daysUntil(nextActionAt);
+  if (days !== null && days < 0) return { state: "overdue", label: `Vencido ${Math.abs(days)}d`, className: "is-danger" };
+  if (days === 0) return { state: "today", label: "Para hoy", className: "is-warning" };
+  return { state: "scheduled", label: `En ${days}d`, className: "is-info" };
 }
 
 async function loadCommercialLeads() {
@@ -2563,6 +2644,7 @@ function exportLeadsCsv() {
   const rows = getFilteredLeads().map((lead) => [
     lead.created_at,
     leadStatusLabel(lead.status),
+    leadFollowStatus(lead).label,
     lead.company,
     lead.name,
     lead.phone,
@@ -2574,7 +2656,7 @@ function exportLeadsCsv() {
     lead.next_action_at,
     lead.notes
   ]);
-  const header = ["Fecha", "Estado", "Empresa", "Contacto", "Telefono", "Correo", "Sistema", "Periodo", "Mensaje", "Proxima accion", "Fecha accion", "Notas"];
+  const header = ["Fecha", "Estado", "Seguimiento", "Empresa", "Contacto", "Telefono", "Correo", "Sistema", "Periodo", "Mensaje", "Proxima accion", "Fecha accion", "Notas"];
   const csv = [header, ...rows].map((row) => row.map(csvCell).join(",")).join("\n");
   const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
   const url = URL.createObjectURL(blob);
