@@ -4303,6 +4303,8 @@ body.system-zow-site .holo-panel,
 body.system-zow-site .product-card,
 body.system-zow-site .plan-grid article,
 body.system-zow-site .operation-grid article,
+body.system-zow-site .trust-grid article,
+body.system-zow-site .faq-shell,
 body.system-zow-site .lead-form {
   background:
     linear-gradient(145deg, rgb(255 255 255 / 88%), rgb(255 255 255 / 68%)),
@@ -4416,6 +4418,143 @@ body.system-zow-site .contact-actions .ghost-button {
   body.system-zow-site .contact-actions {
     flex-direction: column;
   }
+}
+
+/* SYSTEM ZOW trust and FAQ */
+body.system-zow-site .trust-section {
+  display: grid;
+  gap: 24px;
+}
+
+body.system-zow-site .trust-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 18px;
+}
+
+body.system-zow-site .trust-grid article,
+body.system-zow-site .faq-shell {
+  border: 1px solid rgb(37 99 235 / 10%);
+  border-radius: 22px;
+  box-shadow: 0 22px 56px rgb(17 31 49 / 8%);
+}
+
+body.system-zow-site .trust-grid article {
+  position: relative;
+  display: grid;
+  gap: 10px;
+  overflow: hidden;
+  padding: 22px;
+  transition: transform 170ms ease, border-color 170ms ease, box-shadow 170ms ease;
+}
+
+body.system-zow-site .trust-grid article::after {
+  content: "";
+  position: absolute;
+  inset: auto 18px 0;
+  height: 3px;
+  border-radius: 999px 999px 0 0;
+  background: linear-gradient(90deg, var(--zow-blue), var(--zow-cyan), #35d07f);
+  opacity: 0.7;
+}
+
+body.system-zow-site .trust-grid article:hover {
+  border-color: rgb(0 184 217 / 26%);
+  box-shadow: 0 30px 72px rgb(37 99 235 / 12%);
+  transform: translateY(-5px);
+}
+
+body.system-zow-site .trust-grid span {
+  color: var(--zow-blue);
+  font-size: 0.76rem;
+  font-weight: 950;
+  text-transform: uppercase;
+}
+
+body.system-zow-site .trust-grid strong {
+  color: var(--zow-ink);
+  font-size: 1.1rem;
+}
+
+body.system-zow-site .trust-grid p,
+body.system-zow-site .faq-list p {
+  margin: 0;
+  color: var(--zow-muted);
+  line-height: 1.55;
+}
+
+body.system-zow-site .faq-shell {
+  display: grid;
+  grid-template-columns: minmax(260px, 0.8fr) minmax(320px, 1.2fr);
+  gap: 26px;
+  padding: clamp(22px, 4vw, 34px);
+}
+
+body.system-zow-site .faq-copy {
+  margin-bottom: 0;
+}
+
+body.system-zow-site .faq-copy h2 {
+  font-size: clamp(1.8rem, 3.5vw, 3.4rem);
+}
+
+body.system-zow-site .faq-list {
+  display: grid;
+  gap: 12px;
+}
+
+body.system-zow-site .faq-list details {
+  border: 1px solid rgb(37 99 235 / 10%);
+  border-radius: 16px;
+  background: rgb(255 255 255 / 62%);
+  transition: border-color 170ms ease, background 170ms ease, transform 170ms ease;
+}
+
+body.system-zow-site .faq-list details[open] {
+  border-color: rgb(0 184 217 / 26%);
+  background: rgb(255 255 255 / 80%);
+}
+
+body.system-zow-site .faq-list details:hover {
+  transform: translateX(3px);
+}
+
+body.system-zow-site .faq-list summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  cursor: pointer;
+  padding: 16px 18px;
+  color: var(--zow-ink);
+  font-weight: 950;
+  list-style: none;
+}
+
+body.system-zow-site .faq-list summary::-webkit-details-marker {
+  display: none;
+}
+
+body.system-zow-site .faq-list summary::after {
+  content: "+";
+  display: grid;
+  width: 26px;
+  height: 26px;
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: 999px;
+  background: rgb(37 99 235 / 8%);
+  color: var(--zow-blue);
+  transition: transform 170ms ease, background 170ms ease;
+}
+
+body.system-zow-site .faq-list details[open] summary::after {
+  background: rgb(0 184 217 / 14%);
+  transform: rotate(45deg);
+}
+
+body.system-zow-site .faq-list p {
+  padding: 0 18px 18px;
 }
 
 /* SYSTEM ZOW commercial plan cards */
@@ -4562,6 +4701,11 @@ body.system-zow-site .lead-form.is-highlighted {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
+  body.system-zow-site .trust-grid,
+  body.system-zow-site .faq-shell {
+    grid-template-columns: 1fr;
+  }
+
   body.system-zow-site .pricing-card.is-featured {
     transform: none;
   }
@@ -4577,6 +4721,14 @@ body.system-zow-site .lead-form.is-highlighted {
   }
 
   body.system-zow-site .pricing-card {
+    padding: 20px;
+  }
+
+  body.system-zow-site .trust-grid {
+    grid-template-columns: 1fr;
+  }
+
+  body.system-zow-site .faq-shell {
     padding: 20px;
   }
 }
