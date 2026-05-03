@@ -859,6 +859,10 @@ app.get("/api/system-health", requireAuth, requireRole("zow_owner"), (req, res) 
 
 app.get("/api/leads", requireAuth, requireRole("zow_owner"), (req, res) => {
   const leads = db.prepare("SELECT * FROM leads ORDER BY created_at DESC LIMIT 200").all();
+  const historyStmt = db.prepare("SELECT * FROM lead_history WHERE lead_id = ? ORDER BY created_at DESC");
+  leads.forEach((lead) => {
+    lead.history = historyStmt.all(lead.id);
+  });
   res.json({ leads });
 });
 
@@ -868,6 +872,7 @@ app.patch("/api/leads/:id/status", requireAuth, requireRole("zow_owner"), (req, 
   const lead = db.prepare("SELECT id, company FROM leads WHERE id = ?").get(req.params.id);
   if (!lead) return res.status(404).json({ error: "Lead no encontrado" });
   db.prepare("UPDATE leads SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?").run(status, lead.id);
+  recordLeadHistory({ req, leadId: lead.id, status, description: `Cambio de estado a ${status}` });
   recordAuditEvent({ req, action: "lead_status", entityType: "lead", entityId: lead.id, description: `Cambio lead ${lead.company} a ${status}` });
   res.json({ ok: true });
 });
@@ -880,17 +885,32 @@ app.patch("/api/leads/:id", requireAuth, requireRole("zow_owner"), (req, res) =>
   const notes = String(req.body.notes || "").trim().slice(0, 1200);
   const nextAction = String(req.body.nextAction || req.body.next_action || "").trim().slice(0, 220);
   const nextActionAt = normalizeDateInput(req.body.nextActionAt || req.body.next_action_at);
+  const priority = normalizeLeadPriority(req.body.priority || "media");
+  const current = db.prepare("SELECT status, notes, next_action, next_action_at, priority FROM leads WHERE id = ?").get(lead.id);
   db.prepare(
     `UPDATE leads
      SET status = COALESCE(NULLIF(?, ''), status),
+         priority = ?,
          notes = ?,
          next_action = ?,
          next_action_at = ?,
          updated_at = CURRENT_TIMESTAMP
      WHERE id = ?`
-  ).run(status, notes, nextAction, nextActionAt, lead.id);
+  ).run(status, priority, notes, nextAction, nextActionAt, lead.id);
+  recordLeadHistory({
+    req,
+    leadId: lead.id,
+    status: status || current.status,
+    priority,
+    nextAction,
+    nextActionAt,
+    notes,
+    description: buildLeadHistoryDescription(current, { status, priority, notes, nextAction, nextActionAt })
+  });
   recordAuditEvent({ req, action: "lead_update", entityType: "lead", entityId: lead.id, description: `Actualizo seguimiento de lead ${lead.company}` });
-  res.json({ lead: db.prepare("SELECT * FROM leads WHERE id = ?").get(lead.id) });
+  const updatedLead = db.prepare("SELECT * FROM leads WHERE id = ?").get(lead.id);
+  updatedLead.history = db.prepare("SELECT * FROM lead_history WHERE lead_id = ? ORDER BY created_at DESC").all(lead.id);
+  res.json({ lead: updatedLead });
 });
 
 app.get("/api/audit", requireAuth, requireRole("admin", "zow_owner"), (req, res) => {
@@ -1748,6 +1768,29 @@ function recordAuditEvent({ req, action, entityType = "", entityId = "", descrip
     JSON.stringify(metadata || {}),
     getRequestIp(req)
   );
+}
+
+function recordLeadHistory({ req, leadId, status = "", priority = "", nextAction = "", nextActionAt = "", notes = "", description = "" }) {
+  db.prepare(
+    `INSERT INTO lead_history (id, lead_id, actor_user_id, actor_name, status, priority, next_action, next_action_at, notes, description)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+  ).run(randomUUID(), leadId, req.user?.id || null, req.user?.name || "", status, priority, nextAction, nextActionAt, notes, description);
+}
+
+function normalizeLeadPriority(value) {
+  const allowed = new Set(["baja", "media", "alta", "urgente"]);
+  const normalized = String(value || "media").trim().toLowerCase();
+  return allowed.has(normalized) ? normalized : "media";
+}
+
+function buildLeadHistoryDescription(previous = {}, next = {}) {
+  const changes = [];
+  if (next.status && next.status !== previous.status) changes.push(`estado: ${next.status}`);
+  if (next.priority && next.priority !== previous.priority) changes.push(`prioridad: ${next.priority}`);
+  if ((next.nextAction || "") !== (previous.next_action || "")) changes.push("proxima accion actualizada");
+  if ((next.nextActionAt || "") !== (previous.next_action_at || "")) changes.push("fecha de accion actualizada");
+  if ((next.notes || "") !== (previous.notes || "")) changes.push("notas actualizadas");
+  return changes.length ? changes.join(", ") : "Seguimiento actualizado";
 }
 
 function normalizeMembership(body = {}) {

@@ -730,6 +730,23 @@ app.get("/api/system-health", requireAuth, requireRole("zow_owner"), async (_req
 app.get("/api/leads", requireAuth, requireRole("zow_owner"), async (_req, res) => {
   await ensureLeadsSchema();
   const leads = await pg.all("SELECT * FROM leads ORDER BY created_at DESC LIMIT 200");
+  const histories = leads.length
+    ? await pg.all(
+        `SELECT *
+         FROM lead_history
+         WHERE lead_id = ANY(?)
+         ORDER BY created_at DESC`,
+        [leads.map((lead) => lead.id)]
+      )
+    : [];
+  const historyByLead = histories.reduce((map, item) => {
+    map[item.lead_id] ||= [];
+    map[item.lead_id].push(item);
+    return map;
+  }, {});
+  leads.forEach((lead) => {
+    lead.history = historyByLead[lead.id] || [];
+  });
   res.json({ leads });
 });
 
@@ -740,6 +757,7 @@ app.patch("/api/leads/:id/status", requireAuth, requireRole("zow_owner"), async 
   const lead = await pg.get("SELECT id, company FROM leads WHERE id = ?", [req.params.id]);
   if (!lead) return res.status(404).json({ error: "Lead no encontrado" });
   await pg.run("UPDATE leads SET status = ?, updated_at = now() WHERE id = ?", [status, lead.id]);
+  await recordLeadHistory({ req, leadId: lead.id, status, description: `Cambio de estado a ${status}` });
   await recordAuditEvent({ req, action: "lead_status", entityType: "lead", entityId: lead.id, description: `Cambio lead ${lead.company} a ${status}` });
   res.json({ ok: true });
 });
@@ -753,18 +771,33 @@ app.patch("/api/leads/:id", requireAuth, requireRole("zow_owner"), async (req, r
   const notes = String(req.body.notes || "").trim().slice(0, 1200);
   const nextAction = String(req.body.nextAction || req.body.next_action || "").trim().slice(0, 220);
   const nextActionAt = normalizeDateInput(req.body.nextActionAt || req.body.next_action_at);
+  const priority = normalizeLeadPriority(req.body.priority || "media");
+  const current = await pg.get("SELECT status, notes, next_action, next_action_at, priority FROM leads WHERE id = ?", [lead.id]);
   await pg.run(
     `UPDATE leads
      SET status = COALESCE(NULLIF(?, ''), status),
+         priority = ?,
          notes = ?,
          next_action = ?,
          next_action_at = ?,
          updated_at = now()
      WHERE id = ?`,
-    [status, notes, nextAction, nextActionAt, lead.id]
+    [status, priority, notes, nextAction, nextActionAt, lead.id]
   );
+  await recordLeadHistory({
+    req,
+    leadId: lead.id,
+    status: status || current.status,
+    priority,
+    nextAction,
+    nextActionAt,
+    notes,
+    description: buildLeadHistoryDescription(current, { status, priority, notes, nextAction, nextActionAt })
+  });
   await recordAuditEvent({ req, action: "lead_update", entityType: "lead", entityId: lead.id, description: `Actualizo seguimiento de lead ${lead.company}` });
-  res.json({ lead: await pg.get("SELECT * FROM leads WHERE id = ?", [lead.id]) });
+  const updatedLead = await pg.get("SELECT * FROM leads WHERE id = ?", [lead.id]);
+  updatedLead.history = await pg.all("SELECT * FROM lead_history WHERE lead_id = ? ORDER BY created_at DESC", [lead.id]);
+  res.json({ lead: updatedLead });
 });
 
 app.get("/api/audit", requireAuth, requireRole("admin", "zow_owner"), async (req, res) => {
@@ -1269,18 +1302,72 @@ async function ensureLeadsSchema() {
           notes text not null default '',
           next_action text not null default '',
           next_action_at text not null default '',
+          priority text not null default 'media',
           status text not null default 'nuevo',
           created_at timestamptz not null default now(),
           updated_at timestamptz not null default now()
         )
       `);
+      await pg.run(`
+        CREATE TABLE IF NOT EXISTS lead_history (
+          id text primary key,
+          lead_id text not null references leads(id) on delete cascade,
+          actor_user_id text,
+          actor_name text not null default '',
+          status text not null default '',
+          priority text not null default '',
+          next_action text not null default '',
+          next_action_at text not null default '',
+          notes text not null default '',
+          description text not null default '',
+          created_at timestamptz not null default now()
+        )
+      `);
       await pg.run("CREATE INDEX IF NOT EXISTS idx_leads_status ON leads(status, created_at DESC)");
+      await pg.run("CREATE INDEX IF NOT EXISTS idx_leads_priority ON leads(priority, created_at DESC)");
+      await pg.run("CREATE INDEX IF NOT EXISTS idx_lead_history_lead ON lead_history(lead_id, created_at DESC)");
       await pg.run("ALTER TABLE leads ADD COLUMN IF NOT EXISTS notes text NOT NULL DEFAULT ''");
       await pg.run("ALTER TABLE leads ADD COLUMN IF NOT EXISTS next_action text NOT NULL DEFAULT ''");
       await pg.run("ALTER TABLE leads ADD COLUMN IF NOT EXISTS next_action_at text NOT NULL DEFAULT ''");
+      await pg.run("ALTER TABLE leads ADD COLUMN IF NOT EXISTS priority text NOT NULL DEFAULT 'media'");
     })();
   }
   await leadsSchemaReady;
+}
+
+async function recordLeadHistory({ req, leadId, status = "", priority = "", nextAction = "", nextActionAt = "", notes = "", description = "" }) {
+  await pg.run(
+    `INSERT INTO lead_history (id, lead_id, actor_user_id, actor_name, status, priority, next_action, next_action_at, notes, description)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [
+      randomUUID(),
+      leadId,
+      req.user?.id || null,
+      req.user?.name || "",
+      status,
+      priority,
+      nextAction,
+      nextActionAt,
+      notes,
+      description
+    ]
+  );
+}
+
+function normalizeLeadPriority(value) {
+  const allowed = new Set(["baja", "media", "alta", "urgente"]);
+  const normalized = String(value || "media").trim().toLowerCase();
+  return allowed.has(normalized) ? normalized : "media";
+}
+
+function buildLeadHistoryDescription(previous = {}, next = {}) {
+  const changes = [];
+  if (next.status && next.status !== previous.status) changes.push(`estado: ${next.status}`);
+  if (next.priority && next.priority !== previous.priority) changes.push(`prioridad: ${next.priority}`);
+  if ((next.nextAction || "") !== (previous.next_action || "")) changes.push("proxima accion actualizada");
+  if ((next.nextActionAt || "") !== (previous.next_action_at || "")) changes.push("fecha de accion actualizada");
+  if ((next.notes || "") !== (previous.notes || "")) changes.push("notas actualizadas");
+  return changes.length ? changes.join(", ") : "Seguimiento actualizado";
 }
 
 async function suspendExpiredCompanies() {

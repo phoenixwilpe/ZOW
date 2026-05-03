@@ -414,7 +414,7 @@ let systemHealth = null;
 let systemHealthLoaded = false;
 let commercialLeads = [];
 let commercialLeadsLoaded = false;
-let leadFilters = { status: "all", system: "all", plan: "all", follow: "all", sort: "recent", term: "" };
+let leadFilters = { status: "all", system: "all", plan: "all", priority: "all", follow: "all", sort: "recent", term: "" };
 let leadConversionDraft = null;
 
 const loginScreen = document.querySelector("#loginScreen");
@@ -2112,7 +2112,7 @@ function renderZowAdmin(mode = "overview") {
   });
   document.querySelector("#exportLeadsCsv")?.addEventListener("click", exportLeadsCsv);
   document.querySelector("#clearLeadFilters")?.addEventListener("click", () => {
-    leadFilters = { status: "all", system: "all", plan: "all", follow: "all", sort: "recent", term: "" };
+    leadFilters = { status: "all", system: "all", plan: "all", priority: "all", follow: "all", sort: "recent", term: "" };
     renderZowAdmin("leads");
   });
   document.querySelectorAll("[data-lead-quick-filter]").forEach((button) => {
@@ -2287,6 +2287,7 @@ function renderLeadsPanel() {
   const nextCount = commercialLeads.filter((lead) => lead.next_action || lead.next_action_at).length;
   const dueTodayCount = commercialLeads.filter((lead) => leadFollowStatus(lead).state === "today").length;
   const overdueCount = commercialLeads.filter((lead) => leadFollowStatus(lead).state === "overdue").length;
+  const urgentCount = commercialLeads.filter((lead) => leadPriority(lead) === "urgente").length;
   return `
     <section class="admin-panel">
       <div class="admin-panel-head">
@@ -2316,6 +2317,10 @@ function renderLeadsPanel() {
         <article class="${overdueCount ? "is-danger" : ""}">
           <span>Vencidos</span>
           <strong>${overdueCount}</strong>
+        </article>
+        <article class="${urgentCount ? "is-danger" : ""}">
+          <span>Urgentes</span>
+          <strong>${urgentCount}</strong>
         </article>
       </section>
       ${renderLeadActivityPanel()}
@@ -2354,11 +2359,19 @@ function renderLeadsPanel() {
           </select>
         </label>
         <label>
+          Prioridad
+          <select id="leadPriorityFilter">
+            <option value="all" ${leadFilters.priority === "all" ? "selected" : ""}>Todas</option>
+            ${leadPriorityOptions(leadFilters.priority)}
+          </select>
+        </label>
+        <label>
           Ordenar
           <select id="leadSortFilter">
             <option value="recent" ${leadFilters.sort === "recent" ? "selected" : ""}>Mas recientes</option>
             <option value="oldest" ${leadFilters.sort === "oldest" ? "selected" : ""}>Mas antiguos</option>
             <option value="next_action" ${leadFilters.sort === "next_action" ? "selected" : ""}>Proxima accion</option>
+            <option value="priority" ${leadFilters.sort === "priority" ? "selected" : ""}>Prioridad</option>
             <option value="company" ${leadFilters.sort === "company" ? "selected" : ""}>Empresa A-Z</option>
           </select>
         </label>
@@ -2420,7 +2433,7 @@ function renderLeadActivityItem(lead) {
     <button class="lead-activity-item" type="button" data-lead-follow="${escapeHtml(lead.id)}">
       <span class="lead-follow-pill ${followStatus.className}">${escapeHtml(followStatus.label)}</span>
       <strong>${escapeHtml(lead.company || lead.name || "Lead sin empresa")}</strong>
-      <small>${escapeHtml(nextAction || systemLeadLabel(lead.system_id))} / ${escapeHtml(lead.phone || "Sin celular")}</small>
+      <small>${escapeHtml(leadPriorityLabel(leadPriority(lead)))} / ${escapeHtml(nextAction || systemLeadLabel(lead.system_id))} / ${escapeHtml(lead.phone || "Sin celular")}</small>
     </button>
   `;
 }
@@ -2455,8 +2468,9 @@ function renderLeadCard(lead) {
   const nextAction = lead.next_action || lead.nextAction || "";
   const nextActionAt = lead.next_action_at || lead.nextActionAt || "";
   const followStatus = leadFollowStatus(lead);
+  const priority = leadPriority(lead);
   return `
-    <article class="lead-card ${followStatus.className}">
+    <article class="lead-card ${followStatus.className} priority-${priority}">
       <div class="lead-card-head">
         <strong>${escapeHtml(lead.company || "Sin empresa")}</strong>
         <span>${escapeHtml(systemLeadLabel(lead.system_id))}</span>
@@ -2465,6 +2479,7 @@ function renderLeadCard(lead) {
       <small>${escapeHtml(lead.email || "Sin correo")} / ${escapeHtml(billingPeriodLabel(lead.plan))}</small>
       <div class="lead-meta-line">
         <span>${escapeHtml(formatDateTime(lead.created_at))}</span>
+        <span class="lead-priority-pill priority-${priority}">${escapeHtml(leadPriorityLabel(priority))}</span>
         <span class="lead-follow-pill ${followStatus.className}">${escapeHtml(followStatus.label)}</span>
       </div>
       <div class="lead-card-message">${escapeHtml(lead.message || "Sin mensaje")}</div>
@@ -2537,6 +2552,12 @@ function renderLeadFollowDialog() {
             </select>
           </label>
           <label>
+            Prioridad
+            <select id="leadFollowPriority">
+              ${leadPriorityOptions("media")}
+            </select>
+          </label>
+          <label>
             Fecha proxima accion
             <input id="leadFollowNextAt" type="date" />
           </label>
@@ -2549,6 +2570,7 @@ function renderLeadFollowDialog() {
             <textarea id="leadFollowNotes" rows="5" maxlength="1200" placeholder="Resumen de llamada, interes, decision pendiente..."></textarea>
           </label>
         </div>
+        <section class="lead-history-box" id="leadHistoryBox"></section>
         <div class="modal-actions">
           <button class="primary-button" type="submit">Guardar seguimiento</button>
         </div>
@@ -2564,10 +2586,41 @@ function openLeadFollowDialog(leadId) {
   document.querySelector("#leadFollowTitle").textContent = lead.company || lead.name || "Lead";
   document.querySelector("#leadFollowId").value = lead.id;
   document.querySelector("#leadFollowStatus").value = lead.status || "nuevo";
+  document.querySelector("#leadFollowPriority").value = leadPriority(lead);
   document.querySelector("#leadFollowNext").value = lead.next_action || "";
   document.querySelector("#leadFollowNextAt").value = normalizeDateForInput(lead.next_action_at || "");
   document.querySelector("#leadFollowNotes").value = lead.notes || "";
+  document.querySelector("#leadHistoryBox").innerHTML = renderLeadHistory(lead);
   dialog.showModal();
+}
+
+function renderLeadHistory(lead) {
+  const history = Array.isArray(lead.history) ? lead.history : [];
+  return `
+    <div class="lead-history-head">
+      <strong>Historial de seguimiento</strong>
+      <span>${history.length} evento(s)</span>
+    </div>
+    ${
+      history.length
+        ? `<div class="lead-history-list">
+            ${history
+              .slice(0, 8)
+              .map(
+                (item) => `
+                  <article>
+                    <strong>${escapeHtml(item.description || "Seguimiento actualizado")}</strong>
+                    <span>${escapeHtml(formatDateTime(item.created_at))} / ${escapeHtml(item.actor_name || "Sistema")}</span>
+                    <small>${escapeHtml([item.status && leadStatusLabel(item.status), item.priority && leadPriorityLabel(item.priority), item.next_action].filter(Boolean).join(" / "))}</small>
+                    ${item.notes ? `<p>${escapeHtml(item.notes)}</p>` : ""}
+                  </article>
+                `
+              )
+              .join("")}
+          </div>`
+        : `<div class="lead-activity-empty">Aun no hay eventos guardados para este lead.</div>`
+    }
+  `;
 }
 
 async function handleLeadFollowSubmit(event) {
@@ -2577,6 +2630,7 @@ async function handleLeadFollowSubmit(event) {
     method: "PATCH",
     body: {
       status: documentWindowValue("#leadFollowStatus"),
+      priority: documentWindowValue("#leadFollowPriority"),
       nextAction: documentWindowValue("#leadFollowNext").trim(),
       nextActionAt: documentWindowValue("#leadFollowNextAt"),
       notes: documentWindowValue("#leadFollowNotes").trim()
@@ -2588,13 +2642,14 @@ async function handleLeadFollowSubmit(event) {
 }
 
 function bindLeadFilters() {
-  ["#leadStatusFilter", "#leadSystemFilter", "#leadPlanFilter", "#leadFollowFilter", "#leadSortFilter", "#leadTermFilter"].forEach((selector) => {
+  ["#leadStatusFilter", "#leadSystemFilter", "#leadPlanFilter", "#leadPriorityFilter", "#leadFollowFilter", "#leadSortFilter", "#leadTermFilter"].forEach((selector) => {
     const eventName = selector === "#leadTermFilter" ? "input" : "change";
     document.querySelector(selector)?.addEventListener(eventName, () => {
       leadFilters = {
         status: document.querySelector("#leadStatusFilter")?.value || "all",
         system: document.querySelector("#leadSystemFilter")?.value || "all",
         plan: document.querySelector("#leadPlanFilter")?.value || "all",
+        priority: document.querySelector("#leadPriorityFilter")?.value || "all",
         follow: document.querySelector("#leadFollowFilter")?.value || "all",
         sort: document.querySelector("#leadSortFilter")?.value || "recent",
         term: document.querySelector("#leadTermFilter")?.value.trim().toLowerCase() || ""
@@ -2610,9 +2665,10 @@ function getFilteredLeads() {
       if (leadFilters.status !== "all" && lead.status !== leadFilters.status) return false;
       if (leadFilters.system !== "all" && lead.system_id !== leadFilters.system) return false;
       if (leadFilters.plan !== "all" && lead.plan !== leadFilters.plan) return false;
+      if (leadFilters.priority !== "all" && leadPriority(lead) !== leadFilters.priority) return false;
       if (leadFilters.follow !== "all" && leadFollowStatus(lead).state !== leadFilters.follow) return false;
       if (leadFilters.term) {
-        const haystack = [lead.name, lead.company, lead.phone, lead.email, lead.message, lead.notes, lead.next_action, lead.system_id, lead.plan, lead.status]
+        const haystack = [lead.name, lead.company, lead.phone, lead.email, lead.message, lead.notes, lead.next_action, lead.system_id, lead.plan, lead.status, leadPriorityLabel(leadPriority(lead))]
           .join(" ")
           .toLowerCase();
         if (!haystack.includes(leadFilters.term)) return false;
@@ -2626,6 +2682,7 @@ function sortLeadsForPanel(first, second) {
   const sort = leadFilters.sort || "recent";
   if (sort === "oldest") return leadTimeValue(first.created_at) - leadTimeValue(second.created_at);
   if (sort === "company") return String(first.company || "").localeCompare(String(second.company || ""), "es");
+  if (sort === "priority") return leadPriorityRank(second) - leadPriorityRank(first) || leadTimeValue(second.created_at) - leadTimeValue(first.created_at);
   if (sort === "next_action") {
     const firstNext = leadTimeValue(first.next_action_at || first.created_at);
     const secondNext = leadTimeValue(second.next_action_at || second.created_at);
@@ -2637,6 +2694,31 @@ function sortLeadsForPanel(first, second) {
 function leadTimeValue(value) {
   const time = new Date(value || 0).getTime();
   return Number.isFinite(time) ? time : 0;
+}
+
+function leadPriority(lead) {
+  const normalized = String(lead?.priority || "media").toLowerCase();
+  return ["baja", "media", "alta", "urgente"].includes(normalized) ? normalized : "media";
+}
+
+function leadPriorityRank(lead) {
+  return { baja: 1, media: 2, alta: 3, urgente: 4 }[leadPriority(lead)] || 2;
+}
+
+function leadPriorityLabel(priority) {
+  const labels = {
+    baja: "Baja",
+    media: "Media",
+    alta: "Alta",
+    urgente: "Urgente"
+  };
+  return labels[priority] || "Media";
+}
+
+function leadPriorityOptions(selected = "media") {
+  return ["baja", "media", "alta", "urgente"]
+    .map((priority) => `<option value="${priority}" ${priority === selected ? "selected" : ""}>${leadPriorityLabel(priority)}</option>`)
+    .join("");
 }
 
 function leadFollowStatus(lead) {
@@ -2711,6 +2793,7 @@ function exportLeadsCsv() {
     lead.created_at,
     leadStatusLabel(lead.status),
     leadFollowStatus(lead).label,
+    leadPriorityLabel(leadPriority(lead)),
     lead.company,
     lead.name,
     lead.phone,
@@ -2722,7 +2805,7 @@ function exportLeadsCsv() {
     lead.next_action_at,
     lead.notes
   ]);
-  const header = ["Fecha", "Estado", "Seguimiento", "Empresa", "Contacto", "Telefono", "Correo", "Sistema", "Periodo", "Mensaje", "Proxima accion", "Fecha accion", "Notas"];
+  const header = ["Fecha", "Estado", "Seguimiento", "Prioridad", "Empresa", "Contacto", "Telefono", "Correo", "Sistema", "Periodo", "Mensaje", "Proxima accion", "Fecha accion", "Notas"];
   const csv = [header, ...rows].map((row) => row.map(csvCell).join(",")).join("\n");
   const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
   const url = URL.createObjectURL(blob);

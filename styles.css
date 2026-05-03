@@ -2801,7 +2801,7 @@ h3 {
 
 .lead-dashboard {
   display: grid;
-  grid-template-columns: repeat(4, minmax(140px, 1fr));
+  grid-template-columns: repeat(5, minmax(130px, 1fr));
   gap: 12px;
 }
 
@@ -2936,7 +2936,7 @@ h3 {
 }
 
 .lead-filter-grid {
-  grid-template-columns: repeat(6, minmax(120px, 1fr)) auto;
+  grid-template-columns: repeat(7, minmax(112px, 1fr)) auto;
 }
 
 .lead-pipeline {
@@ -3027,6 +3027,14 @@ h3 {
   box-shadow: 0 14px 30px rgb(198 61 61 / 12%);
 }
 
+.lead-card.priority-urgente {
+  border-left: 4px solid #b42318;
+}
+
+.lead-card.priority-alta {
+  border-left: 4px solid #b45309;
+}
+
 .lead-card-head {
   display: grid;
   gap: 4px;
@@ -3066,6 +3074,35 @@ h3 {
   color: #52676d;
   font-size: 0.72rem;
   font-weight: 900;
+}
+
+.lead-priority-pill {
+  border-radius: 999px;
+  padding: 4px 8px;
+  background: rgb(82 103 109 / 10%);
+  color: #52676d;
+  font-size: 0.72rem;
+  font-weight: 900;
+}
+
+.lead-priority-pill.priority-baja {
+  background: rgb(36 117 109 / 10%);
+  color: #17695f;
+}
+
+.lead-priority-pill.priority-media {
+  background: rgb(29 78 216 / 10%);
+  color: #1d4ed8;
+}
+
+.lead-priority-pill.priority-alta {
+  background: rgb(255 186 73 / 20%);
+  color: #8a5300;
+}
+
+.lead-priority-pill.priority-urgente {
+  background: rgb(198 61 61 / 14%);
+  color: #9d2f2f;
 }
 
 .lead-follow-pill.is-info {
@@ -3118,6 +3155,62 @@ h3 {
 .lead-note {
   border: 1px solid rgb(180 83 9 / 12%);
   background: #fff7ed;
+}
+
+.lead-history-box {
+  display: grid;
+  gap: 10px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 12px;
+  background: #f8fbfc;
+}
+
+.lead-history-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.lead-history-head strong {
+  color: var(--ink);
+}
+
+.lead-history-head span {
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 850;
+}
+
+.lead-history-list {
+  display: grid;
+  gap: 8px;
+  max-height: 260px;
+  overflow: auto;
+}
+
+.lead-history-list article {
+  display: grid;
+  gap: 4px;
+  border: 1px solid rgb(20 34 38 / 8%);
+  border-radius: 12px;
+  padding: 10px;
+  background: #ffffff;
+}
+
+.lead-history-list strong {
+  color: var(--ink);
+  font-size: 0.9rem;
+}
+
+.lead-history-list span,
+.lead-history-list small,
+.lead-history-list p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.8rem;
+  line-height: 1.35;
 }
 
 .lead-actions {
@@ -3219,7 +3312,7 @@ h3 {
 }
 
 .report-filter-grid.lead-filter-grid {
-  grid-template-columns: repeat(6, minmax(120px, 1fr)) auto;
+  grid-template-columns: repeat(7, minmax(112px, 1fr)) auto;
 }
 
 .report-box h4 {

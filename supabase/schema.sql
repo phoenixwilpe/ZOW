@@ -224,9 +224,24 @@ create table if not exists leads (
   notes text not null default '',
   next_action text not null default '',
   next_action_at text not null default '',
+  priority text not null default 'media',
   status text not null default 'nuevo',
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
+);
+
+create table if not exists lead_history (
+  id text primary key,
+  lead_id text not null references leads(id) on delete cascade,
+  actor_user_id text,
+  actor_name text not null default '',
+  status text not null default '',
+  priority text not null default '',
+  next_action text not null default '',
+  next_action_at text not null default '',
+  notes text not null default '',
+  description text not null default '',
+  created_at timestamptz not null default now()
 );
 
 create index if not exists idx_users_company on users(company_id);
@@ -240,6 +255,8 @@ create index if not exists idx_public_lookup_audit_company on public_lookup_audi
 create index if not exists idx_audit_events_company on audit_events(company_id, created_at desc);
 create index if not exists idx_audit_events_action on audit_events(action);
 create index if not exists idx_leads_status on leads(status, created_at desc);
+create index if not exists idx_leads_priority on leads(priority, created_at desc);
+create index if not exists idx_lead_history_lead on lead_history(lead_id, created_at desc);
 
 alter table companies enable row level security;
 alter table units enable row level security;

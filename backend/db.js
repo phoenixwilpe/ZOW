@@ -151,9 +151,24 @@ function initDb() {
       notes TEXT NOT NULL DEFAULT '',
       next_action TEXT NOT NULL DEFAULT '',
       next_action_at TEXT NOT NULL DEFAULT '',
+      priority TEXT NOT NULL DEFAULT 'media',
       status TEXT NOT NULL DEFAULT 'nuevo',
       created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
       updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE TABLE IF NOT EXISTS lead_history (
+      id TEXT PRIMARY KEY,
+      lead_id TEXT NOT NULL REFERENCES leads(id) ON DELETE CASCADE,
+      actor_user_id TEXT,
+      actor_name TEXT NOT NULL DEFAULT '',
+      status TEXT NOT NULL DEFAULT '',
+      priority TEXT NOT NULL DEFAULT '',
+      next_action TEXT NOT NULL DEFAULT '',
+      next_action_at TEXT NOT NULL DEFAULT '',
+      notes TEXT NOT NULL DEFAULT '',
+      description TEXT NOT NULL DEFAULT '',
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
     );
 
     CREATE TABLE IF NOT EXISTS organization_settings (
@@ -360,6 +375,9 @@ function migrateSchema() {
   ensureColumn("leads", "notes", "TEXT NOT NULL DEFAULT ''");
   ensureColumn("leads", "next_action", "TEXT NOT NULL DEFAULT ''");
   ensureColumn("leads", "next_action_at", "TEXT NOT NULL DEFAULT ''");
+  ensureColumn("leads", "priority", "TEXT NOT NULL DEFAULT 'media'");
+  db.prepare("CREATE INDEX IF NOT EXISTS idx_leads_priority ON leads(priority, created_at)").run();
+  db.prepare("CREATE INDEX IF NOT EXISTS idx_lead_history_lead ON lead_history(lead_id, created_at)").run();
   migrateTenantTables();
   db.prepare("UPDATE units SET company_id = COALESCE(NULLIF(company_id, ''), 'company-default')").run();
   db.prepare("UPDATE users SET company_id = COALESCE(NULLIF(company_id, ''), 'company-default')").run();
