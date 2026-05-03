@@ -1492,6 +1492,199 @@ h3 {
     linear-gradient(180deg, #ffffff, color-mix(in srgb, var(--accent-tint) 42%, white));
 }
 
+.ventas-module-grid,
+.promotion-grid,
+.report-grid,
+.route-grid,
+.service-strip {
+  display: grid;
+  gap: 14px;
+  margin-bottom: 14px;
+}
+
+.ventas-module-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.ventas-module-card {
+  min-height: 122px;
+  border: 1px solid color-mix(in srgb, var(--accent) 18%, var(--line));
+  border-radius: 8px;
+  padding: 18px;
+  background:
+    radial-gradient(circle at 90% 10%, rgb(67 146 100 / 12%), transparent 32%),
+    linear-gradient(145deg, #ffffff, color-mix(in srgb, var(--accent-tint) 54%, white));
+  color: var(--ink);
+  text-align: left;
+  display: grid;
+  align-content: space-between;
+  gap: 14px;
+  box-shadow: 0 16px 42px rgb(32 74 48 / 7%);
+}
+
+.ventas-module-card span,
+.promotion-card span,
+.route-card-head span,
+.service-strip span,
+.report-grid span {
+  color: var(--muted);
+  font-size: 0.76rem;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.ventas-module-card strong {
+  max-width: 28ch;
+  font-size: 1.02rem;
+  line-height: 1.35;
+}
+
+.ventas-module-card:not(:disabled):hover {
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--line));
+  transform: translateY(-2px);
+}
+
+.service-strip {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.service-strip article,
+.report-grid article,
+.promotion-card,
+.route-card {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 16px;
+  background: rgb(255 255 255 / 88%);
+  box-shadow: 0 14px 38px rgb(15 23 42 / 6%);
+}
+
+.service-strip article {
+  display: grid;
+  gap: 5px;
+}
+
+.promotion-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.promotion-card {
+  display: grid;
+  gap: 8px;
+  min-height: 136px;
+}
+
+.promotion-card strong {
+  font-size: 1.35rem;
+}
+
+.promotion-card p {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.45;
+}
+
+.promotion-card.is-green {
+  background: linear-gradient(145deg, #ffffff, #e8f7ed);
+}
+
+.promotion-card.is-amber {
+  background: linear-gradient(145deg, #ffffff, #fff0ce);
+}
+
+.promotion-card.is-red {
+  background: linear-gradient(145deg, #ffffff, #fff0ee);
+}
+
+.route-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.route-card {
+  display: grid;
+  gap: 14px;
+}
+
+.route-card-head,
+.route-stats,
+.price-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.route-card-head strong {
+  font-size: 1.12rem;
+}
+
+.route-stats span {
+  border-radius: 999px;
+  padding: 6px 9px;
+  background: color-mix(in srgb, var(--accent-tint) 72%, white);
+  color: var(--accent-dark);
+  font-size: 0.78rem;
+  font-weight: 900;
+}
+
+.route-customer-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.route-customer-list span {
+  border: 1px solid color-mix(in srgb, var(--accent) 16%, var(--line));
+  border-radius: 999px;
+  padding: 7px 10px;
+  background: white;
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-weight: 800;
+}
+
+.report-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.report-grid article {
+  display: grid;
+  gap: 6px;
+}
+
+.report-grid strong {
+  font-size: 1.32rem;
+}
+
+.report-grid small,
+.price-row small {
+  color: var(--muted);
+}
+
+.price-list {
+  display: grid;
+  gap: 10px;
+}
+
+.price-row {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 14px;
+  background:
+    linear-gradient(90deg, color-mix(in srgb, var(--accent-tint) 60%, white), white);
+}
+
+.price-row > div {
+  display: grid;
+  gap: 4px;
+}
+
+.price-row span {
+  color: var(--muted);
+  font-size: 0.86rem;
+}
+
 .admin-action-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -5447,5 +5640,41 @@ body.system-zow-site .lead-form.is-highlighted {
 
   body.system-zow-site .launch-cta .primary-button {
     width: 100%;
+  }
+}
+
+@media (max-width: 980px) {
+  .ventas-module-grid,
+  .promotion-grid,
+  .route-grid,
+  .report-grid,
+  .service-strip {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .ventas-tabs {
+    overflow-x: auto;
+    padding-bottom: 4px;
+  }
+}
+
+@media (max-width: 640px) {
+  .ventas-module-grid,
+  .promotion-grid,
+  .route-grid,
+  .report-grid,
+  .service-strip {
+    grid-template-columns: 1fr;
+  }
+
+  .route-card-head,
+  .route-stats,
+  .price-row {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .ventas-module-card {
+    min-height: 104px;
   }
 }

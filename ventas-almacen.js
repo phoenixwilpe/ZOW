@@ -176,6 +176,9 @@ function renderMain() {
     alerts: ["Alertas", "Productos sin stock o bajo minimo"],
     sell: ["Vender", "Registrar venta y emitir ticket"],
     finance: ["Finanzas", "Ventas y caja"],
+    routes: ["Rutas", "Venta en ruta y despacho"],
+    promotions: ["Promociones", "Lista de precios y ofertas"],
+    reports: ["Reportes", "Auditoria comercial"],
     catalog: ["Catalogos", "Articulos y categorias"],
     customers: ["Clientes", "Base de clientes"],
     inventory: ["Inventario", "Stock y reabastecimiento"],
@@ -184,8 +187,15 @@ function renderMain() {
   document.querySelector("#viewEyebrow").textContent = titles[activeView][0];
   document.querySelector("#viewTitle").textContent = titles[activeView][1];
   renderWorkflow();
-  const renderers = { summary: renderSummary, alerts: renderAlerts, sell: renderSell, finance: renderFinance, catalog: renderCatalog, customers: renderCustomers, inventory: renderInventory, settings: renderSettings };
+  const renderers = { summary: renderSummary, alerts: renderAlerts, sell: renderSell, finance: renderFinance, routes: renderRoutes, promotions: renderPromotions, reports: renderReports, catalog: renderCatalog, customers: renderCustomers, inventory: renderInventory, settings: renderSettings };
   renderers[activeView]();
+  document.querySelectorAll("[data-module-view]").forEach((button) => {
+    button.addEventListener("click", () => {
+      if (!canAccessView(button.dataset.moduleView)) return;
+      activeView = button.dataset.moduleView;
+      renderMain();
+    });
+  });
 }
 
 function renderWorkflow() {
@@ -195,6 +205,9 @@ function renderWorkflow() {
     alerts: [`<strong>Alertas de stock</strong><span>Repone productos agotados o por debajo del minimo.</span>`, ""],
     sell: [`<strong>Nueva venta</strong><span>Agrega productos, cliente, descuento y efectivo recibido.</span>`, ""],
     finance: [`<strong>Caja</strong><span>Controla ventas pendientes de cierre y procesa cortes.</span>`, `<button class="primary-button" type="button" id="closeCashBtn">Procesar caja</button>`],
+    routes: [`<strong>Operacion en ruta</strong><span>Organiza clientes, entrega, despacho y seguimiento de vendedores.</span>`, ""],
+    promotions: [`<strong>Politica comercial</strong><span>Prepara listas de precios, paquetes y promociones por temporada.</span>`, ""],
+    reports: [`<strong>Auditoria comercial</strong><span>Revisa ventas, caja, inventario critico y valor de almacen.</span>`, ""],
     catalog: [`<strong>Catalogos</strong><span>Administra articulos y categorias.</span>`, `<button class="ghost-button" type="button" id="newCategoryBtn">Nueva categoria</button><button class="primary-button" type="button" id="newProductBtn">Nuevo producto</button>`],
     customers: [`<strong>Clientes</strong><span>Registra compradores frecuentes para ventas y tienda virtual.</span>`, `<button class="primary-button" type="button" id="newCustomerBtn">Nuevo cliente</button>`],
     inventory: [`<strong>Inventario</strong><span>Controla stock actual y regulariza entradas o salidas.</span>`, `<button class="primary-button" type="button" id="newProductInventoryBtn">Nuevo producto</button>`],
@@ -216,6 +229,8 @@ function renderSummary() {
       <article><span>Ventas</span><strong>${summary.sales || 0}</strong></article>
       <article><span>Ingresos</span><strong>${money(summary.income || 0)}</strong></article>
     </section>
+    ${renderVentasCommandCenter()}
+    ${renderServiceStrip()}
     <section class="admin-panel">
       <div class="admin-panel-head"><div><p class="eyebrow">Ultimas ventas</p><h3>Movimiento comercial</h3></div></div>
       <div class="admin-list">${sales.slice(0, 6).map(renderSaleRow).join("") || empty("Sin ventas registradas")}</div>
@@ -264,6 +279,71 @@ function renderFinance() {
       <article><span>Ingreso total</span><strong>${money(summary.income || 0)}</strong></article>
     </section>
     <section class="admin-panel"><div class="admin-list">${sales.map(renderSaleRow).join("") || empty("Sin ventas")}</div></section>
+  `;
+}
+
+function renderRoutes() {
+  const pending = cash.pendingSales || [];
+  const routeGroups = buildRouteGroups();
+  setCount(`${routeGroups.length} ruta${routeGroups.length === 1 ? "" : "s"}`);
+  mainList().innerHTML = `
+    <section class="route-grid">
+      ${routeGroups.map((route) => `
+        <article class="route-card">
+          <div class="route-card-head">
+            <span>${route.code}</span>
+            <strong>${route.name}</strong>
+          </div>
+          <div class="route-stats">
+            <span>${route.customers.length} clientes</span>
+            <span>${route.priority}</span>
+          </div>
+          <div class="route-customer-list">
+            ${route.customers.map((customer) => `<span>${escapeHtml(customer.name)}</span>`).join("") || "<span>Sin clientes asignados</span>"}
+          </div>
+        </article>
+      `).join("")}
+    </section>
+    <section class="admin-panel">
+      <div class="admin-panel-head"><div><p class="eyebrow">Despacho</p><h3>Ventas pendientes de liquidacion</h3></div></div>
+      <div class="admin-list">${pending.slice(0, 8).map(renderSaleRow).join("") || empty("No hay ventas pendientes para liquidar")}</div>
+    </section>
+  `;
+}
+
+function renderPromotions() {
+  const featured = products.slice().sort((a, b) => Number(b.stock || 0) - Number(a.stock || 0)).slice(0, 6);
+  const critical = products.filter((product) => Number(product.stock || 0) <= Number(product.min_stock || 0)).slice(0, 4);
+  setCount(`${featured.length} articulo${featured.length === 1 ? "" : "s"}`);
+  mainList().innerHTML = `
+    <section class="promotion-grid">
+      <article class="promotion-card is-green"><span>Lista base</span><strong>${products.length} productos activos</strong><p>Precios actuales listos para caja, vendedores y ruta.</p></article>
+      <article class="promotion-card is-amber"><span>Paquetes</span><strong>${featured.length} sugeridos</strong><p>Combina productos con mayor disponibilidad para impulsar salida.</p></article>
+      <article class="promotion-card is-red"><span>Reposicion</span><strong>${critical.length} criticos</strong><p>Evita promocionar articulos por debajo del minimo.</p></article>
+    </section>
+    <section class="admin-panel">
+      <div class="admin-panel-head"><div><p class="eyebrow">Lista de precios</p><h3>Productos para venta</h3></div></div>
+      <div class="price-list">${featured.map(renderPriceRow).join("") || empty("Registra productos para crear listas de precios")}</div>
+    </section>
+  `;
+}
+
+function renderReports() {
+  const grossMargin = products.reduce((sum, product) => sum + Math.max(Number(product.sale_price || 0) - Number(product.cost_price || 0), 0) * Number(product.stock || 0), 0);
+  const pendingTotal = Number(summary.pending_total || cash.total || 0);
+  const averageSale = Number(summary.sales || 0) ? Number(summary.income || 0) / Number(summary.sales || 1) : 0;
+  setCount("Auditoria");
+  mainList().innerHTML = `
+    <section class="report-grid">
+      <article><span>Ticket promedio</span><strong>${money(averageSale)}</strong><small>${summary.sales || 0} ventas confirmadas</small></article>
+      <article><span>Pendiente de caja</span><strong>${money(pendingTotal)}</strong><small>${summary.pending_sales || cash.pendingSales?.length || 0} ventas por liquidar</small></article>
+      <article><span>Margen potencial</span><strong>${money(grossMargin)}</strong><small>Segun costo, precio y stock actual</small></article>
+      <article><span>Stock critico</span><strong>${summary.low_stock || 0}</strong><small>Productos bajo minimo</small></article>
+    </section>
+    <section class="admin-panel">
+      <div class="admin-panel-head"><div><p class="eyebrow">Control</p><h3>Productos que requieren accion</h3></div></div>
+      <div class="admin-list">${products.filter((product) => Number(product.stock || 0) <= Number(product.min_stock || 0)).map(renderProductRow).join("") || empty("Sin riesgos de inventario")}</div>
+    </section>
   `;
 }
 
@@ -331,6 +411,52 @@ function renderCartItem(item) {
 
 function renderSaleRow(sale) {
   return `<article class="admin-row"><div><strong>${escapeHtml(sale.code)}</strong><span>${escapeHtml(sale.customer_name || "Cliente sin registrar")} / ${escapeHtml(sale.seller_name || "Vendedor")}</span><span>${formatDateTime(sale.created_at)}</span></div><div class="admin-row-meta"><span>Total ${money(sale.total)}</span><span>${sale.cash_closed ? "Caja cerrada" : "Pendiente caja"}</span></div></article>`;
+}
+
+function renderVentasCommandCenter() {
+  const modules = [
+    ["Gestion comercial", "Ventas, clientes, promociones y listas de precios.", "sell"],
+    ["Gestion operativa", "Rutas, despacho, stock minimo y reposicion.", "routes"],
+    ["Gestion administrativa", "Caja, liquidaciones, auditoria y reportes.", "finance"]
+  ];
+  return `
+    <section class="ventas-module-grid">
+      ${modules.map(([title, description, view]) => `
+        <button class="ventas-module-card" type="button" data-module-view="${view}" ${canAccessView(view) ? "" : "disabled"}>
+          <span>${escapeHtml(title)}</span>
+          <strong>${escapeHtml(description)}</strong>
+        </button>
+      `).join("")}
+    </section>
+  `;
+}
+
+function renderServiceStrip() {
+  return `
+    <section class="service-strip" aria-label="Servicios SaaS">
+      <article><span>Respaldo</span><strong>Datos en la nube</strong></article>
+      <article><span>Soporte</span><strong>Asistencia operativa</strong></article>
+      <article><span>Capacitacion</span><strong>Usuarios y procesos</strong></article>
+      <article><span>Mantenimiento</span><strong>Mejoras continuas</strong></article>
+    </section>
+  `;
+}
+
+function buildRouteGroups() {
+  const seeds = [
+    { code: "R-01", name: "Ruta Centro", priority: "Alta rotacion" },
+    { code: "R-02", name: "Ruta Norte", priority: "Clientes frecuentes" },
+    { code: "R-03", name: "Ruta Mayorista", priority: "Volumen" }
+  ];
+  return seeds.map((route, index) => ({
+    ...route,
+    customers: customers.filter((_, customerIndex) => customerIndex % seeds.length === index).slice(0, 5)
+  }));
+}
+
+function renderPriceRow(product) {
+  const margin = Number(product.sale_price || 0) - Number(product.cost_price || 0);
+  return `<article class="price-row"><div><strong>${escapeHtml(product.name)}</strong><span>${escapeHtml(product.code)} / ${escapeHtml(product.category || "Sin categoria")}</span></div><div><span>${money(product.sale_price)}</span><small>Margen ${money(margin)}</small></div></article>`;
 }
 
 function addToCart(productId) {
@@ -413,8 +539,7 @@ async function saveStoreSettings(event) {
 
 async function assertVentasAccess() {
   if (currentUser?.role === "zow_owner") throw new Error("El panel ZOW administra empresas. Ingresa con un usuario de empresa.");
-  const response = await apiRequest("/auth/systems");
-  if (!(response.systems || []).some((system) => system.id === "ventas_almacen")) throw new Error("Esta empresa no tiene activo Zow Ventas-Almacen.");
+  await apiRequest("/ventas/settings");
 }
 
 async function apiRequest(path, options = {}) {
@@ -445,13 +570,13 @@ function canAccessView(view) { return accessibleViewsForRole(currentUser?.role).
 function defaultViewForRole() { return accessibleViewsForRole(currentUser?.role)[0] || "summary"; }
 function accessibleViewsForRole(role) {
   const views = {
-    admin: ["summary", "alerts", "sell", "finance", "catalog", "customers", "inventory", "settings"],
-    ventas_admin: ["summary", "alerts", "sell", "finance", "catalog", "customers", "inventory", "settings"],
-    cajero: ["summary", "sell", "finance", "customers"],
-    vendedor: ["summary", "sell", "customers"],
-    almacen: ["summary", "alerts", "catalog", "inventory"],
-    supervisor: ["summary", "alerts", "sell", "finance", "catalog", "customers", "inventory"],
-    funcionario: ["summary", "sell", "customers"]
+    admin: ["summary", "alerts", "sell", "finance", "routes", "promotions", "reports", "catalog", "customers", "inventory", "settings"],
+    ventas_admin: ["summary", "alerts", "sell", "finance", "routes", "promotions", "reports", "catalog", "customers", "inventory", "settings"],
+    cajero: ["summary", "sell", "finance", "routes", "customers", "reports"],
+    vendedor: ["summary", "sell", "routes", "promotions", "customers"],
+    almacen: ["summary", "alerts", "routes", "reports", "catalog", "inventory"],
+    supervisor: ["summary", "alerts", "sell", "finance", "routes", "promotions", "reports", "catalog", "customers", "inventory"],
+    funcionario: ["summary", "sell", "routes", "customers"]
   };
   return views[role] || ["summary"];
 }

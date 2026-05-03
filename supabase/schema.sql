@@ -244,6 +244,95 @@ create table if not exists lead_history (
   created_at timestamptz not null default now()
 );
 
+create table if not exists inventory_products (
+  id text primary key,
+  company_id text not null references companies(id) on delete cascade,
+  code text not null,
+  name text not null,
+  category text not null default '',
+  unit text not null default 'Unidad',
+  cost_price numeric not null default 0,
+  sale_price numeric not null default 0,
+  min_stock numeric not null default 0,
+  stock numeric not null default 0,
+  is_active boolean not null default true,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  unique (company_id, code)
+);
+
+create table if not exists inventory_categories (
+  id text primary key,
+  company_id text not null references companies(id) on delete cascade,
+  name text not null,
+  description text not null default '',
+  unique (company_id, name)
+);
+
+create table if not exists sales_customers (
+  id text primary key,
+  company_id text not null references companies(id) on delete cascade,
+  name text not null,
+  phone text not null default '',
+  ci text not null default '',
+  email text not null default '',
+  address text not null default '',
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create table if not exists sales_orders (
+  id text primary key,
+  company_id text not null references companies(id) on delete cascade,
+  code text not null,
+  customer_id text references sales_customers(id),
+  customer_name text not null default '',
+  subtotal numeric not null default 0,
+  discount numeric not null default 0,
+  total numeric not null default 0,
+  cash_received numeric not null default 0,
+  change_amount numeric not null default 0,
+  status text not null default 'confirmada',
+  cash_closed boolean not null default false,
+  created_by text not null references users(id),
+  created_at timestamptz not null default now(),
+  unique (company_id, code)
+);
+
+create table if not exists sales_order_items (
+  id text primary key,
+  company_id text not null references companies(id) on delete cascade,
+  sale_id text not null references sales_orders(id) on delete cascade,
+  product_id text references inventory_products(id),
+  product_name text not null,
+  quantity numeric not null default 0,
+  unit_price numeric not null default 0,
+  total numeric not null default 0
+);
+
+create table if not exists cash_closures (
+  id text primary key,
+  company_id text not null references companies(id) on delete cascade,
+  code text not null,
+  total_sales numeric not null default 0,
+  sale_count integer not null default 0,
+  created_by text not null references users(id),
+  created_at timestamptz not null default now(),
+  unique (company_id, code)
+);
+
+create table if not exists inventory_movements (
+  id text primary key,
+  company_id text not null references companies(id) on delete cascade,
+  product_id text not null references inventory_products(id) on delete cascade,
+  type text not null,
+  quantity numeric not null default 0,
+  reference text not null default '',
+  note text not null default '',
+  created_by text not null references users(id),
+  created_at timestamptz not null default now()
+);
+
 create index if not exists idx_users_company on users(company_id);
 create index if not exists idx_units_company on units(company_id);
 create index if not exists idx_documents_company on documents(company_id);
@@ -257,6 +346,9 @@ create index if not exists idx_audit_events_action on audit_events(action);
 create index if not exists idx_leads_status on leads(status, created_at desc);
 create index if not exists idx_leads_priority on leads(priority, created_at desc);
 create index if not exists idx_lead_history_lead on lead_history(lead_id, created_at desc);
+create index if not exists idx_inventory_products_company on inventory_products(company_id, name);
+create index if not exists idx_sales_orders_company on sales_orders(company_id, created_at desc);
+create index if not exists idx_inventory_movements_product on inventory_movements(product_id, created_at desc);
 
 alter table companies enable row level security;
 alter table units enable row level security;
@@ -268,6 +360,13 @@ alter table documents enable row level security;
 alter table movements enable row level security;
 alter table document_recipients enable row level security;
 alter table document_files enable row level security;
+alter table inventory_products enable row level security;
+alter table inventory_categories enable row level security;
+alter table sales_customers enable row level security;
+alter table sales_orders enable row level security;
+alter table sales_order_items enable row level security;
+alter table cash_closures enable row level security;
+alter table inventory_movements enable row level security;
 
 -- El backend de Vercel usara SUPABASE_SERVICE_ROLE_KEY, por eso RLS no bloquea al servidor.
 -- Cuando pasemos auth directa de Supabase al frontend, agregaremos politicas por JWT/company_id.

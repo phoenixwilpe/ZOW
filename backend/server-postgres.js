@@ -1014,6 +1014,305 @@ app.patch("/api/companies/:id/systems", requireAuth, requireRole("zow_owner"), a
   res.json({ ok: true });
 });
 
+app.get("/api/ventas/summary", requireAuth, async (req, res) => {
+  if (!(await requireSystemAccess("ventas_almacen", req, res))) return;
+  await ensureVentasSchema();
+  const inventory = await pg.get(
+    `SELECT COUNT(*) AS products,
+            COALESCE(SUM(stock), 0) AS stock,
+            COALESCE(SUM(stock * cost_price), 0) AS inventory_value,
+            COALESCE(SUM(CASE WHEN stock <= min_stock THEN 1 ELSE 0 END), 0) AS low_stock
+     FROM inventory_products
+     WHERE company_id = ? AND is_active = true`,
+    [req.user.company_id]
+  );
+  const sales = await pg.get(
+    `SELECT COUNT(*) AS sales, COALESCE(SUM(total), 0) AS income
+     FROM sales_orders
+     WHERE company_id = ? AND status = 'confirmada'`,
+    [req.user.company_id]
+  );
+  const pendingCash = await pg.get(
+    `SELECT COUNT(*) AS pending_sales, COALESCE(SUM(total), 0) AS pending_total
+     FROM sales_orders
+     WHERE company_id = ? AND status = 'confirmada' AND cash_closed = false`,
+    [req.user.company_id]
+  );
+  res.json({ summary: { ...inventory, ...sales, ...pendingCash } });
+});
+
+app.get("/api/ventas/settings", requireAuth, async (req, res) => {
+  if (!(await requireSystemAccess("ventas_almacen", req, res))) return;
+  res.json({ settings: await mapSettings(await loadSettings(req.user.company_id)) });
+});
+
+app.patch("/api/ventas/settings", requireAuth, async (req, res) => {
+  if (!(await requireSystemAccess("ventas_almacen", req, res))) return;
+  if (!requireVentasRole(req, res, "admin", "ventas_admin")) return;
+  await ensureSettingsSchema();
+  const current = await mapSettings(await loadSettings(req.user.company_id));
+  const settings = {
+    companyName: String(req.body.companyName || current.companyName || "").trim(),
+    storeName: String(req.body.storeName || "").trim(),
+    currency: String(req.body.currency || current.currency || "BOB").trim().toUpperCase().slice(0, 8),
+    taxId: String(req.body.taxId || "").trim(),
+    phone: String(req.body.phone || "").trim(),
+    address: String(req.body.address || "").trim(),
+    ticketNote: String(req.body.ticketNote || "").trim()
+  };
+  if (!settings.companyName) return res.status(400).json({ error: "Nombre de empresa obligatorio" });
+  if (!settings.currency) return res.status(400).json({ error: "Moneda obligatoria" });
+  await pg.run(
+    `INSERT INTO organization_settings (
+       id, company_id, company_name, store_name, currency, tax_id, phone, address, ticket_note, updated_at
+     )
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, now())
+     ON CONFLICT(id) DO UPDATE SET
+       company_name = excluded.company_name,
+       store_name = excluded.store_name,
+       currency = excluded.currency,
+       tax_id = excluded.tax_id,
+       phone = excluded.phone,
+       address = excluded.address,
+       ticket_note = excluded.ticket_note,
+       updated_at = now()`,
+    [req.user.company_id, req.user.company_id, settings.companyName, settings.storeName, settings.currency, settings.taxId, settings.phone, settings.address, settings.ticketNote]
+  );
+  res.json({ settings: await mapSettings(await loadSettings(req.user.company_id)) });
+});
+
+app.get("/api/ventas/products", requireAuth, async (req, res) => {
+  if (!(await requireSystemAccess("ventas_almacen", req, res))) return;
+  await ensureVentasSchema();
+  const products = await pg.all("SELECT * FROM inventory_products WHERE company_id = ? ORDER BY name", [req.user.company_id]);
+  res.json({ products });
+});
+
+app.post("/api/ventas/products", requireAuth, async (req, res) => {
+  if (!(await requireSystemAccess("ventas_almacen", req, res))) return;
+  if (!requireVentasRole(req, res, "admin", "ventas_admin", "almacen")) return;
+  await ensureVentasSchema();
+  const product = {
+    id: randomUUID(),
+    code: String(req.body.code || "").trim().toUpperCase(),
+    name: String(req.body.name || "").trim(),
+    category: String(req.body.category || "").trim(),
+    unit: String(req.body.unit || "Unidad").trim(),
+    costPrice: Number(req.body.costPrice || 0),
+    salePrice: Number(req.body.salePrice || 0),
+    minStock: Number(req.body.minStock || 0),
+    stock: Number(req.body.stock || 0)
+  };
+  if (!product.code || !product.name) return res.status(400).json({ error: "Codigo y nombre son obligatorios" });
+  await pg.tx(async (client) => {
+    await client.run(
+      `INSERT INTO inventory_products (id, company_id, code, name, category, unit, cost_price, sale_price, min_stock, stock, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, now(), now())`,
+      [product.id, req.user.company_id, product.code, product.name, product.category, product.unit, product.costPrice, product.salePrice, product.minStock, product.stock]
+    );
+    if (product.stock !== 0) {
+      await client.run(
+        `INSERT INTO inventory_movements (id, company_id, product_id, type, quantity, reference, note, created_by, created_at)
+         VALUES (?, ?, ?, 'entrada', ?, ?, ?, ?, now())`,
+        [randomUUID(), req.user.company_id, product.id, product.stock, "Stock inicial", "Registro inicial de producto", req.user.id]
+      );
+    }
+  });
+  res.status(201).json({ product: await pg.get("SELECT * FROM inventory_products WHERE id = ?", [product.id]) });
+});
+
+app.get("/api/ventas/categories", requireAuth, async (req, res) => {
+  if (!(await requireSystemAccess("ventas_almacen", req, res))) return;
+  await ensureVentasSchema();
+  const categories = await pg.all("SELECT * FROM inventory_categories WHERE company_id = ? ORDER BY name", [req.user.company_id]);
+  res.json({ categories });
+});
+
+app.post("/api/ventas/categories", requireAuth, async (req, res) => {
+  if (!(await requireSystemAccess("ventas_almacen", req, res))) return;
+  if (!requireVentasRole(req, res, "admin", "ventas_admin", "almacen")) return;
+  await ensureVentasSchema();
+  const category = {
+    id: randomUUID(),
+    name: String(req.body.name || "").trim(),
+    description: String(req.body.description || "").trim()
+  };
+  if (!category.name) return res.status(400).json({ error: "Nombre de categoria obligatorio" });
+  await pg.run("INSERT INTO inventory_categories (id, company_id, name, description) VALUES (?, ?, ?, ?)", [category.id, req.user.company_id, category.name, category.description]);
+  res.status(201).json({ category });
+});
+
+app.get("/api/ventas/customers", requireAuth, async (req, res) => {
+  if (!(await requireSystemAccess("ventas_almacen", req, res))) return;
+  await ensureVentasSchema();
+  const customers = await pg.all("SELECT * FROM sales_customers WHERE company_id = ? ORDER BY name", [req.user.company_id]);
+  res.json({ customers });
+});
+
+app.post("/api/ventas/customers", requireAuth, async (req, res) => {
+  if (!(await requireSystemAccess("ventas_almacen", req, res))) return;
+  if (!requireVentasRole(req, res, "admin", "ventas_admin", "cajero", "vendedor")) return;
+  await ensureVentasSchema();
+  const customer = {
+    id: randomUUID(),
+    name: String(req.body.name || "").trim(),
+    phone: String(req.body.phone || "").trim(),
+    ci: String(req.body.ci || "").trim(),
+    email: String(req.body.email || "").trim(),
+    address: String(req.body.address || "").trim()
+  };
+  if (!customer.name) return res.status(400).json({ error: "Nombre de cliente obligatorio" });
+  await pg.run(
+    `INSERT INTO sales_customers (id, company_id, name, phone, ci, email, address, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, now(), now())`,
+    [customer.id, req.user.company_id, customer.name, customer.phone, customer.ci, customer.email, customer.address]
+  );
+  res.status(201).json({ customer });
+});
+
+app.get("/api/ventas/sales", requireAuth, async (req, res) => {
+  if (!(await requireSystemAccess("ventas_almacen", req, res))) return;
+  await ensureVentasSchema();
+  const ownOnly = !["admin", "ventas_admin"].includes(req.user.role);
+  const sales = await pg.all(
+    `SELECT sales_orders.*, users.name AS seller_name
+     FROM sales_orders
+     LEFT JOIN users ON users.id = sales_orders.created_by
+     WHERE sales_orders.company_id = ? ${ownOnly ? "AND sales_orders.created_by = ?" : ""}
+     ORDER BY sales_orders.created_at DESC`,
+    ownOnly ? [req.user.company_id, req.user.id] : [req.user.company_id]
+  );
+  res.json({ sales });
+});
+
+app.get("/api/ventas/sales/:id", requireAuth, async (req, res) => {
+  if (!(await requireSystemAccess("ventas_almacen", req, res))) return;
+  await ensureVentasSchema();
+  const sale = await pg.get("SELECT * FROM sales_orders WHERE id = ? AND company_id = ?", [req.params.id, req.user.company_id]);
+  if (!sale) return res.status(404).json({ error: "Venta no encontrada" });
+  if (!["admin", "ventas_admin"].includes(req.user.role) && sale.created_by !== req.user.id) return res.status(403).json({ error: "Permiso insuficiente" });
+  const items = await pg.all("SELECT * FROM sales_order_items WHERE sale_id = ? AND company_id = ?", [sale.id, req.user.company_id]);
+  res.json({ sale, items });
+});
+
+app.post("/api/ventas/sales", requireAuth, async (req, res) => {
+  if (!(await requireSystemAccess("ventas_almacen", req, res))) return;
+  if (!requireVentasRole(req, res, "admin", "ventas_admin", "cajero", "vendedor")) return;
+  await ensureVentasSchema();
+  const items = Array.isArray(req.body.items) ? req.body.items : [];
+  if (!items.length) return res.status(400).json({ error: "Agrega al menos un producto a la venta" });
+  const saleId = randomUUID();
+  const customerId = String(req.body.customerId || "").trim();
+  try {
+    const result = await pg.tx(async (client) => {
+      const saleCode = await buildNextSaleCode(req.user.company_id, new Date().toISOString(), client);
+      const customer = customerId ? await client.get("SELECT * FROM sales_customers WHERE id = ? AND company_id = ?", [customerId, req.user.company_id]) : null;
+      const customerName = customer?.name || String(req.body.customerName || "Cliente sin registrar").trim();
+      const preparedItems = [];
+      for (const item of items) {
+        const product = await client.get("SELECT * FROM inventory_products WHERE id = ? AND company_id = ? AND is_active = true", [String(item.productId || ""), req.user.company_id]);
+        const quantity = Number(item.quantity || 0);
+        if (!product || quantity <= 0) throw new Error("Producto o cantidad invalida");
+        if (Number(product.stock) < quantity) throw new Error(`Stock insuficiente para ${product.name}`);
+        const unitPrice = Number(item.unitPrice || product.sale_price || 0);
+        preparedItems.push({ product, quantity, unitPrice, total: quantity * unitPrice });
+      }
+      const subtotal = preparedItems.reduce((total, item) => total + item.total, 0);
+      const discount = Number(req.body.discount || 0);
+      const total = Math.max(subtotal - discount, 0);
+      const cashReceived = Number(req.body.cashReceived || total);
+      const changeAmount = Math.max(cashReceived - total, 0);
+      await client.run(
+        `INSERT INTO sales_orders (
+          id, company_id, code, customer_id, customer_name, subtotal, discount, total,
+          cash_received, change_amount, status, cash_closed, created_by, created_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'confirmada', false, ?, now())`,
+        [saleId, req.user.company_id, saleCode, customer?.id || null, customerName, subtotal, discount, total, cashReceived, changeAmount, req.user.id]
+      );
+      for (const item of preparedItems) {
+        await client.run(
+          `INSERT INTO sales_order_items (id, company_id, sale_id, product_id, product_name, quantity, unit_price, total)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+          [randomUUID(), req.user.company_id, saleId, item.product.id, item.product.name, item.quantity, item.unitPrice, item.total]
+        );
+        await client.run(
+          `INSERT INTO inventory_movements (id, company_id, product_id, type, quantity, reference, note, created_by, created_at)
+           VALUES (?, ?, ?, 'salida', ?, ?, ?, ?, now())`,
+          [randomUUID(), req.user.company_id, item.product.id, item.quantity, saleCode, "Venta confirmada", req.user.id]
+        );
+        await client.run("UPDATE inventory_products SET stock = stock - ?, updated_at = now() WHERE id = ?", [item.quantity, item.product.id]);
+      }
+      return { saleCode };
+    });
+    res.status(201).json({
+      sale: await pg.get("SELECT * FROM sales_orders WHERE id = ?", [saleId]),
+      items: await pg.all("SELECT * FROM sales_order_items WHERE sale_id = ?", [saleId]),
+      code: result.saleCode
+    });
+  } catch (error) {
+    res.status(400).json({ error: error.message || "No se pudo registrar la venta" });
+  }
+});
+
+app.get("/api/ventas/cash", requireAuth, async (req, res) => {
+  if (!(await requireSystemAccess("ventas_almacen", req, res))) return;
+  await ensureVentasSchema();
+  const pendingSales = await pg.all(
+    "SELECT * FROM sales_orders WHERE company_id = ? AND status = 'confirmada' AND cash_closed = false ORDER BY created_at DESC",
+    [req.user.company_id]
+  );
+  const total = pendingSales.reduce((sum, sale) => sum + Number(sale.total || 0), 0);
+  res.json({ pendingSales, total });
+});
+
+app.post("/api/ventas/cash/close", requireAuth, async (req, res) => {
+  if (!(await requireSystemAccess("ventas_almacen", req, res))) return;
+  if (!requireVentasRole(req, res, "admin", "ventas_admin", "cajero")) return;
+  await ensureVentasSchema();
+  const pendingSales = await pg.all("SELECT * FROM sales_orders WHERE company_id = ? AND status = 'confirmada' AND cash_closed = false", [req.user.company_id]);
+  if (!pendingSales.length) return res.status(400).json({ error: "No hay ventas pendientes de cierre" });
+  const closureId = randomUUID();
+  const total = pendingSales.reduce((sum, sale) => sum + Number(sale.total || 0), 0);
+  const code = await buildNextCashCode(req.user.company_id);
+  await pg.tx(async (client) => {
+    await client.run(
+      `INSERT INTO cash_closures (id, company_id, code, total_sales, sale_count, created_by, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, now())`,
+      [closureId, req.user.company_id, code, total, pendingSales.length, req.user.id]
+    );
+    await client.run("UPDATE sales_orders SET cash_closed = true WHERE company_id = ? AND status = 'confirmada' AND cash_closed = false", [req.user.company_id]);
+  });
+  res.status(201).json({ closure: await pg.get("SELECT * FROM cash_closures WHERE id = ?", [closureId]) });
+});
+
+app.get("/api/ventas/cash/history", requireAuth, async (req, res) => {
+  if (!(await requireSystemAccess("ventas_almacen", req, res))) return;
+  await ensureVentasSchema();
+  const closures = await pg.all("SELECT * FROM cash_closures WHERE company_id = ? ORDER BY created_at DESC", [req.user.company_id]);
+  res.json({ closures });
+});
+
+app.post("/api/ventas/products/:id/movements", requireAuth, async (req, res) => {
+  if (!(await requireSystemAccess("ventas_almacen", req, res))) return;
+  if (!requireVentasRole(req, res, "admin", "ventas_admin", "almacen")) return;
+  await ensureVentasSchema();
+  const product = await pg.get("SELECT * FROM inventory_products WHERE id = ? AND company_id = ?", [req.params.id, req.user.company_id]);
+  if (!product) return res.status(404).json({ error: "Producto no encontrado" });
+  const type = String(req.body.type || "entrada");
+  const quantity = Number(req.body.quantity || 0);
+  if (!["entrada", "salida", "ajuste"].includes(type) || quantity <= 0) return res.status(400).json({ error: "Movimiento invalido" });
+  const signedQuantity = type === "salida" ? -quantity : quantity;
+  await pg.tx(async (client) => {
+    await client.run(
+      `INSERT INTO inventory_movements (id, company_id, product_id, type, quantity, reference, note, created_by, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, now())`,
+      [randomUUID(), req.user.company_id, product.id, type, quantity, String(req.body.reference || ""), String(req.body.note || ""), req.user.id]
+    );
+    await client.run("UPDATE inventory_products SET stock = stock + ?, updated_at = now() WHERE id = ?", [signedQuantity, product.id]);
+  });
+  res.json({ product: await pg.get("SELECT * FROM inventory_products WHERE id = ?", [product.id]) });
+});
+
 app.patch("/api/companies/:id/status", requireAuth, requireRole("zow_owner"), async (req, res) => {
   const status = String(req.body.status || "").trim();
   if (!["active", "suspended", "cancelled"].includes(status)) return res.status(400).json({ error: "Estado invalido" });
@@ -1447,6 +1746,144 @@ async function requireSystemAccess(systemId, req, res) {
     return false;
   }
   return true;
+}
+
+function requireVentasRole(req, res, ...roles) {
+  if (!roles.includes(req.user.role)) {
+    res.status(403).json({ error: "Este rol no tiene permiso para esta funcion de Ventas-Almacen" });
+    return false;
+  }
+  return true;
+}
+
+let ventasSchemaReady;
+async function ensureVentasSchema() {
+  if (!ventasSchemaReady) {
+    ventasSchemaReady = (async () => {
+      await pg.run(`
+        CREATE TABLE IF NOT EXISTS inventory_products (
+          id text primary key,
+          company_id text not null references companies(id) on delete cascade,
+          code text not null,
+          name text not null,
+          category text not null default '',
+          unit text not null default 'Unidad',
+          cost_price numeric not null default 0,
+          sale_price numeric not null default 0,
+          min_stock numeric not null default 0,
+          stock numeric not null default 0,
+          is_active boolean not null default true,
+          created_at timestamptz not null default now(),
+          updated_at timestamptz not null default now(),
+          unique (company_id, code)
+        )
+      `);
+      await pg.run(`
+        CREATE TABLE IF NOT EXISTS inventory_categories (
+          id text primary key,
+          company_id text not null references companies(id) on delete cascade,
+          name text not null,
+          description text not null default '',
+          unique (company_id, name)
+        )
+      `);
+      await pg.run(`
+        CREATE TABLE IF NOT EXISTS sales_customers (
+          id text primary key,
+          company_id text not null references companies(id) on delete cascade,
+          name text not null,
+          phone text not null default '',
+          ci text not null default '',
+          email text not null default '',
+          address text not null default '',
+          created_at timestamptz not null default now(),
+          updated_at timestamptz not null default now()
+        )
+      `);
+      await pg.run(`
+        CREATE TABLE IF NOT EXISTS sales_orders (
+          id text primary key,
+          company_id text not null references companies(id) on delete cascade,
+          code text not null,
+          customer_id text references sales_customers(id),
+          customer_name text not null default '',
+          subtotal numeric not null default 0,
+          discount numeric not null default 0,
+          total numeric not null default 0,
+          cash_received numeric not null default 0,
+          change_amount numeric not null default 0,
+          status text not null default 'confirmada',
+          cash_closed boolean not null default false,
+          created_by text not null references users(id),
+          created_at timestamptz not null default now(),
+          unique (company_id, code)
+        )
+      `);
+      await pg.run(`
+        CREATE TABLE IF NOT EXISTS sales_order_items (
+          id text primary key,
+          company_id text not null references companies(id) on delete cascade,
+          sale_id text not null references sales_orders(id) on delete cascade,
+          product_id text references inventory_products(id),
+          product_name text not null,
+          quantity numeric not null default 0,
+          unit_price numeric not null default 0,
+          total numeric not null default 0
+        )
+      `);
+      await pg.run(`
+        CREATE TABLE IF NOT EXISTS cash_closures (
+          id text primary key,
+          company_id text not null references companies(id) on delete cascade,
+          code text not null,
+          total_sales numeric not null default 0,
+          sale_count integer not null default 0,
+          created_by text not null references users(id),
+          created_at timestamptz not null default now(),
+          unique (company_id, code)
+        )
+      `);
+      await pg.run(`
+        CREATE TABLE IF NOT EXISTS inventory_movements (
+          id text primary key,
+          company_id text not null references companies(id) on delete cascade,
+          product_id text not null references inventory_products(id) on delete cascade,
+          type text not null,
+          quantity numeric not null default 0,
+          reference text not null default '',
+          note text not null default '',
+          created_by text not null references users(id),
+          created_at timestamptz not null default now()
+        )
+      `);
+      await pg.run("CREATE INDEX IF NOT EXISTS idx_inventory_products_company ON inventory_products(company_id, name)");
+      await pg.run("CREATE INDEX IF NOT EXISTS idx_sales_orders_company ON sales_orders(company_id, created_at DESC)");
+      await pg.run("CREATE INDEX IF NOT EXISTS idx_inventory_movements_product ON inventory_movements(product_id, created_at DESC)");
+    })();
+  }
+  await ventasSchemaReady;
+}
+
+async function buildNextSaleCode(companyId, date = new Date().toISOString(), client = pg) {
+  const year = new Date(date).getFullYear();
+  const prefix = `V-${year}`;
+  const rows = await client.all("SELECT code FROM sales_orders WHERE company_id = ? AND code LIKE ?", [companyId, `${prefix}-%`]);
+  const next = rows.reduce((max, row) => {
+    const match = String(row.code || "").match(/(\d+)$/);
+    return match ? Math.max(max, Number(match[1])) : max;
+  }, 0) + 1;
+  return `${prefix}-${String(next).padStart(5, "0")}`;
+}
+
+async function buildNextCashCode(companyId, date = new Date().toISOString(), client = pg) {
+  const year = new Date(date).getFullYear();
+  const prefix = `C-${year}`;
+  const rows = await client.all("SELECT code FROM cash_closures WHERE company_id = ? AND code LIKE ?", [companyId, `${prefix}-%`]);
+  const next = rows.reduce((max, row) => {
+    const match = String(row.code || "").match(/(\d+)$/);
+    return match ? Math.max(max, Number(match[1])) : max;
+  }, 0) + 1;
+  return `${prefix}-${String(next).padStart(5, "0")}`;
 }
 
 function slugify(value) {

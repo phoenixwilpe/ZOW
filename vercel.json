@@ -26,6 +26,14 @@
     {
       "source": "/consulta/:slug",
       "destination": "/consulta.html"
+    },
+    {
+      "source": "/ventas-almacen",
+      "destination": "/ventas-almacen.html"
+    },
+    {
+      "source": "/ventas",
+      "destination": "/ventas-almacen.html"
     }
   ]
 }
