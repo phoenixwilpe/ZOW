@@ -1323,13 +1323,13 @@ async function ensureLeadsSchema() {
           created_at timestamptz not null default now()
         )
       `);
-      await pg.run("CREATE INDEX IF NOT EXISTS idx_leads_status ON leads(status, created_at DESC)");
-      await pg.run("CREATE INDEX IF NOT EXISTS idx_leads_priority ON leads(priority, created_at DESC)");
-      await pg.run("CREATE INDEX IF NOT EXISTS idx_lead_history_lead ON lead_history(lead_id, created_at DESC)");
       await pg.run("ALTER TABLE leads ADD COLUMN IF NOT EXISTS notes text NOT NULL DEFAULT ''");
       await pg.run("ALTER TABLE leads ADD COLUMN IF NOT EXISTS next_action text NOT NULL DEFAULT ''");
       await pg.run("ALTER TABLE leads ADD COLUMN IF NOT EXISTS next_action_at text NOT NULL DEFAULT ''");
       await pg.run("ALTER TABLE leads ADD COLUMN IF NOT EXISTS priority text NOT NULL DEFAULT 'media'");
+      await pg.run("CREATE INDEX IF NOT EXISTS idx_leads_status ON leads(status, created_at DESC)");
+      await pg.run("CREATE INDEX IF NOT EXISTS idx_leads_priority ON leads(priority, created_at DESC)");
+      await pg.run("CREATE INDEX IF NOT EXISTS idx_lead_history_lead ON lead_history(lead_id, created_at DESC)");
     })();
   }
   await leadsSchemaReady;
