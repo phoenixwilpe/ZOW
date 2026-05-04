@@ -8,6 +8,9 @@ const planSelect = leadForm?.querySelector('select[name="plan"]');
 const leadMessageField = leadForm?.querySelector('textarea[name="message"]');
 const leadNameField = leadForm?.querySelector('input[name="name"]');
 const siteHeader = document.querySelector(".site-header");
+const siteMenuToggle = document.querySelector(".site-menu-toggle");
+const siteNav = document.querySelector("#siteNav");
+const siteBrand = document.querySelector(".site-brand");
 const scrollProgress = document.querySelector(".site-scroll-progress");
 const navLinks = [...document.querySelectorAll("[data-nav-link]")];
 const planLabels = {
@@ -25,8 +28,27 @@ document.querySelectorAll('a[href^="#"]').forEach((link) => {
     const target = document.querySelector(link.getAttribute("href"));
     if (!target) return;
     event.preventDefault();
+    closeSiteMenu();
     target.scrollIntoView({ behavior: "smooth", block: "start" });
   });
+});
+
+function closeSiteMenu() {
+  document.body.classList.remove("site-menu-open");
+  siteMenuToggle?.setAttribute("aria-expanded", "false");
+}
+
+siteMenuToggle?.addEventListener("click", () => {
+  const isOpen = document.body.classList.toggle("site-menu-open");
+  siteMenuToggle.setAttribute("aria-expanded", String(isOpen));
+});
+
+siteNav?.querySelectorAll("a").forEach((link) => {
+  link.addEventListener("click", () => closeSiteMenu());
+});
+
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape") closeSiteMenu();
 });
 
 const revealObserver = "IntersectionObserver" in window
@@ -87,6 +109,19 @@ navLinks.forEach((link) => {
     link.style.setProperty("--mx", `${event.clientX - rect.left}px`);
     link.style.setProperty("--my", `${event.clientY - rect.top}px`);
   });
+});
+
+siteBrand?.addEventListener("pointermove", (event) => {
+  const rect = siteBrand.getBoundingClientRect();
+  const x = ((event.clientX - rect.left) / rect.width - 0.5) * 18;
+  const y = ((event.clientY - rect.top) / rect.height - 0.5) * -18;
+  siteBrand.style.setProperty("--brand-tilt-x", `${y}deg`);
+  siteBrand.style.setProperty("--brand-tilt-y", `${x}deg`);
+});
+
+siteBrand?.addEventListener("pointerleave", () => {
+  siteBrand.style.removeProperty("--brand-tilt-x");
+  siteBrand.style.removeProperty("--brand-tilt-y");
 });
 
 document.querySelector(".holo-panel")?.addEventListener("pointermove", (event) => {
