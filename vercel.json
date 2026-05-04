@@ -2,14 +2,22 @@
   "version": 2,
   "buildCommand": "npm run vercel-build",
   "outputDirectory": "public",
+  "redirects": [
+    {
+      "source": "/system-zow.html",
+      "destination": "/",
+      "permanent": true
+    },
+    {
+      "source": "/system-zow",
+      "destination": "/",
+      "permanent": true
+    }
+  ],
   "rewrites": [
     {
       "source": "/api/(.*)",
       "destination": "/api/index.js"
-    },
-    {
-      "source": "/system-zow",
-      "destination": "/index.html"
     },
     {
       "source": "/correspondencia",

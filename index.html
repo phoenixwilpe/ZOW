@@ -1,4 +1,4 @@
-<!doctype html>
+﻿<!doctype html>
 <html lang="es">
   <head>
     <meta charset="UTF-8" />
@@ -17,11 +17,16 @@
     <div class="site-scroll-progress" aria-hidden="true"></div>
     <header class="site-header">
       <a class="site-brand" href="/" aria-label="SYSTEM ZOW SAAS">
-        <span class="zow-symbol" aria-hidden="true"><span></span></span>
-        <span class="site-brand-copy"><strong>SYSTEM ZOW</strong><small>SAAS cloud platform</small></span>
+        <span class="zow-symbol" aria-hidden="true"><span></span><i></i></span>
+        <span class="site-brand-copy"><strong>SYSTEM ZOW</strong><small>Sistemas en la nube</small></span>
       </a>
-      <nav class="site-nav" aria-label="Navegacion comercial">
+      <button class="site-menu-toggle" type="button" aria-label="Abrir menu" aria-controls="siteNav" aria-expanded="false">
+        <span></span><span></span><span></span>
+      </button>
+      <nav class="site-nav" id="siteNav" aria-label="Navegacion comercial">
         <a href="#sistemas" data-nav-link><span>Sistemas</span></a>
+        <a href="#servicios" data-nav-link><span>Servicios</span></a>
+        <a href="#capacidades" data-nav-link><span>Capacidades</span></a>
         <a href="#operacion" data-nav-link><span>Operacion</span></a>
         <a href="#planes" data-nav-link><span>Planes</span></a>
         <a href="#implementacion" data-nav-link><span>Proceso</span></a>
@@ -37,51 +42,72 @@
           <div class="hero-badge"><span></span> Plataforma SaaS multiempresa</div>
           <h1>SYSTEM ZOW SAAS</h1>
           <p>
-            Sistemas empresariales en la nube para vender, activar y administrar clientes con datos separados,
-            control de usuarios, membresias, auditoria y operaciones por empresa.
+            Desarrollamos sistemas en la nube para empresas que necesitan operar mejor: ventas, almacen,
+            correspondencia, control interno, reportes, usuarios, seguridad y procesos a medida en la nube.
           </p>
           <div class="site-hero-actions">
-            <a class="primary-button" href="#contacto">Solicitar demo</a>
-            <a class="ghost-button" href="/correspondencia">Entrar a Correspondencia</a>
+            <a class="primary-button" href="#contacto">Solicitar diagnostico</a>
+            <a class="ghost-button" href="#sistemas">Ver sistemas SaaS</a>
           </div>
           <div class="hero-metrics" aria-label="Capacidades SYSTEM ZOW">
-            <article><strong>24/7</strong><span>Acceso web</span></article>
-            <article><strong>100%</strong><span>Separacion por empresa</span></article>
-            <article><strong>QR</strong><span>Control y trazabilidad</span></article>
+            <article><strong>En la nube</strong><span>Acceso web seguro</span></article>
+            <article><strong>Empresas separadas</strong><span>Datos privados por cliente</span></article>
+            <article><strong>A medida</strong><span>Flujos segun tu negocio</span></article>
           </div>
         </div>
 
-        <div class="site-hero-visual" aria-label="Panel futurista de SYSTEM ZOW">
-          <div class="holo-panel">
+        <div class="site-hero-visual tech-hero-visual" aria-label="Escena tecnologica 3D de SYSTEM ZOW">
+          <canvas id="zowHeroCanvas" aria-hidden="true"></canvas>
+          <div class="tech-orbit-stack" aria-hidden="true">
+            <span></span><span></span><span></span>
+          </div>
+          <div class="holo-panel tech-command-panel">
             <div class="holo-panel-top">
               <span class="zow-symbol small" aria-hidden="true"><span></span></span>
-              <div><strong>Command Center</strong><small>Empresas, sistemas y planes</small></div>
-              <i>LIVE</i>
+              <div><strong>Sistema completo</strong><small>Aplicacion, datos, seguridad y automatizacion</small></div>
+              <i>ONLINE</i>
             </div>
             <div class="holo-main">
               <div class="holo-core">
-                <span>SZ</span>
+                <span>ZOW</span>
                 <i></i>
               </div>
-              <div class="holo-lines">
+              <div class="holo-lines tech-pulses">
                 <span></span><span></span><span></span><span></span>
               </div>
             </div>
             <div class="holo-grid">
-              <article><span>Clientes</span><strong>Activos</strong></article>
-              <article><span>Planes</span><strong>Mensual - Anual</strong></article>
-              <article><span>Datos</span><strong>PostgreSQL</strong></article>
-              <article><span>Auditoria</span><strong>En tiempo real</strong></article>
+              <article><span>Uso</span><strong>Web + movil</strong></article>
+              <article><span>Datos</span><strong>Base segura</strong></article>
+              <article><span>Control</span><strong>Usuarios y permisos</strong></article>
+              <article><span>Crecimiento</span><strong>Clientes separados</strong></article>
             </div>
           </div>
+          <div class="floating-tech-card card-a"><strong>POS</strong><span>Ventas y caja</span></div>
+          <div class="floating-tech-card card-b"><strong>Docs</strong><span>Correspondencia digital</span></div>
+          <div class="floating-tech-card card-c"><strong>Conexion</strong><span>Listo para integrarse</span></div>
+        </div>
+      </section>
+
+      <section class="site-section capability-section" id="capacidades">
+        <div class="site-section-head">
+          <p class="eyebrow">Que hacemos</p>
+          <h2>Construimos sistemas que ordenan el trabajo real de una empresa</h2>
+          <p>Revisamos como trabaja tu empresa, disenamos pantallas faciles de usar, protegemos la informacion y dejamos el sistema listo para operar, vender y crecer.</p>
+        </div>
+        <div class="capability-grid">
+          <article><span>01</span><strong>Empresas separadas</strong><p>Cada cliente trabaja con sus propios usuarios, configuracion, planes, permisos y datos privados.</p></article>
+          <article><span>02</span><strong>Sistemas operativos</strong><p>Ventas, inventario, documentacion, caja, reportes, control interno y cualquier flujo que tu empresa necesite digitalizar.</p></article>
+          <article><span>03</span><strong>Panel de control</strong><p>Un espacio simple para activar clientes, administrar accesos, controlar pagos y dar seguimiento a renovaciones.</p></article>
+          <article><span>04</span><strong>Implementacion completa</strong><p>Configuracion inicial, pruebas con usuarios, ajustes visuales, despliegue en la nube y acompanamiento de puesta en marcha.</p></article>
         </div>
       </section>
 
       <section class="site-section" id="sistemas">
         <div class="site-section-head">
           <p class="eyebrow">Catalogo SaaS</p>
-          <h2>Sistemas listos para empresas reales</h2>
-          <p>Cada producto se activa por empresa, con permisos, usuarios, planes y datos separados.</p>
+          <h2>Sistemas SaaS para operar, controlar y crecer</h2>
+          <p>Cada producto se activa por empresa, con permisos, usuarios, planes, auditoria y datos separados.</p>
         </div>
         <div class="product-grid">
           <article class="product-card">
@@ -105,15 +131,48 @@
         </div>
       </section>
 
+      <section class="site-section services-section" id="servicios">
+        <div class="site-section-head">
+          <p class="eyebrow">Servicios adicionales</p>
+          <h2>Tambien ayudamos a tu empresa con presencia digital y soporte tecnico</h2>
+          <p>
+            Estos servicios son independientes de los sistemas SaaS. Se pueden contratar por separado o como parte de
+            una implementacion completa para mejorar la imagen, los equipos y el trabajo diario de la empresa.
+          </p>
+        </div>
+        <div class="services-grid">
+          <article class="service-card web-service">
+            <span aria-hidden="true"></span>
+            <strong>Diseno de paginas web</strong>
+            <p>Sitios modernos, responsivos y orientados a mostrar servicios, productos, contacto y presencia comercial.</p>
+          </article>
+          <article class="service-card design-service">
+            <span aria-hidden="true"></span>
+            <strong>Diseno grafico</strong>
+            <p>Identidad visual, piezas para redes, banners, presentaciones, logos y materiales para comunicacion.</p>
+          </article>
+          <article class="service-card support-service">
+            <span aria-hidden="true"></span>
+            <strong>Mantenimiento de computadoras</strong>
+            <p>Revision, limpieza, optimizacion, respaldo basico y mejora del rendimiento de equipos de trabajo.</p>
+          </article>
+          <article class="service-card software-service">
+            <span aria-hidden="true"></span>
+            <strong>Instalacion de software</strong>
+            <p>Configuracion de programas, herramientas de oficina, navegadores, antivirus y utilidades necesarias.</p>
+          </article>
+        </div>
+      </section>
+
       <section class="site-section operation-section" id="operacion">
         <div class="site-section-head">
           <p class="eyebrow">Operacion SaaS</p>
-          <h2>Del lead al cliente activo</h2>
-          <p>El panel ZOW permite captar solicitudes, convertirlas en empresas, activar sistemas y controlar vencimientos.</p>
+          <h2>De la solicitud al cliente activo</h2>
+          <p>El panel ZOW permite recibir solicitudes, crear empresas, activar sistemas y controlar vencimientos.</p>
         </div>
         <div class="operation-grid">
-          <article><strong>01</strong><span>Captura leads desde la web comercial.</span></article>
-          <article><strong>02</strong><span>Convierte el lead en empresa cliente.</span></article>
+          <article><strong>01</strong><span>Recibe solicitudes desde la pagina web.</span></article>
+          <article><strong>02</strong><span>Convierte esa solicitud en empresa cliente.</span></article>
           <article><strong>03</strong><span>Asigna sistemas, planes y credenciales.</span></article>
           <article><strong>04</strong><span>Audita uso, accesos y renovaciones.</span></article>
         </div>
@@ -268,7 +327,10 @@
         <div class="site-section-head contact-copy">
           <p class="eyebrow">Contacto</p>
           <h2>Solicita una demo o acceso</h2>
-          <p>Tu solicitud se registra en el Panel ZOW para seguimiento comercial. Tambien puedes comunicarte directo con SYSTEM ZOW.</p>
+          <p>
+            Tu solicitud se registra en el Panel ZOW para seguimiento comercial. Tambien puedes programar
+            una reunion para conocer las necesidades de tu empresa y desarrollar tu sistema.
+          </p>
           <div class="contact-direct">
             <article>
               <span>Responsable</span>
@@ -278,6 +340,7 @@
               <span>Celulares</span>
               <strong><a href="tel:+59175620492">+591 75620492</a></strong>
               <strong><a href="tel:+59172172355">+591 72172355</a></strong>
+              <strong><a href="tel:+59177328706">+591 77328706</a></strong>
             </article>
             <article>
               <span>Correo</span>
@@ -286,14 +349,21 @@
             <article>
               <span>Direccion</span>
               <strong>Puerto Suarez, Santa Cruz, Bolivia</strong>
+              <strong>Santa Cruz de la Sierra, Bolivia</strong>
+            </article>
+            <article>
+              <span>Redes sociales</span>
+              <strong><a href="https://www.tiktok.com/@zow_systems" target="_blank" rel="noopener">TikTok @zow_systems</a></strong>
             </article>
           </div>
           <div class="contact-actions">
             <a class="primary-button" href="https://wa.me/59175620492" target="_blank" rel="noopener">WhatsApp principal</a>
+            <a class="ghost-button" href="https://wa.me/59177328706" target="_blank" rel="noopener">WhatsApp Santa Cruz</a>
+            <a class="ghost-button" href="https://www.tiktok.com/@zow_systems" target="_blank" rel="noopener">TikTok</a>
             <a class="ghost-button" href="mailto:systemszow@gmail.com">Enviar correo</a>
           </div>
         </div>
-        <form class="lead-form" id="leadForm">
+        <form class="request-form" id="requestForm">
           <label>Nombre completo<input name="name" type="text" required /></label>
           <label>Empresa<input name="company" type="text" required /></label>
           <label>Celular<input name="phone" type="tel" required /></label>
@@ -317,15 +387,16 @@
           </label>
           <label class="span-2">Mensaje<textarea name="message" rows="4" placeholder="Cuentanos que necesita tu empresa"></textarea></label>
           <button class="primary-button" type="submit">Enviar solicitud</button>
-          <p class="form-error" id="leadMessage" aria-live="polite"></p>
+          <p class="form-error" id="requestMessage" aria-live="polite"></p>
         </form>
       </section>
     </main>
 
     <footer class="site-footer">
-      <span>© 2026 SYSTEM ZOW SAAS. Derecho de autor: Wilmar Peinado B.</span>
+      <span>&copy; 2026 SYSTEM ZOW SAAS. Derecho de autor: Wilmar Peinado B.</span>
       <a href="/panel">Acceso privado</a>
     </footer>
     <script src="system-zow.js"></script>
   </body>
 </html>
+
