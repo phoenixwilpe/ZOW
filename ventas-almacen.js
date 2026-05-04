@@ -24,6 +24,7 @@ let users = [];
 let units = [];
 let suppliers = [];
 let purchases = [];
+let receivables = [];
 let cash = { pendingSales: [], total: 0 };
 let summary = {};
 let saleCart = [];
@@ -194,7 +195,7 @@ async function render() {
   try {
     await assertVentasAccess();
     const canReadPurchases = canAccessView("purchases");
-    const [settingsResponse, summaryResponse, productsResponse, customersResponse, categoriesResponse, salesResponse, cashResponse, suppliersResponse, purchasesResponse, usersResponse, unitsResponse] = await Promise.all([
+    const [settingsResponse, summaryResponse, productsResponse, customersResponse, categoriesResponse, salesResponse, cashResponse, suppliersResponse, purchasesResponse, receivablesResponse, usersResponse, unitsResponse] = await Promise.all([
       apiRequest("/ventas/settings"),
       apiRequest("/ventas/summary"),
       apiRequest("/ventas/products"),
@@ -204,6 +205,7 @@ async function render() {
       apiRequest("/ventas/cash"),
       canReadPurchases ? apiRequest("/ventas/suppliers") : Promise.resolve({ suppliers: [] }),
       canReadPurchases ? apiRequest("/ventas/purchases") : Promise.resolve({ purchases: [] }),
+      canAccessView("customers") ? apiRequest("/ventas/receivables") : Promise.resolve({ receivables: [] }),
       currentUser?.role === "admin" ? apiRequest("/users") : Promise.resolve({ users: [] }),
       currentUser?.role === "admin" ? apiRequest("/units") : Promise.resolve({ units: [] })
     ]);
@@ -215,6 +217,7 @@ async function render() {
     sales = salesResponse.sales || [];
     suppliers = suppliersResponse.suppliers || [];
     purchases = purchasesResponse.purchases || [];
+    receivables = receivablesResponse.receivables || [];
     users = (usersResponse.users || []).map(normalizeUser);
     units = (unitsResponse.units || []).map(normalizeUnit);
     cash = cashResponse || { pendingSales: [], total: 0 };
@@ -568,9 +571,30 @@ function renderCatalog() {
 
 function renderCustomers() {
   setCount(`${customers.length} cliente${customers.length === 1 ? "" : "s"}`);
-  mainList().innerHTML = customers.map((customer) => `
-    <article class="admin-row"><div><strong>${escapeHtml(customer.name)}</strong><span>CI/NIT ${escapeHtml(customer.ci || "Sin dato")} / Cel. ${escapeHtml(customer.phone || "Sin celular")}</span><span>${escapeHtml(customer.address || "Sin direccion")}</span></div><div class="admin-row-meta"><span>${escapeHtml(customer.email || "Sin email")}</span></div></article>
-  `).join("") || empty("Sin clientes registrados");
+  mainList().innerHTML = `
+    <section class="setup-overview">
+      <article><span>Clientes</span><strong>${customers.length}</strong></article>
+      <article><span>Cuentas por cobrar</span><strong>${receivables.length}</strong></article>
+      <article><span>Saldo pendiente</span><strong>${money(receivables.reduce((sum, sale) => sum + Number(sale.balance_due || 0), 0))}</strong></article>
+    </section>
+    <section class="admin-panel">
+      <div class="admin-panel-head"><div><p class="eyebrow">Cuentas por cobrar</p><h3>Ventas al credito</h3></div></div>
+      <div class="admin-list">${receivables.map(renderReceivableRow).join("") || empty("Sin saldos pendientes")}</div>
+    </section>
+    <section class="admin-panel">
+      <div class="admin-panel-head"><div><p class="eyebrow">Directorio</p><h3>Clientes registrados</h3></div></div>
+      <div class="admin-list">${customers.map((customer) => `
+        <article class="admin-row"><div><strong>${escapeHtml(customer.name)}</strong><span>CI/NIT ${escapeHtml(customer.ci || "Sin dato")} / Cel. ${escapeHtml(customer.phone || "Sin celular")}</span><span>${escapeHtml(customer.address || "Sin direccion")}</span></div><div class="admin-row-meta"><span>${escapeHtml(customer.email || "Sin email")}</span></div></article>
+      `).join("") || empty("Sin clientes registrados")}</div>
+    </section>
+  `;
+  document.querySelectorAll("[data-pay-receivable]").forEach((button) => {
+    button.addEventListener("click", () => payReceivable(button.dataset.payReceivable));
+  });
+}
+
+function renderReceivableRow(sale) {
+  return `<article class="admin-row"><div><strong>${escapeHtml(sale.code)}</strong><span>${escapeHtml(sale.customer_name || "Cliente sin registrar")} / ${formatDateTime(sale.created_at)}</span><span>Pagado ${money(sale.amount_paid)} de ${money(sale.total)}</span></div><div class="admin-row-meta"><span class="warn-text">Debe ${money(sale.balance_due)}</span><button class="primary-button" type="button" data-pay-receivable="${sale.id}">Registrar pago</button></div></article>`;
 }
 
 function renderPurchases() {
@@ -771,7 +795,7 @@ function renderCartItem(item) {
 
 function renderSaleRow(sale) {
   const status = saleStatus(sale);
-  const label = status === "anulada" ? "Anulada" : sale.cash_closed ? "Caja cerrada" : "Pendiente caja";
+  const label = status === "anulada" ? "Anulada" : Number(sale.balance_due || 0) > 0 ? "Credito pendiente" : sale.cash_closed ? "Caja cerrada" : "Pendiente caja";
   return `<article class="admin-row"><div><strong>${escapeHtml(sale.code)}</strong><span>${escapeHtml(sale.customer_name || "Cliente sin registrar")} / ${escapeHtml(sale.seller_name || "Vendedor")}</span><span>${formatDateTime(sale.created_at)}</span></div><div class="admin-row-meta"><span>Total ${money(sale.total)}</span><span class="${status === "anulada" ? "danger-text" : status === "pagada" ? "ok-text" : "warn-text"}">${label}</span></div></article>`;
 }
 
@@ -780,13 +804,15 @@ function renderHistorySaleRow(sale) {
   const status = saleStatus(sale);
   const canVoid = status !== "anulada" && !sale.cash_closed;
   return `<article class="admin-row">
-    <div><strong>${escapeHtml(sale.code)}</strong><span>${escapeHtml(sale.customer_name || "Cliente sin registrar")} / ${formatDateTime(sale.created_at)}</span><span>Metodo: ${escapeHtml(paymentLabel(meta.method || "efectivo"))}</span></div>
-    <div class="admin-row-meta"><span>Total ${money(sale.total)}</span><span class="${status === "anulada" ? "danger-text" : status === "pagada" ? "ok-text" : "warn-text"}">${status}</span><button class="ghost-button" type="button" data-reprint-sale="${sale.id}">Reimprimir</button>${canVoid ? `<button class="ghost-button danger-action" type="button" data-void-sale="${sale.id}">Anular</button>` : `<span class="muted-text">${status === "anulada" ? "Stock devuelto" : "Caja cerrada"}</span>`}</div>
+    <div><strong>${escapeHtml(sale.code)}</strong><span>${escapeHtml(sale.customer_name || "Cliente sin registrar")} / ${formatDateTime(sale.created_at)}</span><span>Metodo: ${escapeHtml(paymentLabel(sale.payment_method || meta.method || "efectivo"))} / Pagado ${money(sale.amount_paid || sale.cash_received || 0)}</span></div>
+    <div class="admin-row-meta"><span>Total ${money(sale.total)}</span>${Number(sale.balance_due || 0) > 0 ? `<span class="warn-text">Debe ${money(sale.balance_due)}</span>` : ""}<span class="${status === "anulada" ? "danger-text" : status === "pagada" ? "ok-text" : "warn-text"}">${status}</span><button class="ghost-button" type="button" data-reprint-sale="${sale.id}">Reimprimir</button>${canVoid ? `<button class="ghost-button danger-action" type="button" data-void-sale="${sale.id}">Anular</button>` : `<span class="muted-text">${status === "anulada" ? "Stock devuelto" : "Caja cerrada"}</span>`}</div>
   </article>`;
 }
 
 function saleStatus(sale) {
   if (sale.status === "anulada") return "anulada";
+  if (sale.payment_status === "pendiente" || Number(sale.balance_due || 0) > 0) return "pendiente";
+  if (sale.payment_status === "pagada") return "pagada";
   const meta = localSaleMeta[sale.id] || {};
   return meta.status || (sale.cash_closed ? "pagada" : "pendiente");
 }
@@ -1044,17 +1070,19 @@ function openPaymentModal() {
 
 function renderPaymentModal() {
   const totals = cartTotals();
+  const isCredit = paymentDraft.method === "credito";
   const change = Math.max(Number(paymentDraft.received || 0) - totals.total, 0);
-  const insufficient = Number(paymentDraft.received || 0) < totals.total;
+  const insufficient = !isCredit && Number(paymentDraft.received || 0) < totals.total;
+  const balanceDue = isCredit ? Math.max(totals.total - Number(paymentDraft.received || 0), 0) : 0;
   const quickAmounts = buildQuickCashAmounts(totals.total);
   paymentModalContent.innerHTML = `
     <div class="touch-payment-layout">
       <div class="payment-total touch-payment-total"><span>Total a pagar</span><strong>${money(totals.total)}</strong><small>${saleCart.length} item${saleCart.length === 1 ? "" : "s"} en carrito</small></div>
       <div class="payment-method-grid touch-payment-methods">${paymentMethods().map((method) => `<button class="${paymentDraft.method === method.id ? "is-active" : ""}" type="button" data-payment-method="${method.id}">${method.label}</button>`).join("")}</div>
-      <div class="quick-cash-grid">${quickAmounts.map((amount) => `<button type="button" data-quick-cash="${amount}">${money(amount)}</button>`).join("")}</div>
+      ${isCredit ? `<div class="cloud-safe-note"><strong>Venta al credito</strong><span>Quedara saldo pendiente de ${money(balanceDue)} en cuentas por cobrar.</span></div>` : `<div class="quick-cash-grid">${quickAmounts.map((amount) => `<button type="button" data-quick-cash="${amount}">${money(amount)}</button>`).join("")}</div>`}
       <div class="form-grid touch-payment-fields">
-        <label>Monto recibido<input id="paymentReceived" type="number" min="0" step="0.01" value="${Number(paymentDraft.received || 0).toFixed(2)}" /></label>
-        <label>Vuelto<input type="text" value="${money(change)}" readonly /></label>
+        <label>${isCredit ? "Anticipo recibido" : "Monto recibido"}<input id="paymentReceived" type="number" min="0" step="0.01" value="${Number(paymentDraft.received || 0).toFixed(2)}" /></label>
+        <label>${isCredit ? "Saldo pendiente" : "Vuelto"}<input type="text" value="${money(isCredit ? balanceDue : change)}" readonly /></label>
       </div>
       ${insufficient ? `<p class="form-error">Pago insuficiente. Falta ${money(totals.total - Number(paymentDraft.received || 0))}.</p>` : ""}
       <div class="modal-actions touch-payment-actions"><button class="ghost-button" type="button" id="printDraftBtn">Precomprobante</button><button class="primary-button" type="submit" id="confirmPaymentBtn" ${insufficient ? "disabled" : ""}>Confirmar pago</button></div>
@@ -1063,6 +1091,7 @@ function renderPaymentModal() {
   paymentModalContent.querySelectorAll("[data-payment-method]").forEach((button) => {
     button.addEventListener("click", () => {
       paymentDraft.method = button.dataset.paymentMethod;
+      if (paymentDraft.method === "credito") paymentDraft.received = 0;
       renderPaymentModal();
     });
   });
@@ -1098,17 +1127,19 @@ async function submitSale(event) {
     return;
   }
   const totals = cartTotals();
-  if (Number(paymentDraft.received || 0) < totals.total) return;
+  if (paymentDraft.method !== "credito" && Number(paymentDraft.received || 0) < totals.total) return;
+  if (paymentDraft.method === "credito" && Number(paymentDraft.received || 0) > totals.total) return;
   const response = await apiRequest("/ventas/sales", {
     method: "POST",
     body: {
       customerId: value("#saleCustomer"),
       discount: totals.discount,
-      cashReceived: Number(paymentDraft.received || totals.total),
+      paymentMethod: paymentDraft.method,
+      cashReceived: paymentDraft.method === "credito" ? Number(paymentDraft.received || 0) : Number(paymentDraft.received || totals.total),
       items: saleCart.map((item) => ({ productId: item.productId, quantity: item.quantity, unitPrice: item.salePrice }))
     }
   });
-  localSaleMeta[response.sale.id] = { method: paymentDraft.method, status: "pagada", received: Number(paymentDraft.received || totals.total), createdAt: new Date().toISOString() };
+  localSaleMeta[response.sale.id] = { method: paymentDraft.method, status: response.sale.payment_status || "pagada", received: Number(paymentDraft.received || totals.total), createdAt: new Date().toISOString() };
   persistJson(LOCAL_SALE_META_KEY, localSaleMeta);
   saleCart = [];
   paymentModal.close();
@@ -1211,7 +1242,7 @@ function openCategoryModal() {
 function printTicket(sale, items) {
   const printable = window.open("", "_blank", "width=420,height=720");
   if (!printable) return;
-  printable.document.write(`<!doctype html><html><head><meta charset="UTF-8"><title>Ticket ${escapeHtml(sale.code)}</title><style>body{font-family:Arial,sans-serif;padding:18px;max-width:320px;color:#111}h1{font-size:18px;text-align:center;margin:0 0 6px}p{line-height:1.4}table{width:100%;border-collapse:collapse}td{padding:5px 0;border-bottom:1px dashed #aaa}.total{font-weight:800;font-size:18px}.center{text-align:center}.muted{color:#555;font-size:12px}button{margin-bottom:12px}</style></head><body><button onclick="window.print()">Imprimir</button><h1>${escapeHtml(storeSettings.storeName || storeSettings.companyName || currentUser.companyName || "Zow Ventas-Almacen")}</h1><p class="center muted">${escapeHtml(storeSettings.taxId ? `NIT ${storeSettings.taxId}` : "")}<br>${escapeHtml(storeSettings.address || "")}<br>${escapeHtml(storeSettings.phone || "")}</p><p>${escapeHtml(sale.code)}<br>${formatDateTime(sale.created_at)}<br>Cajero: ${escapeHtml(currentUser.name || "")}</p><table>${items.map((item) => `<tr><td>${escapeHtml(item.product_name)} x ${item.quantity}</td><td>${money(item.total)}</td></tr>`).join("")}</table><p>Subtotal ${money(sale.subtotal)}<br>Descuento ${money(sale.discount)}</p><p class="total">Total ${money(sale.total)}</p><p>Efectivo ${money(sale.cash_received)}<br>Cambio ${money(sale.change_amount)}</p><p class="center muted">${escapeHtml(storeSettings.ticketNote || "Gracias por su compra")}</p></body></html>`);
+  printable.document.write(`<!doctype html><html><head><meta charset="UTF-8"><title>Ticket ${escapeHtml(sale.code)}</title><style>body{font-family:Arial,sans-serif;padding:18px;max-width:320px;color:#111}h1{font-size:18px;text-align:center;margin:0 0 6px}p{line-height:1.4}table{width:100%;border-collapse:collapse}td{padding:5px 0;border-bottom:1px dashed #aaa}.total{font-weight:800;font-size:18px}.center{text-align:center}.muted{color:#555;font-size:12px}button{margin-bottom:12px}</style></head><body><button onclick="window.print()">Imprimir</button><h1>${escapeHtml(storeSettings.storeName || storeSettings.companyName || currentUser.companyName || "Zow Ventas-Almacen")}</h1><p class="center muted">${escapeHtml(storeSettings.taxId ? `NIT ${storeSettings.taxId}` : "")}<br>${escapeHtml(storeSettings.address || "")}<br>${escapeHtml(storeSettings.phone || "")}</p><p>${escapeHtml(sale.code)}<br>${formatDateTime(sale.created_at)}<br>Cajero: ${escapeHtml(currentUser.name || "")}</p><table>${items.map((item) => `<tr><td>${escapeHtml(item.product_name)} x ${item.quantity}</td><td>${money(item.total)}</td></tr>`).join("")}</table><p>Subtotal ${money(sale.subtotal)}<br>Descuento ${money(sale.discount)}</p><p class="total">Total ${money(sale.total)}</p><p>Metodo ${escapeHtml(paymentLabel(sale.payment_method || paymentDraft.method || "efectivo"))}<br>Pagado ${money(sale.amount_paid || sale.cash_received || 0)}<br>Cambio ${money(sale.change_amount)}${Number(sale.balance_due || 0) > 0 ? `<br>Saldo pendiente ${money(sale.balance_due)}` : ""}</p><p class="center muted">${escapeHtml(storeSettings.ticketNote || "Gracias por su compra")}</p></body></html>`);
   printable.document.close();
   printable.focus();
 }
@@ -1225,6 +1256,9 @@ function printDraftTicket() {
     total: totals.total,
     cash_received: Number(paymentDraft.received || totals.total),
     change_amount: Math.max(Number(paymentDraft.received || 0) - totals.total, 0),
+    payment_method: paymentDraft.method,
+    amount_paid: paymentDraft.method === "credito" ? Number(paymentDraft.received || 0) : Number(paymentDraft.received || totals.total),
+    balance_due: paymentDraft.method === "credito" ? Math.max(totals.total - Number(paymentDraft.received || 0), 0) : 0,
     created_at: new Date().toISOString()
   };
   const items = saleCart.map((item) => ({ product_name: item.name, quantity: item.quantity, total: item.quantity * item.salePrice - Number(item.discount || 0) }));
@@ -1413,6 +1447,28 @@ async function viewStockHistory(productId) {
   }
 }
 
+async function payReceivable(saleId) {
+  const sale = receivables.find((item) => item.id === saleId);
+  if (!sale) return;
+  const amountValue = window.prompt(`Monto a pagar de ${sale.code}. Saldo: ${money(sale.balance_due)}`, Number(sale.balance_due || 0).toFixed(2));
+  if (amountValue === null) return;
+  const amount = Number(amountValue);
+  if (!Number.isFinite(amount) || amount <= 0 || amount > Number(sale.balance_due || 0)) {
+    window.alert("Ingresa un monto valido.");
+    return;
+  }
+  const method = window.prompt("Metodo de pago: efectivo, tarjeta, transferencia, qr o mixto", "efectivo") || "efectivo";
+  try {
+    await apiRequest(`/ventas/sales/${sale.id}/pay`, { method: "POST", body: { amount, paymentMethod: method } });
+    ventasMessage = "Pago registrado. La cuenta por cobrar fue actualizada.";
+    activeView = "customers";
+    await render();
+  } catch (error) {
+    ventasMessage = error.message || "No se pudo registrar el pago.";
+    renderMain();
+  }
+}
+
 async function toggleProductStatus(productId) {
   const product = products.find((item) => item.id === productId);
   if (!product) return;
@@ -1488,7 +1544,8 @@ function paymentMethods() {
     { id: "tarjeta", label: "Tarjeta" },
     { id: "transferencia", label: "Transferencia" },
     { id: "qr", label: "QR" },
-    { id: "mixto", label: "Pago mixto" }
+    { id: "mixto", label: "Pago mixto" },
+    { id: "credito", label: "Credito" }
   ];
 }
 function paymentLabel(id) { return paymentMethods().find((method) => method.id === id)?.label || "Efectivo"; }

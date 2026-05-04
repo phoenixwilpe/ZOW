@@ -1036,7 +1036,8 @@ app.get("/api/ventas/summary", requireAuth, async (req, res) => {
     ownOnly ? [req.user.company_id, req.user.id] : [req.user.company_id]
   );
   const pendingCash = await pg.get(
-    `SELECT COUNT(*) AS pending_sales, COALESCE(SUM(total), 0) AS pending_total
+    `SELECT COUNT(*) AS pending_sales,
+            COALESCE(SUM(CASE WHEN payment_method = 'credito' THEN amount_paid ELSE total END), 0) AS pending_total
      FROM sales_orders
      WHERE company_id = ? AND status = 'confirmada' AND cash_closed = false ${ownOnly ? "AND created_by = ?" : ""}`,
     ownOnly ? [req.user.company_id, req.user.id] : [req.user.company_id]
@@ -1213,6 +1214,25 @@ app.post("/api/ventas/customers", requireAuth, async (req, res) => {
   res.status(201).json({ customer });
 });
 
+app.get("/api/ventas/receivables", requireAuth, async (req, res) => {
+  if (!(await requireSystemAccess("ventas_almacen", req, res))) return;
+  if (!requireVentasRole(req, res, "admin", "ventas_admin", "cajero", "vendedor", "supervisor")) return;
+  await ensureVentasSchema();
+  const ownOnly = ventasOwnOnly(req.user.role);
+  const receivables = await pg.all(
+    `SELECT sales_orders.*, users.name AS seller_name
+     FROM sales_orders
+     LEFT JOIN users ON users.id = sales_orders.created_by
+     WHERE sales_orders.company_id = ?
+       AND sales_orders.status = 'confirmada'
+       AND sales_orders.balance_due > 0
+       ${ownOnly ? "AND sales_orders.created_by = ?" : ""}
+     ORDER BY sales_orders.created_at DESC`,
+    ownOnly ? [req.user.company_id, req.user.id] : [req.user.company_id]
+  );
+  res.json({ receivables });
+});
+
 app.get("/api/ventas/suppliers", requireAuth, async (req, res) => {
   if (!(await requireSystemAccess("ventas_almacen", req, res))) return;
   if (!requireVentasRole(req, res, "admin", "ventas_admin", "almacen", "supervisor")) return;
@@ -1375,6 +1395,40 @@ app.post("/api/ventas/sales/:id/void", requireAuth, async (req, res) => {
   }
 });
 
+app.post("/api/ventas/sales/:id/pay", requireAuth, async (req, res) => {
+  if (!(await requireSystemAccess("ventas_almacen", req, res))) return;
+  if (!requireVentasRole(req, res, "admin", "ventas_admin", "cajero", "vendedor")) return;
+  await ensureVentasSchema();
+  const sale = await pg.get("SELECT * FROM sales_orders WHERE id = ? AND company_id = ?", [req.params.id, req.user.company_id]);
+  if (!sale) return res.status(404).json({ error: "Venta no encontrada" });
+  if (ventasOwnOnly(req.user.role) && sale.created_by !== req.user.id) return res.status(403).json({ error: "Permiso insuficiente" });
+  if (sale.status === "anulada") return res.status(400).json({ error: "No se puede cobrar una venta anulada" });
+  const balance = Number(sale.balance_due || 0);
+  const amount = Number(req.body.amount || 0);
+  const method = String(req.body.paymentMethod || "efectivo").trim();
+  if (balance <= 0) return res.status(400).json({ error: "La venta no tiene saldo pendiente" });
+  if (amount <= 0 || amount > balance) return res.status(400).json({ error: "Monto de pago invalido" });
+  const nextPaid = Number(sale.amount_paid || 0) + amount;
+  const nextBalance = Math.max(balance - amount, 0);
+  await pg.tx(async (client) => {
+    await client.run(
+      `UPDATE sales_orders
+       SET amount_paid = ?, balance_due = ?, payment_method = ?, payment_status = ?
+       WHERE id = ? AND company_id = ?`,
+      [nextPaid, nextBalance, method, nextBalance > 0 ? "pendiente" : "pagada", sale.id, req.user.company_id]
+    );
+    const session = await client.get("SELECT * FROM cash_sessions WHERE company_id = ? AND opened_by = ? AND status = 'abierta'", [req.user.company_id, req.user.id]);
+    if (session) {
+      await client.run(
+        `INSERT INTO cash_movements (id, company_id, session_id, type, amount, reason, created_by, created_at)
+         VALUES (?, ?, ?, 'ingreso', ?, ?, ?, now())`,
+        [randomUUID(), req.user.company_id, session.id, amount, `Cobro de credito ${sale.code}`, req.user.id]
+      );
+    }
+  });
+  res.json({ sale: await pg.get("SELECT * FROM sales_orders WHERE id = ? AND company_id = ?", [sale.id, req.user.company_id]) });
+});
+
 app.post("/api/ventas/sales", requireAuth, async (req, res) => {
   if (!(await requireSystemAccess("ventas_almacen", req, res))) return;
   if (!requireVentasRole(req, res, "admin", "ventas_admin", "cajero", "vendedor")) return;
@@ -1400,14 +1454,18 @@ app.post("/api/ventas/sales", requireAuth, async (req, res) => {
       const subtotal = preparedItems.reduce((total, item) => total + item.total, 0);
       const discount = Number(req.body.discount || 0);
       const total = Math.max(subtotal - discount, 0);
-      const cashReceived = Number(req.body.cashReceived || total);
+      const paymentMethod = String(req.body.paymentMethod || "efectivo").trim();
+      const cashReceived = paymentMethod === "credito" ? Number(req.body.cashReceived || 0) : Number(req.body.cashReceived || total);
+      const amountPaid = Math.min(Math.max(cashReceived, 0), total);
+      const balanceDue = Math.max(total - amountPaid, 0);
       const changeAmount = Math.max(cashReceived - total, 0);
       await client.run(
         `INSERT INTO sales_orders (
           id, company_id, code, customer_id, customer_name, subtotal, discount, total,
-          cash_received, change_amount, status, cash_closed, created_by, created_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'confirmada', false, ?, now())`,
-        [saleId, req.user.company_id, saleCode, customer?.id || null, customerName, subtotal, discount, total, cashReceived, changeAmount, req.user.id]
+          cash_received, change_amount, payment_method, amount_paid, balance_due, payment_status,
+          status, cash_closed, created_by, created_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'confirmada', false, ?, now())`,
+        [saleId, req.user.company_id, saleCode, customer?.id || null, customerName, subtotal, discount, total, cashReceived, changeAmount, paymentMethod, amountPaid, balanceDue, balanceDue > 0 ? "pendiente" : "pagada", req.user.id]
       );
       for (const item of preparedItems) {
         await client.run(
@@ -1460,7 +1518,7 @@ app.get("/api/ventas/cash", requireAuth, async (req, res) => {
     `SELECT * FROM sales_orders WHERE company_id = ? AND status = 'confirmada' AND cash_closed = false ${ownOnly ? "AND created_by = ?" : ""} ORDER BY created_at DESC`,
     ownOnly ? [req.user.company_id, req.user.id] : [req.user.company_id]
   );
-  const total = pendingSales.reduce((sum, sale) => sum + Number(sale.total || 0), 0);
+  const total = pendingSales.reduce((sum, sale) => sum + payableToCash(sale), 0);
   res.json({ pendingSales, total, activeSession, movements });
 });
 
@@ -1516,7 +1574,7 @@ app.post("/api/ventas/cash/close", requireAuth, async (req, res) => {
     ownOnly ? [req.user.company_id, req.user.id] : [req.user.company_id]
   );
   const closureId = randomUUID();
-  const total = pendingSales.reduce((sum, sale) => sum + Number(sale.total || 0), 0);
+  const total = pendingSales.reduce((sum, sale) => sum + payableToCash(sale), 0);
   const movements = await pg.all("SELECT * FROM cash_movements WHERE company_id = ? AND session_id = ?", [req.user.company_id, session.id]);
   const movementTotal = movements.reduce((sum, item) => sum + (item.type === "ingreso" ? Number(item.amount || 0) : -Number(item.amount || 0)), 0);
   const openingAmount = Number(session.opening_amount || 0);
@@ -2039,6 +2097,10 @@ function ventasOwnOnly(role) {
   return !["admin", "ventas_admin", "supervisor"].includes(role);
 }
 
+function payableToCash(sale) {
+  return sale.payment_method === "credito" ? Number(sale.amount_paid || 0) : Number(sale.total || 0);
+}
+
 let ventasSchemaReady;
 async function ensureVentasSchema() {
   if (!ventasSchemaReady) {
@@ -2135,6 +2197,10 @@ async function ensureVentasSchema() {
           total numeric not null default 0,
           cash_received numeric not null default 0,
           change_amount numeric not null default 0,
+          payment_method text not null default 'efectivo',
+          amount_paid numeric not null default 0,
+          balance_due numeric not null default 0,
+          payment_status text not null default 'pagada',
           status text not null default 'confirmada',
           cash_closed boolean not null default false,
           created_by text not null references users(id),
@@ -2219,6 +2285,11 @@ async function ensureVentasSchema() {
       await pg.run("ALTER TABLE cash_closures ADD COLUMN IF NOT EXISTS expected_amount numeric not null default 0");
       await pg.run("ALTER TABLE cash_closures ADD COLUMN IF NOT EXISTS counted_amount numeric not null default 0");
       await pg.run("ALTER TABLE cash_closures ADD COLUMN IF NOT EXISTS difference_amount numeric not null default 0");
+      await pg.run("ALTER TABLE sales_orders ADD COLUMN IF NOT EXISTS payment_method text not null default 'efectivo'");
+      await pg.run("ALTER TABLE sales_orders ADD COLUMN IF NOT EXISTS amount_paid numeric not null default 0");
+      await pg.run("ALTER TABLE sales_orders ADD COLUMN IF NOT EXISTS balance_due numeric not null default 0");
+      await pg.run("ALTER TABLE sales_orders ADD COLUMN IF NOT EXISTS payment_status text not null default 'pagada'");
+      await pg.run("UPDATE sales_orders SET amount_paid = total WHERE amount_paid = 0 AND payment_method <> 'credito' AND status <> 'anulada'");
     })();
   }
   await ventasSchemaReady;

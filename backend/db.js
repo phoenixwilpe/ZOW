@@ -321,6 +321,10 @@ function initDb() {
       total REAL NOT NULL DEFAULT 0,
       cash_received REAL NOT NULL DEFAULT 0,
       change_amount REAL NOT NULL DEFAULT 0,
+      payment_method TEXT NOT NULL DEFAULT 'efectivo',
+      amount_paid REAL NOT NULL DEFAULT 0,
+      balance_due REAL NOT NULL DEFAULT 0,
+      payment_status TEXT NOT NULL DEFAULT 'pagada',
       status TEXT NOT NULL DEFAULT 'confirmada',
       cash_closed INTEGER NOT NULL DEFAULT 0,
       created_by TEXT NOT NULL,
@@ -456,6 +460,11 @@ function migrateSchema() {
   ensureColumn("cash_closures", "expected_amount", "REAL NOT NULL DEFAULT 0");
   ensureColumn("cash_closures", "counted_amount", "REAL NOT NULL DEFAULT 0");
   ensureColumn("cash_closures", "difference_amount", "REAL NOT NULL DEFAULT 0");
+  ensureColumn("sales_orders", "payment_method", "TEXT NOT NULL DEFAULT 'efectivo'");
+  ensureColumn("sales_orders", "amount_paid", "REAL NOT NULL DEFAULT 0");
+  ensureColumn("sales_orders", "balance_due", "REAL NOT NULL DEFAULT 0");
+  ensureColumn("sales_orders", "payment_status", "TEXT NOT NULL DEFAULT 'pagada'");
+  db.prepare("UPDATE sales_orders SET amount_paid = total WHERE amount_paid = 0 AND payment_method <> 'credito' AND status <> 'anulada'").run();
   db.prepare("CREATE INDEX IF NOT EXISTS idx_leads_priority ON leads(priority, created_at)").run();
   db.prepare("CREATE INDEX IF NOT EXISTS idx_lead_history_lead ON lead_history(lead_id, created_at)").run();
   db.prepare("CREATE INDEX IF NOT EXISTS idx_cash_sessions_company ON cash_sessions(company_id, status, opened_at)").run();
