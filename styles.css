@@ -1,4 +1,4 @@
-:root {
+﻿:root {
   --bg: #f5f7f8;
   --panel: #ffffff;
   --ink: #1d2528;
@@ -289,7 +289,7 @@ body.system-zow-site .holo-grid article,
 body.system-zow-site .product-card,
 body.system-zow-site .plan-grid article,
 body.system-zow-site .operation-grid article,
-body.system-zow-site .lead-form {
+body.system-zow-site .request-form {
   border: 1px solid var(--zow-line);
   border-radius: 24px;
   background: var(--zow-panel);
@@ -547,17 +547,17 @@ body.system-zow-site .contact-section {
   align-items: start;
 }
 
-body.system-zow-site .lead-form {
+body.system-zow-site .request-form {
   padding: clamp(20px, 4vw, 34px);
 }
 
-body.system-zow-site .lead-form label {
+body.system-zow-site .request-form label {
   color: #243548;
 }
 
-body.system-zow-site .lead-form input,
-body.system-zow-site .lead-form select,
-body.system-zow-site .lead-form textarea {
+body.system-zow-site .request-form input,
+body.system-zow-site .request-form select,
+body.system-zow-site .request-form textarea {
   border-color: rgb(17 31 49 / 12%);
   background: #ffffff;
   color: var(--zow-ink);
@@ -633,7 +633,7 @@ body.system-zow-site .site-footer {
   body.system-zow-site .hero-metrics,
   body.system-zow-site .holo-grid,
   body.system-zow-site .product-card,
-  body.system-zow-site .lead-form {
+  body.system-zow-site .request-form {
     grid-template-columns: 1fr;
   }
 
@@ -3407,7 +3407,7 @@ body.app-correspondencia .metrics article:hover {
 .product-card,
 .plan-grid article,
 .operation-grid article,
-.lead-form {
+.request-form {
   border: 1px solid rgb(23 36 33 / 10%);
   border-radius: 16px;
   background: rgb(255 255 255 / 90%);
@@ -3501,23 +3501,23 @@ body.app-correspondencia .metrics article:hover {
   align-items: start;
 }
 
-.lead-form {
+.request-form {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 14px;
   padding: clamp(20px, 4vw, 32px);
 }
 
-.lead-form label {
+.request-form label {
   display: grid;
   gap: 7px;
   color: #34565b;
   font-weight: 800;
 }
 
-.lead-form input,
-.lead-form select,
-.lead-form textarea {
+.request-form input,
+.request-form select,
+.request-form textarea {
   width: 100%;
   box-sizing: border-box;
   border: 1px solid rgb(19 40 45 / 14%);
@@ -3527,16 +3527,16 @@ body.app-correspondencia .metrics article:hover {
   font: inherit;
 }
 
-.lead-form textarea {
+.request-form textarea {
   resize: vertical;
 }
 
-.lead-form button,
-.lead-form .form-error {
+.request-form button,
+.request-form .form-error {
   grid-column: 1 / -1;
 }
 
-.lead-form .form-error.is-success {
+.request-form .form-error.is-success {
   color: #17695f;
 }
 
@@ -3956,7 +3956,7 @@ body.app-correspondencia .metrics article:hover {
 .system-zow-site .product-card,
 .system-zow-site .plan-grid article,
 .system-zow-site .operation-grid article,
-.system-zow-site .lead-form {
+.system-zow-site .request-form {
   border: 1px solid var(--zow-line);
   background: var(--zow-panel);
   box-shadow: 0 22px 56px rgb(0 0 0 / 24%);
@@ -4078,20 +4078,20 @@ body.app-correspondencia .metrics article:hover {
   gap: 32px;
 }
 
-.system-zow-site .lead-form label {
+.system-zow-site .request-form label {
   color: #d9e8f4;
 }
 
-.system-zow-site .lead-form input,
-.system-zow-site .lead-form select,
-.system-zow-site .lead-form textarea {
+.system-zow-site .request-form input,
+.system-zow-site .request-form select,
+.system-zow-site .request-form textarea {
   border-color: rgb(98 239 255 / 18%);
   background: rgb(255 255 255 / 7%);
   color: #ffffff;
 }
 
-.system-zow-site .lead-form input::placeholder,
-.system-zow-site .lead-form textarea::placeholder {
+.system-zow-site .request-form input::placeholder,
+.system-zow-site .request-form textarea::placeholder {
   color: #8094a8;
 }
 
@@ -4158,7 +4158,7 @@ body.app-correspondencia .metrics article:hover {
   .holo-grid,
   .system-zow-site .product-card,
   .system-zow-site .contact-section,
-  .system-zow-site .lead-form {
+  .system-zow-site .request-form {
     grid-template-columns: 1fr;
   }
 
@@ -5903,7 +5903,7 @@ dialog::backdrop {
 
   .site-hero,
   .contact-section,
-  .lead-form {
+  .request-form {
     grid-template-columns: 1fr;
   }
 
@@ -6481,7 +6481,7 @@ body.system-zow-site .trust-grid article,
 body.system-zow-site .faq-shell,
 body.system-zow-site .implementation-flow article,
 body.system-zow-site .launch-cta,
-body.system-zow-site .lead-form {
+body.system-zow-site .request-form {
   background:
     linear-gradient(145deg, rgb(255 255 255 / 88%), rgb(255 255 255 / 68%)),
     linear-gradient(135deg, rgb(37 99 235 / 5%), transparent 48%, rgb(0 184 217 / 5%));
@@ -6967,8 +6967,8 @@ body.system-zow-site .plan-cta:hover {
   transform: translateY(-2px);
 }
 
-body.system-zow-site .lead-form.is-highlighted {
-  animation: leadPulse 1400ms ease;
+body.system-zow-site .request-form.is-highlighted {
+  animation: requestPulse 1400ms ease;
 }
 
 /* SYSTEM ZOW advanced public landing */
@@ -7421,7 +7421,7 @@ body.system-zow-site .capability-grid p {
   }
 }
 
-@keyframes leadPulse {
+@keyframes requestPulse {
   0%,
   100% {
     box-shadow: 0 22px 56px rgb(17 31 49 / 8%);
@@ -7712,3 +7712,4 @@ body.system-zow-site .capability-grid p {
     flex-direction: column;
   }
 }
+

@@ -1,12 +1,12 @@
-const siteApiBase = window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1"
+﻿const siteApiBase = window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1"
   ? "http://localhost:4174/api"
   : "/api";
 
-const leadForm = document.querySelector("#leadForm");
-const leadMessage = document.querySelector("#leadMessage");
-const planSelect = leadForm?.querySelector('select[name="plan"]');
-const leadMessageField = leadForm?.querySelector('textarea[name="message"]');
-const leadNameField = leadForm?.querySelector('input[name="name"]');
+const requestForm = document.querySelector("#requestForm");
+const requestMessage = document.querySelector("#requestMessage");
+const planSelect = requestForm?.querySelector('select[name="plan"]');
+const requestMessageField = requestForm?.querySelector('textarea[name="message"]');
+const requestNameField = requestForm?.querySelector('input[name="name"]');
 const siteHeader = document.querySelector(".site-header");
 const siteMenuToggle = document.querySelector(".site-menu-toggle");
 const siteNav = document.querySelector("#siteNav");
@@ -65,7 +65,7 @@ const revealObserver = "IntersectionObserver" in window
     )
   : null;
 
-document.querySelectorAll(".site-section, .product-card, .plan-grid article, .operation-grid article, .trust-grid article, .faq-shell, .implementation-flow article, .launch-cta, .lead-form").forEach((item) => {
+document.querySelectorAll(".site-section, .product-card, .plan-grid article, .operation-grid article, .trust-grid article, .faq-shell, .implementation-flow article, .launch-cta, .request-form").forEach((item) => {
   item.classList.add("reveal-item");
   revealObserver?.observe(item);
 });
@@ -76,13 +76,13 @@ document.querySelectorAll("[data-plan-request]").forEach((button) => {
     const contactSection = document.querySelector("#contacto");
     event.preventDefault();
     if (planSelect && plan) planSelect.value = plan;
-    if (leadMessageField && !leadMessageField.value.trim()) {
-      leadMessageField.value = `Me interesa el plan ${planLabels[plan] || plan} para mi empresa.`;
+    if (requestMessageField && !requestMessageField.value.trim()) {
+      requestMessageField.value = `Me interesa el plan ${planLabels[plan] || plan} para mi empresa.`;
     }
     contactSection?.scrollIntoView({ behavior: "smooth", block: "start" });
-    leadForm?.classList.add("is-highlighted");
-    window.setTimeout(() => leadForm?.classList.remove("is-highlighted"), 1400);
-    window.setTimeout(() => leadNameField?.focus({ preventScroll: true }), 520);
+    requestForm?.classList.add("is-highlighted");
+    window.setTimeout(() => requestForm?.classList.remove("is-highlighted"), 1400);
+    window.setTimeout(() => requestNameField?.focus({ preventScroll: true }), 520);
   });
 });
 
@@ -234,10 +234,10 @@ if (heroCanvas && heroContext) {
   });
 }
 
-leadForm?.addEventListener("submit", async (event) => {
+requestForm?.addEventListener("submit", async (event) => {
   event.preventDefault();
-  leadMessage.textContent = "Enviando solicitud...";
-  const formData = new FormData(leadForm);
+  requestMessage.textContent = "Enviando solicitud...";
+  const formData = new FormData(requestForm);
   const payload = Object.fromEntries(formData.entries());
 
   try {
@@ -248,11 +248,12 @@ leadForm?.addEventListener("submit", async (event) => {
     });
     const data = await response.json().catch(() => ({}));
     if (!response.ok) throw new Error(data.error || "No se pudo registrar la solicitud");
-    leadForm.reset();
-    leadMessage.textContent = "Solicitud registrada. Te contactaremos pronto.";
-    leadMessage.classList.add("is-success");
+    requestForm.reset();
+    requestMessage.textContent = "Solicitud registrada. Te contactaremos pronto.";
+    requestMessage.classList.add("is-success");
   } catch (error) {
-    leadMessage.textContent = error.message;
-    leadMessage.classList.remove("is-success");
+    requestMessage.textContent = error.message;
+    requestMessage.classList.remove("is-success");
   }
 });
+
