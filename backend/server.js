@@ -1401,6 +1401,96 @@ app.post("/api/ventas/customers", requireAuth, requireSystemAccess("ventas_almac
   res.status(201).json({ customer });
 });
 
+app.get("/api/ventas/suppliers", requireAuth, requireSystemAccess("ventas_almacen"), requireVentasRole("admin", "ventas_admin", "almacen", "supervisor"), (req, res) => {
+  const suppliers = db.prepare("SELECT * FROM purchase_suppliers WHERE company_id = ? ORDER BY name").all(req.user.company_id);
+  res.json({ suppliers });
+});
+
+app.post("/api/ventas/suppliers", requireAuth, requireSystemAccess("ventas_almacen"), requireVentasRole("admin", "ventas_admin", "almacen"), (req, res) => {
+  const now = new Date().toISOString();
+  const supplier = {
+    id: randomUUID(),
+    name: String(req.body.name || "").trim(),
+    phone: String(req.body.phone || "").trim(),
+    taxId: String(req.body.taxId || "").trim(),
+    address: String(req.body.address || "").trim()
+  };
+  if (!supplier.name) return res.status(400).json({ error: "Nombre de proveedor obligatorio" });
+  db.prepare(
+    `INSERT INTO purchase_suppliers (id, company_id, name, phone, tax_id, address, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+  ).run(supplier.id, req.user.company_id, supplier.name, supplier.phone, supplier.taxId, supplier.address, now, now);
+  res.status(201).json({ supplier: db.prepare("SELECT * FROM purchase_suppliers WHERE id = ?").get(supplier.id) });
+});
+
+app.get("/api/ventas/purchases", requireAuth, requireSystemAccess("ventas_almacen"), requireVentasRole("admin", "ventas_admin", "almacen", "supervisor"), (req, res) => {
+  const purchases = db
+    .prepare(
+      `SELECT purchase_orders.*, users.name AS created_by_name
+       FROM purchase_orders
+       LEFT JOIN users ON users.id = purchase_orders.created_by
+       WHERE purchase_orders.company_id = ?
+       ORDER BY purchase_orders.created_at DESC`
+    )
+    .all(req.user.company_id);
+  res.json({ purchases });
+});
+
+app.post("/api/ventas/purchases", requireAuth, requireSystemAccess("ventas_almacen"), requireVentasRole("admin", "ventas_admin", "almacen"), (req, res) => {
+  const items = Array.isArray(req.body.items) ? req.body.items : [];
+  if (!items.length) return res.status(400).json({ error: "Agrega al menos un producto a la compra" });
+  const now = new Date().toISOString();
+  const purchaseId = randomUUID();
+  const purchaseCode = buildNextPurchaseCode(req.user.company_id, now);
+  const supplierId = String(req.body.supplierId || "").trim();
+  const supplier = supplierId ? db.prepare("SELECT * FROM purchase_suppliers WHERE id = ? AND company_id = ?").get(supplierId, req.user.company_id) : null;
+  const supplierName = supplier?.name || String(req.body.supplierName || "Proveedor sin registrar").trim();
+
+  let preparedItems;
+  try {
+    preparedItems = items.map((item) => {
+      const product = db.prepare("SELECT * FROM inventory_products WHERE id = ? AND company_id = ?").get(String(item.productId || ""), req.user.company_id);
+      const quantity = Number(item.quantity || 0);
+      const unitCost = Number(item.unitCost || product?.cost_price || 0);
+      if (!product || quantity <= 0) throw new Error("Producto o cantidad invalida");
+      return { product, quantity, unitCost, total: quantity * unitCost };
+    });
+  } catch (error) {
+    return res.status(400).json({ error: error.message || "No se pudo preparar la compra" });
+  }
+
+  const total = preparedItems.reduce((sum, item) => sum + item.total, 0);
+  db.exec("BEGIN");
+  try {
+    db.prepare(
+      `INSERT INTO purchase_orders (id, company_id, code, supplier_id, supplier_name, invoice_number, note, total, status, created_by, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'confirmada', ?, ?)`
+    ).run(purchaseId, req.user.company_id, purchaseCode, supplier?.id || null, supplierName, String(req.body.invoiceNumber || "").trim(), String(req.body.note || "").trim(), total, req.user.id, now);
+    const insertItem = db.prepare(
+      `INSERT INTO purchase_order_items (id, company_id, purchase_id, product_id, product_name, quantity, unit_cost, total)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+    );
+    const insertMovement = db.prepare(
+      `INSERT INTO inventory_movements (id, company_id, product_id, type, quantity, reference, note, created_by, created_at)
+       VALUES (?, ?, ?, 'entrada', ?, ?, ?, ?, ?)`
+    );
+    const updateProduct = db.prepare("UPDATE inventory_products SET stock = stock + ?, cost_price = ?, updated_at = ? WHERE id = ? AND company_id = ?");
+    preparedItems.forEach((item) => {
+      insertItem.run(randomUUID(), req.user.company_id, purchaseId, item.product.id, item.product.name, item.quantity, item.unitCost, item.total);
+      insertMovement.run(randomUUID(), req.user.company_id, item.product.id, item.quantity, purchaseCode, `Compra confirmada: ${supplierName}`, req.user.id, now);
+      updateProduct.run(item.quantity, item.unitCost, now, item.product.id, req.user.company_id);
+    });
+    db.exec("COMMIT");
+  } catch (error) {
+    db.exec("ROLLBACK");
+    return res.status(400).json({ error: error.message || "No se pudo registrar la compra" });
+  }
+  res.status(201).json({
+    purchase: db.prepare("SELECT * FROM purchase_orders WHERE id = ? AND company_id = ?").get(purchaseId, req.user.company_id),
+    items: db.prepare("SELECT * FROM purchase_order_items WHERE purchase_id = ? AND company_id = ?").all(purchaseId, req.user.company_id)
+  });
+});
+
 app.get("/api/ventas/sales", requireAuth, requireSystemAccess("ventas_almacen"), (req, res) => {
   const ownOnly = ventasOwnOnly(req.user.role);
   const sales = db
@@ -1927,6 +2017,17 @@ function buildNextCashCode(companyId, date = new Date().toISOString()) {
   const year = new Date(date).getFullYear();
   const prefix = `C-${year}`;
   const rows = db.prepare("SELECT code FROM cash_closures WHERE company_id = ? AND code LIKE ?").all(companyId, `${prefix}-%`);
+  const next = rows.reduce((max, row) => {
+    const match = String(row.code || "").match(/(\d+)$/);
+    return match ? Math.max(max, Number(match[1])) : max;
+  }, 0) + 1;
+  return `${prefix}-${String(next).padStart(5, "0")}`;
+}
+
+function buildNextPurchaseCode(companyId, date = new Date().toISOString()) {
+  const year = new Date(date).getFullYear();
+  const prefix = `P-${year}`;
+  const rows = db.prepare("SELECT code FROM purchase_orders WHERE company_id = ? AND code LIKE ?").all(companyId, `${prefix}-%`);
   const next = rows.reduce((max, row) => {
     const match = String(row.code || "").match(/(\d+)$/);
     return match ? Math.max(max, Number(match[1])) : max;

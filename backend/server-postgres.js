@@ -1213,6 +1213,106 @@ app.post("/api/ventas/customers", requireAuth, async (req, res) => {
   res.status(201).json({ customer });
 });
 
+app.get("/api/ventas/suppliers", requireAuth, async (req, res) => {
+  if (!(await requireSystemAccess("ventas_almacen", req, res))) return;
+  if (!requireVentasRole(req, res, "admin", "ventas_admin", "almacen", "supervisor")) return;
+  await ensureVentasSchema();
+  const suppliers = await pg.all("SELECT * FROM purchase_suppliers WHERE company_id = ? ORDER BY name", [req.user.company_id]);
+  res.json({ suppliers });
+});
+
+app.post("/api/ventas/suppliers", requireAuth, async (req, res) => {
+  if (!(await requireSystemAccess("ventas_almacen", req, res))) return;
+  if (!requireVentasRole(req, res, "admin", "ventas_admin", "almacen")) return;
+  await ensureVentasSchema();
+  const supplier = {
+    id: randomUUID(),
+    name: String(req.body.name || "").trim(),
+    phone: String(req.body.phone || "").trim(),
+    taxId: String(req.body.taxId || "").trim(),
+    address: String(req.body.address || "").trim()
+  };
+  if (!supplier.name) return res.status(400).json({ error: "Nombre de proveedor obligatorio" });
+  await pg.run(
+    `INSERT INTO purchase_suppliers (id, company_id, name, phone, tax_id, address, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, now(), now())`,
+    [supplier.id, req.user.company_id, supplier.name, supplier.phone, supplier.taxId, supplier.address]
+  );
+  res.status(201).json({ supplier: await pg.get("SELECT * FROM purchase_suppliers WHERE id = ?", [supplier.id]) });
+});
+
+app.get("/api/ventas/purchases", requireAuth, async (req, res) => {
+  if (!(await requireSystemAccess("ventas_almacen", req, res))) return;
+  if (!requireVentasRole(req, res, "admin", "ventas_admin", "almacen", "supervisor")) return;
+  await ensureVentasSchema();
+  const purchases = await pg.all(
+    `SELECT purchase_orders.*, users.name AS created_by_name
+     FROM purchase_orders
+     LEFT JOIN users ON users.id = purchase_orders.created_by
+     WHERE purchase_orders.company_id = ?
+     ORDER BY purchase_orders.created_at DESC`,
+    [req.user.company_id]
+  );
+  res.json({ purchases });
+});
+
+app.post("/api/ventas/purchases", requireAuth, async (req, res) => {
+  if (!(await requireSystemAccess("ventas_almacen", req, res))) return;
+  if (!requireVentasRole(req, res, "admin", "ventas_admin", "almacen")) return;
+  await ensureVentasSchema();
+  const items = Array.isArray(req.body.items) ? req.body.items : [];
+  if (!items.length) return res.status(400).json({ error: "Agrega al menos un producto a la compra" });
+  const purchaseId = randomUUID();
+  const supplierId = String(req.body.supplierId || "").trim();
+  try {
+    const result = await pg.tx(async (client) => {
+      const purchaseCode = await buildNextPurchaseCode(req.user.company_id, new Date().toISOString(), client);
+      const supplier = supplierId ? await client.get("SELECT * FROM purchase_suppliers WHERE id = ? AND company_id = ?", [supplierId, req.user.company_id]) : null;
+      const supplierName = supplier?.name || String(req.body.supplierName || "Proveedor sin registrar").trim();
+      const preparedItems = [];
+      for (const item of items) {
+        const product = await client.get("SELECT * FROM inventory_products WHERE id = ? AND company_id = ?", [String(item.productId || ""), req.user.company_id]);
+        const quantity = Number(item.quantity || 0);
+        const unitCost = Number(item.unitCost || product?.cost_price || 0);
+        if (!product || quantity <= 0) throw new Error("Producto o cantidad invalida");
+        preparedItems.push({ product, quantity, unitCost, total: quantity * unitCost });
+      }
+      const total = preparedItems.reduce((sum, item) => sum + item.total, 0);
+      await client.run(
+        `INSERT INTO purchase_orders (id, company_id, code, supplier_id, supplier_name, invoice_number, note, total, status, created_by, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'confirmada', ?, now())`,
+        [purchaseId, req.user.company_id, purchaseCode, supplier?.id || null, supplierName, String(req.body.invoiceNumber || "").trim(), String(req.body.note || "").trim(), total, req.user.id]
+      );
+      for (const item of preparedItems) {
+        await client.run(
+          `INSERT INTO purchase_order_items (id, company_id, purchase_id, product_id, product_name, quantity, unit_cost, total)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+          [randomUUID(), req.user.company_id, purchaseId, item.product.id, item.product.name, item.quantity, item.unitCost, item.total]
+        );
+        await client.run(
+          `INSERT INTO inventory_movements (id, company_id, product_id, type, quantity, reference, note, created_by, created_at)
+           VALUES (?, ?, ?, 'entrada', ?, ?, ?, ?, now())`,
+          [randomUUID(), req.user.company_id, item.product.id, item.quantity, purchaseCode, `Compra confirmada: ${supplierName}`, req.user.id]
+        );
+        await client.run("UPDATE inventory_products SET stock = stock + ?, cost_price = ?, updated_at = now() WHERE id = ? AND company_id = ?", [
+          item.quantity,
+          item.unitCost,
+          item.product.id,
+          req.user.company_id
+        ]);
+      }
+      return { purchaseCode };
+    });
+    res.status(201).json({
+      purchase: await pg.get("SELECT * FROM purchase_orders WHERE id = ? AND company_id = ?", [purchaseId, req.user.company_id]),
+      items: await pg.all("SELECT * FROM purchase_order_items WHERE purchase_id = ? AND company_id = ?", [purchaseId, req.user.company_id]),
+      code: result.purchaseCode
+    });
+  } catch (error) {
+    res.status(400).json({ error: error.message || "No se pudo registrar la compra" });
+  }
+});
+
 app.get("/api/ventas/sales", requireAuth, async (req, res) => {
   if (!(await requireSystemAccess("ventas_almacen", req, res))) return;
   await ensureVentasSchema();
@@ -1984,6 +2084,46 @@ async function ensureVentasSchema() {
         )
       `);
       await pg.run(`
+        CREATE TABLE IF NOT EXISTS purchase_suppliers (
+          id text primary key,
+          company_id text not null references companies(id) on delete cascade,
+          name text not null,
+          phone text not null default '',
+          tax_id text not null default '',
+          address text not null default '',
+          created_at timestamptz not null default now(),
+          updated_at timestamptz not null default now()
+        )
+      `);
+      await pg.run(`
+        CREATE TABLE IF NOT EXISTS purchase_orders (
+          id text primary key,
+          company_id text not null references companies(id) on delete cascade,
+          code text not null,
+          supplier_id text references purchase_suppliers(id),
+          supplier_name text not null default '',
+          invoice_number text not null default '',
+          note text not null default '',
+          total numeric not null default 0,
+          status text not null default 'confirmada',
+          created_by text not null references users(id),
+          created_at timestamptz not null default now(),
+          unique (company_id, code)
+        )
+      `);
+      await pg.run(`
+        CREATE TABLE IF NOT EXISTS purchase_order_items (
+          id text primary key,
+          company_id text not null references companies(id) on delete cascade,
+          purchase_id text not null references purchase_orders(id) on delete cascade,
+          product_id text not null references inventory_products(id),
+          product_name text not null,
+          quantity numeric not null default 0,
+          unit_cost numeric not null default 0,
+          total numeric not null default 0
+        )
+      `);
+      await pg.run(`
         CREATE TABLE IF NOT EXISTS sales_orders (
           id text primary key,
           company_id text not null references companies(id) on delete cascade,
@@ -2072,6 +2212,8 @@ async function ensureVentasSchema() {
       await pg.run("CREATE INDEX IF NOT EXISTS idx_inventory_movements_product ON inventory_movements(product_id, created_at DESC)");
       await pg.run("CREATE INDEX IF NOT EXISTS idx_cash_sessions_company ON cash_sessions(company_id, status, opened_at)");
       await pg.run("CREATE INDEX IF NOT EXISTS idx_cash_movements_session ON cash_movements(session_id, created_at)");
+      await pg.run("CREATE INDEX IF NOT EXISTS idx_purchase_suppliers_company ON purchase_suppliers(company_id, name)");
+      await pg.run("CREATE INDEX IF NOT EXISTS idx_purchase_orders_company ON purchase_orders(company_id, created_at)");
       await pg.run("ALTER TABLE cash_closures ADD COLUMN IF NOT EXISTS opening_amount numeric not null default 0");
       await pg.run("ALTER TABLE cash_closures ADD COLUMN IF NOT EXISTS movement_total numeric not null default 0");
       await pg.run("ALTER TABLE cash_closures ADD COLUMN IF NOT EXISTS expected_amount numeric not null default 0");
@@ -2122,6 +2264,17 @@ async function buildNextCashCode(companyId, date = new Date().toISOString(), cli
   const year = new Date(date).getFullYear();
   const prefix = `C-${year}`;
   const rows = await client.all("SELECT code FROM cash_closures WHERE company_id = ? AND code LIKE ?", [companyId, `${prefix}-%`]);
+  const next = rows.reduce((max, row) => {
+    const match = String(row.code || "").match(/(\d+)$/);
+    return match ? Math.max(max, Number(match[1])) : max;
+  }, 0) + 1;
+  return `${prefix}-${String(next).padStart(5, "0")}`;
+}
+
+async function buildNextPurchaseCode(companyId, date = new Date().toISOString(), client = pg) {
+  const year = new Date(date).getFullYear();
+  const prefix = `P-${year}`;
+  const rows = await client.all("SELECT code FROM purchase_orders WHERE company_id = ? AND code LIKE ?", [companyId, `${prefix}-%`]);
   const next = rows.reduce((max, row) => {
     const match = String(row.code || "").match(/(\d+)$/);
     return match ? Math.max(max, Number(match[1])) : max;

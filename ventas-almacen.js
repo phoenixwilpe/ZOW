@@ -22,6 +22,8 @@ let categories = [];
 let sales = [];
 let users = [];
 let units = [];
+let suppliers = [];
+let purchases = [];
 let cash = { pendingSales: [], total: 0 };
 let summary = {};
 let saleCart = [];
@@ -191,7 +193,8 @@ async function render() {
   if (!currentUser || !sessionStorage.getItem(TOKEN_KEY)) return renderLoggedOut();
   try {
     await assertVentasAccess();
-    const [settingsResponse, summaryResponse, productsResponse, customersResponse, categoriesResponse, salesResponse, cashResponse, usersResponse, unitsResponse] = await Promise.all([
+    const canReadPurchases = canAccessView("purchases");
+    const [settingsResponse, summaryResponse, productsResponse, customersResponse, categoriesResponse, salesResponse, cashResponse, suppliersResponse, purchasesResponse, usersResponse, unitsResponse] = await Promise.all([
       apiRequest("/ventas/settings"),
       apiRequest("/ventas/summary"),
       apiRequest("/ventas/products"),
@@ -199,6 +202,8 @@ async function render() {
       apiRequest("/ventas/categories"),
       apiRequest("/ventas/sales"),
       apiRequest("/ventas/cash"),
+      canReadPurchases ? apiRequest("/ventas/suppliers") : Promise.resolve({ suppliers: [] }),
+      canReadPurchases ? apiRequest("/ventas/purchases") : Promise.resolve({ purchases: [] }),
       currentUser?.role === "admin" ? apiRequest("/users") : Promise.resolve({ users: [] }),
       currentUser?.role === "admin" ? apiRequest("/units") : Promise.resolve({ units: [] })
     ]);
@@ -208,6 +213,8 @@ async function render() {
     customers = customersResponse.customers || [];
     categories = categoriesResponse.categories || [];
     sales = salesResponse.sales || [];
+    suppliers = suppliersResponse.suppliers || [];
+    purchases = purchasesResponse.purchases || [];
     users = (usersResponse.users || []).map(normalizeUser);
     units = (unitsResponse.units || []).map(normalizeUnit);
     cash = cashResponse || { pendingSales: [], total: 0 };
@@ -258,6 +265,7 @@ function renderMain() {
     catalog: ["Catalogos", "Articulos y categorias"],
     customers: ["Clientes", "Base de clientes"],
     inventory: ["Inventario", "Stock y reabastecimiento"],
+    purchases: ["Compras", "Proveedores y entradas de mercaderia"],
     users: ["Usuarios", "Credenciales y roles de Ventas-Almacen"],
     settings: ["Configuracion", "Tienda, moneda y datos de impresion"]
   };
@@ -265,7 +273,7 @@ function renderMain() {
   document.querySelector("#viewTitle").textContent = titles[activeView][1];
   document.querySelector("#ventasMenuLabel").textContent = document.querySelector(`[data-view="${activeView}"]`)?.textContent || titles[activeView][0];
   renderWorkflow();
-  const renderers = { summary: renderSummary, alerts: renderAlerts, sell: renderSell, finance: renderFinance, history: renderHistory, routes: renderRoutes, promotions: renderPromotions, reports: renderReports, catalog: renderCatalog, customers: renderCustomers, inventory: renderInventory, users: renderUsers, settings: renderSettings };
+  const renderers = { summary: renderSummary, alerts: renderAlerts, sell: renderSell, finance: renderFinance, history: renderHistory, routes: renderRoutes, promotions: renderPromotions, reports: renderReports, catalog: renderCatalog, customers: renderCustomers, inventory: renderInventory, purchases: renderPurchases, users: renderUsers, settings: renderSettings };
   renderers[activeView]();
   document.querySelectorAll("[data-module-view]").forEach((button) => {
     button.addEventListener("click", () => {
@@ -290,6 +298,7 @@ function renderWorkflow() {
     catalog: [`<strong>Catalogos</strong><span>Administra articulos y categorias.</span>`, `<button class="ghost-button" type="button" id="newCategoryBtn">Nueva categoria</button><button class="primary-button" type="button" id="newProductBtn">Nuevo producto</button>`],
     customers: [`<strong>Clientes</strong><span>Registra compradores frecuentes para ventas y tienda virtual.</span>`, `<button class="primary-button" type="button" id="newCustomerBtn">Nuevo cliente</button>`],
     inventory: [`<strong>Inventario</strong><span>Controla stock actual y regulariza entradas o salidas.</span>`, `<button class="primary-button" type="button" id="newProductInventoryBtn">Nuevo producto</button>`],
+    purchases: [`<strong>Compras</strong><span>Registra proveedores y entradas de mercaderia con Kardex automatico.</span>`, ""],
     users: [`<strong>Usuarios operativos</strong><span>Crea cajeros, vendedores, almacen y operador integral para la empresa.</span>`, ""],
     settings: [`<strong>Configuracion comercial</strong><span>Define datos de tienda, moneda y textos del comprobante.</span>`, ""]
   };
@@ -564,6 +573,62 @@ function renderCustomers() {
   `).join("") || empty("Sin clientes registrados");
 }
 
+function renderPurchases() {
+  const activeProducts = products.filter(isProductActive);
+  setCount(`${purchases.length} compra${purchases.length === 1 ? "" : "s"}`);
+  mainList().innerHTML = `
+    ${ventasMessage ? `<div class="cloud-safe-note"><strong>${escapeHtml(ventasMessage)}</strong><span>La compra afecta solo el inventario de esta empresa.</span></div>` : ""}
+    <section class="cashier-grid">
+      <section class="admin-panel">
+        <div class="admin-panel-head"><div><p class="eyebrow">Proveedor</p><h3>Registrar proveedor</h3></div></div>
+        <form class="admin-form" id="supplierForm">
+          <div class="form-grid">
+            <label>Nombre<input id="supplierName" type="text" required placeholder="Proveedor o distribuidora" /></label>
+            <label>Telefono<input id="supplierPhone" type="tel" /></label>
+            <label>NIT / CI<input id="supplierTaxId" type="text" /></label>
+            <label>Direccion<input id="supplierAddress" type="text" /></label>
+          </div>
+          <button class="ghost-button" type="submit">Guardar proveedor</button>
+        </form>
+      </section>
+      <section class="admin-panel">
+        <div class="admin-panel-head"><div><p class="eyebrow">Compra</p><h3>Entrada de mercaderia</h3></div></div>
+        <form class="admin-form" id="purchaseForm">
+          <div class="form-grid">
+            <label>Proveedor<select id="purchaseSupplier"><option value="">Proveedor sin registrar</option>${suppliers.map((supplier) => `<option value="${supplier.id}">${escapeHtml(supplier.name)}</option>`).join("")}</select></label>
+            <label>Nro. factura/nota<input id="purchaseInvoice" type="text" placeholder="Opcional" /></label>
+            <label class="span-2">Producto<select id="purchaseProduct" required>${activeProducts.map((product) => `<option value="${product.id}">${escapeHtml(product.code)} - ${escapeHtml(product.name)}</option>`).join("")}</select></label>
+            <label>Cantidad<input id="purchaseQuantity" type="number" min="0.01" step="0.01" value="1" required /></label>
+            <label>Costo unitario<input id="purchaseCost" type="number" min="0" step="0.01" value="0" required /></label>
+            <label class="span-2">Nota<input id="purchaseNote" type="text" placeholder="Compra, reposicion, factura, etc." /></label>
+          </div>
+          <button class="primary-button" type="submit" ${activeProducts.length ? "" : "disabled"}>Registrar compra y sumar stock</button>
+        </form>
+      </section>
+    </section>
+    <section class="admin-panel">
+      <div class="admin-panel-head"><div><p class="eyebrow">Historial</p><h3>Compras recientes</h3></div><span>${money(purchases.reduce((sum, purchase) => sum + Number(purchase.total || 0), 0))}</span></div>
+      <div class="admin-list">${purchases.slice(0, 12).map(renderPurchaseRow).join("") || empty("Sin compras registradas")}</div>
+    </section>
+    <section class="admin-panel">
+      <div class="admin-panel-head"><div><p class="eyebrow">Proveedores</p><h3>Directorio</h3></div></div>
+      <div class="admin-list">${suppliers.map(renderSupplierRow).join("") || empty("Sin proveedores registrados")}</div>
+    </section>
+  `;
+  document.querySelector("#supplierForm")?.addEventListener("submit", saveSupplier);
+  document.querySelector("#purchaseForm")?.addEventListener("submit", savePurchase);
+  document.querySelector("#purchaseProduct")?.addEventListener("change", updatePurchaseCostFromProduct);
+  updatePurchaseCostFromProduct();
+}
+
+function renderPurchaseRow(purchase) {
+  return `<article class="admin-row"><div><strong>${escapeHtml(purchase.code)}</strong><span>${escapeHtml(purchase.supplier_name || "Proveedor sin registrar")} / ${escapeHtml(purchase.invoice_number || "Sin factura")}</span><span>${formatDateTime(purchase.created_at)} / ${escapeHtml(purchase.created_by_name || "Usuario")}</span></div><div class="admin-row-meta"><span>Total ${money(purchase.total)}</span><span class="ok-text">${escapeHtml(purchase.status || "confirmada")}</span></div></article>`;
+}
+
+function renderSupplierRow(supplier) {
+  return `<article class="admin-row"><div><strong>${escapeHtml(supplier.name)}</strong><span>NIT/CI ${escapeHtml(supplier.tax_id || "Sin dato")} / Cel. ${escapeHtml(supplier.phone || "Sin celular")}</span><span>${escapeHtml(supplier.address || "Sin direccion")}</span></div></article>`;
+}
+
 function renderInventory() {
   const inventoryProducts = filteredProducts({ includeInactive: true });
   setCount(`${products.length} producto${products.length === 1 ? "" : "s"}`);
@@ -733,7 +798,7 @@ function renderCashMovementRow(movement) {
 function renderVentasCommandCenter() {
   const modules = [
     ["Gestion comercial", "Ventas, clientes, promociones y listas de precios.", "sell"],
-    ["Gestion operativa", "Rutas, despacho, stock minimo y reposicion.", "routes"],
+    ["Gestion operativa", "Compras, proveedores, stock minimo y reposicion.", "purchases"],
     ["Gestion administrativa", "Caja, liquidaciones, auditoria y reportes.", "finance"]
   ];
   return `
@@ -1209,6 +1274,60 @@ async function saveStoreSettings(event) {
   await render();
 }
 
+async function saveSupplier(event) {
+  event.preventDefault();
+  try {
+    await apiRequest("/ventas/suppliers", {
+      method: "POST",
+      body: {
+        name: value("#supplierName"),
+        phone: value("#supplierPhone"),
+        taxId: value("#supplierTaxId"),
+        address: value("#supplierAddress")
+      }
+    });
+    ventasMessage = "Proveedor registrado correctamente.";
+    activeView = "purchases";
+    await render();
+  } catch (error) {
+    ventasMessage = error.message || "No se pudo registrar el proveedor.";
+    renderMain();
+  }
+}
+
+async function savePurchase(event) {
+  event.preventDefault();
+  const product = products.find((item) => item.id === value("#purchaseProduct"));
+  if (!product) return;
+  try {
+    await apiRequest("/ventas/purchases", {
+      method: "POST",
+      body: {
+        supplierId: value("#purchaseSupplier"),
+        invoiceNumber: value("#purchaseInvoice"),
+        note: value("#purchaseNote"),
+        items: [{
+          productId: product.id,
+          quantity: Number(value("#purchaseQuantity") || 0),
+          unitCost: Number(value("#purchaseCost") || product.cost_price || 0)
+        }]
+      }
+    });
+    ventasMessage = "Compra registrada. El stock fue actualizado y quedo en Kardex.";
+    activeView = "purchases";
+    await render();
+  } catch (error) {
+    ventasMessage = error.message || "No se pudo registrar la compra.";
+    renderMain();
+  }
+}
+
+function updatePurchaseCostFromProduct() {
+  const input = document.querySelector("#purchaseCost");
+  const product = products.find((item) => item.id === document.querySelector("#purchaseProduct")?.value);
+  if (input && product && Number(input.value || 0) === 0) input.value = Number(product.cost_price || 0);
+}
+
 async function saveVentasUser(event) {
   event.preventDefault();
   ventasMessage = "";
@@ -1425,12 +1544,12 @@ function canAccessView(view) { return accessibleViewsForRole(currentUser?.role).
 function defaultViewForRole() { return accessibleViewsForRole(currentUser?.role)[0] || "summary"; }
 function accessibleViewsForRole(role) {
   const views = {
-    admin: ["sell", "summary", "alerts", "finance", "history", "routes", "promotions", "reports", "catalog", "customers", "inventory", "users", "settings"],
-    ventas_admin: ["sell", "summary", "alerts", "finance", "history", "routes", "promotions", "reports", "catalog", "customers", "inventory", "settings"],
+    admin: ["sell", "summary", "alerts", "finance", "history", "routes", "promotions", "reports", "catalog", "customers", "inventory", "purchases", "users", "settings"],
+    ventas_admin: ["sell", "summary", "alerts", "finance", "history", "routes", "promotions", "reports", "catalog", "customers", "inventory", "purchases", "settings"],
     cajero: ["sell", "finance", "history", "customers", "summary"],
     vendedor: ["sell", "customers", "summary"],
-    almacen: ["inventory", "alerts", "routes", "reports", "catalog", "summary"],
-    supervisor: ["sell", "summary", "alerts", "finance", "history", "routes", "promotions", "reports", "catalog", "customers", "inventory"],
+    almacen: ["inventory", "purchases", "alerts", "routes", "reports", "catalog", "summary"],
+    supervisor: ["sell", "summary", "alerts", "finance", "history", "routes", "promotions", "reports", "catalog", "customers", "inventory", "purchases"],
     funcionario: ["sell", "routes", "customers", "summary"]
   };
   return views[role] || ["summary"];

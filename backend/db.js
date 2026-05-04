@@ -266,6 +266,50 @@ function initDb() {
       FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE
     );
 
+    CREATE TABLE IF NOT EXISTS purchase_suppliers (
+      id TEXT PRIMARY KEY,
+      company_id TEXT NOT NULL,
+      name TEXT NOT NULL,
+      phone TEXT NOT NULL DEFAULT '',
+      tax_id TEXT NOT NULL DEFAULT '',
+      address TEXT NOT NULL DEFAULT '',
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS purchase_orders (
+      id TEXT PRIMARY KEY,
+      company_id TEXT NOT NULL,
+      code TEXT NOT NULL,
+      supplier_id TEXT,
+      supplier_name TEXT NOT NULL DEFAULT '',
+      invoice_number TEXT NOT NULL DEFAULT '',
+      note TEXT NOT NULL DEFAULT '',
+      total REAL NOT NULL DEFAULT 0,
+      status TEXT NOT NULL DEFAULT 'confirmada',
+      created_by TEXT NOT NULL,
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE (company_id, code),
+      FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE,
+      FOREIGN KEY (supplier_id) REFERENCES purchase_suppliers(id),
+      FOREIGN KEY (created_by) REFERENCES users(id)
+    );
+
+    CREATE TABLE IF NOT EXISTS purchase_order_items (
+      id TEXT PRIMARY KEY,
+      company_id TEXT NOT NULL,
+      purchase_id TEXT NOT NULL,
+      product_id TEXT NOT NULL,
+      product_name TEXT NOT NULL,
+      quantity REAL NOT NULL DEFAULT 0,
+      unit_cost REAL NOT NULL DEFAULT 0,
+      total REAL NOT NULL DEFAULT 0,
+      FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE,
+      FOREIGN KEY (purchase_id) REFERENCES purchase_orders(id) ON DELETE CASCADE,
+      FOREIGN KEY (product_id) REFERENCES inventory_products(id)
+    );
+
     CREATE TABLE IF NOT EXISTS sales_orders (
       id TEXT PRIMARY KEY,
       company_id TEXT NOT NULL,
@@ -416,6 +460,8 @@ function migrateSchema() {
   db.prepare("CREATE INDEX IF NOT EXISTS idx_lead_history_lead ON lead_history(lead_id, created_at)").run();
   db.prepare("CREATE INDEX IF NOT EXISTS idx_cash_sessions_company ON cash_sessions(company_id, status, opened_at)").run();
   db.prepare("CREATE INDEX IF NOT EXISTS idx_cash_movements_session ON cash_movements(session_id, created_at)").run();
+  db.prepare("CREATE INDEX IF NOT EXISTS idx_purchase_suppliers_company ON purchase_suppliers(company_id, name)").run();
+  db.prepare("CREATE INDEX IF NOT EXISTS idx_purchase_orders_company ON purchase_orders(company_id, created_at)").run();
   migrateTenantTables();
   db.prepare("UPDATE units SET company_id = COALESCE(NULLIF(company_id, ''), 'company-default')").run();
   db.prepare("UPDATE users SET company_id = COALESCE(NULLIF(company_id, ''), 'company-default')").run();
