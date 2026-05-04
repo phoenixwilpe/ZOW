@@ -643,7 +643,7 @@ body.system-zow-site .site-footer {
 }
 
 body.app-ventas {
-  --bg: #eef2f6;
+  --bg: #e8eef0;
   --ink: #17201d;
   --muted: #66736f;
   --line: #d9e1e7;
@@ -660,6 +660,14 @@ body.app-ventas {
   --login-panel: #f4faf7;
   --warn: #b7791f;
   display: block;
+  background:
+    radial-gradient(circle at 12% 8%, rgb(15 159 110 / 18%), transparent 30vw),
+    radial-gradient(circle at 88% 12%, rgb(245 158 11 / 16%), transparent 24vw),
+    linear-gradient(115deg, rgb(255 255 255 / 80%) 0 18%, transparent 18% 100%),
+    repeating-linear-gradient(90deg, rgb(8 115 79 / 5%) 0 1px, transparent 1px 72px),
+    repeating-linear-gradient(0deg, rgb(15 32 28 / 4%) 0 1px, transparent 1px 72px),
+    var(--bg);
+  background-attachment: fixed;
 }
 
 body.app-ventas .app-shell {
@@ -1662,6 +1670,37 @@ h3 {
   color: var(--muted);
 }
 
+.report-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.report-export-card {
+  min-height: 118px;
+  border: 1px solid color-mix(in srgb, var(--accent) 18%, var(--line));
+  border-radius: 8px;
+  padding: 16px;
+  background:
+    radial-gradient(circle at 90% 12%, rgb(245 158 11 / 13%), transparent 34%),
+    linear-gradient(135deg, rgb(255 255 255 / 90%), rgb(242 250 247 / 86%));
+  display: grid;
+  gap: 10px;
+  align-content: space-between;
+  box-shadow: 0 18px 46px rgb(15 32 28 / 8%);
+}
+
+.report-export-card strong {
+  font-size: 1.05rem;
+}
+
+.report-export-card span {
+  color: var(--muted);
+  font-size: 0.86rem;
+  line-height: 1.45;
+}
+
 .price-list {
   display: grid;
   gap: 10px;
@@ -1949,8 +1988,41 @@ h3 {
 }
 
 .ventas-touch-shell {
+  position: relative;
   width: min(1600px, 100%) !important;
   padding: 18px;
+  isolation: isolate;
+}
+
+.ventas-touch-shell::before,
+.ventas-touch-shell::after {
+  content: "";
+  position: fixed;
+  pointer-events: none;
+  z-index: -1;
+}
+
+.ventas-touch-shell::before {
+  inset: 0;
+  background:
+    linear-gradient(90deg, transparent 0 72%, rgb(16 185 129 / 9%) 72% 72.25%, transparent 72.25% 100%),
+    radial-gradient(circle at 72% 28%, rgb(15 159 110 / 16%), transparent 28vw),
+    radial-gradient(circle at 22% 92%, rgb(245 158 11 / 14%), transparent 28vw);
+}
+
+.ventas-touch-shell::after {
+  right: -120px;
+  bottom: 6vh;
+  width: min(560px, 58vw);
+  aspect-ratio: 1;
+  border: 1px solid rgb(15 159 110 / 12%);
+  border-radius: 50%;
+  background:
+    repeating-linear-gradient(90deg, transparent 0 12px, rgb(15 159 110 / 10%) 12px 14px, transparent 14px 28px),
+    radial-gradient(circle, rgb(255 255 255 / 68%), rgb(15 159 110 / 8%) 64%, transparent 65%);
+  filter: blur(0.2px);
+  opacity: 0.58;
+  animation: ventasAmbientFloat 12s ease-in-out infinite alternate;
 }
 
 .ventas-touch-shell[data-active-view="sell"] {
@@ -1970,10 +2042,31 @@ h3 {
   border: 0;
   border-radius: 8px;
   background:
-    radial-gradient(circle at 18% 10%, rgb(15 159 110 / 24%), transparent 30%),
-    linear-gradient(135deg, #101a18, #162d27 58%, #0f9f6e);
+    radial-gradient(circle at 18% 10%, rgb(52 211 153 / 28%), transparent 30%),
+    radial-gradient(circle at 88% 18%, rgb(245 158 11 / 20%), transparent 22%),
+    linear-gradient(135deg, #0b1412, #132822 58%, #0f8f69);
   color: white;
-  box-shadow: 0 24px 70px rgb(13 35 31 / 18%);
+  box-shadow: 0 28px 80px rgb(13 35 31 / 22%);
+  overflow: hidden;
+  position: relative;
+}
+
+.ventas-touch-shell .topbar::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    linear-gradient(110deg, transparent 0 44%, rgb(255 255 255 / 14%) 46%, transparent 49% 100%),
+    repeating-linear-gradient(90deg, transparent 0 34px, rgb(255 255 255 / 5%) 34px 35px);
+  opacity: 0.52;
+  transform: translateX(-10%);
+  animation: ventasScan 9s ease-in-out infinite;
+}
+
+.ventas-touch-shell .topbar > * {
+  position: relative;
+  z-index: 1;
 }
 
 .ventas-touch-shell .topbar .eyebrow,
@@ -1990,6 +2083,7 @@ h3 {
   border-color: rgb(255 255 255 / 18%);
   background: rgb(255 255 255 / 12%);
   color: white;
+  backdrop-filter: blur(12px);
 }
 
 .ventas-touch-shell .metrics {
@@ -2001,8 +2095,16 @@ h3 {
   border: 0;
   border-radius: 8px;
   background:
-    linear-gradient(180deg, rgb(255 255 255 / 94%), rgb(247 252 249 / 92%));
-  box-shadow: 0 16px 42px rgb(15 32 28 / 8%);
+    radial-gradient(circle at 90% 10%, rgb(15 159 110 / 14%), transparent 28%),
+    linear-gradient(180deg, rgb(255 255 255 / 90%), rgb(247 252 249 / 84%));
+  box-shadow: 0 18px 48px rgb(15 32 28 / 10%);
+  backdrop-filter: blur(16px);
+  transition: transform 160ms ease, box-shadow 160ms ease;
+}
+
+.ventas-touch-shell .metrics article:hover {
+  box-shadow: 0 24px 58px rgb(15 32 28 / 14%);
+  transform: translateY(-2px);
 }
 
 .ventas-workspace {
@@ -2028,8 +2130,10 @@ h3 {
   border: 1px solid rgb(255 255 255 / 12%);
   border-radius: 8px;
   background:
+    radial-gradient(circle at 30% 0%, rgb(15 159 110 / 18%), transparent 34%),
     linear-gradient(180deg, #101a18, #15241f);
   box-shadow: 0 22px 60px rgb(10 31 27 / 16%);
+  backdrop-filter: blur(14px);
 }
 
 .ventas-tabs button {
@@ -2041,6 +2145,19 @@ h3 {
   justify-content: flex-start;
   padding: 0 14px;
   text-align: left;
+  position: relative;
+  overflow: hidden;
+  transition: transform 150ms ease, background 150ms ease, color 150ms ease, border-color 150ms ease;
+}
+
+.ventas-tabs button::before {
+  content: "";
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: currentColor;
+  opacity: 0.34;
+  margin-right: 8px;
 }
 
 .ventas-tabs button.is-active,
@@ -2055,6 +2172,7 @@ h3 {
 .ventas-tabs button:not([hidden]):hover {
   color: white;
   background: rgb(255 255 255 / 8%);
+  transform: translateX(2px);
 }
 
 .ventas-workspace .workflow-panel,
@@ -2068,8 +2186,9 @@ h3 {
   border: 0;
   border-radius: 8px;
   background:
-    linear-gradient(135deg, rgb(255 255 255 / 92%), rgb(241 250 247 / 92%));
+    linear-gradient(135deg, rgb(255 255 255 / 88%), rgb(241 250 247 / 82%));
   box-shadow: 0 18px 42px rgb(15 32 28 / 8%);
+  backdrop-filter: blur(14px);
 }
 
 .ventas-workflow-footer {
@@ -2118,8 +2237,10 @@ h3 {
   border: 0;
   border-radius: 8px;
   padding: 16px;
-  background: rgb(255 255 255 / 82%);
-  box-shadow: 0 24px 70px rgb(15 32 28 / 10%);
+  background:
+    linear-gradient(180deg, rgb(255 255 255 / 86%), rgb(247 252 249 / 80%));
+  box-shadow: 0 26px 76px rgb(15 32 28 / 12%);
+  backdrop-filter: blur(18px);
 }
 
 .touch-pos-shell {
@@ -2138,8 +2259,10 @@ h3 {
   border: 0;
   border-radius: 8px;
   background:
-    linear-gradient(180deg, rgb(255 255 255 / 96%), rgb(249 252 251 / 96%));
-  box-shadow: 0 20px 58px rgb(15 32 28 / 8%);
+    radial-gradient(circle at 96% 0%, rgb(15 159 110 / 10%), transparent 28%),
+    linear-gradient(180deg, rgb(255 255 255 / 92%), rgb(249 252 251 / 90%));
+  box-shadow: 0 24px 68px rgb(15 32 28 / 11%);
+  backdrop-filter: blur(18px);
 }
 
 .touch-panel {
@@ -4642,6 +4765,25 @@ h3 {
   }
 }
 
+@keyframes ventasAmbientFloat {
+  from {
+    transform: translate3d(0, 0, 0) rotate(0deg);
+  }
+  to {
+    transform: translate3d(-42px, -18px, 0) rotate(8deg);
+  }
+}
+
+@keyframes ventasScan {
+  0%,
+  62% {
+    transform: translateX(-35%);
+  }
+  100% {
+    transform: translateX(35%);
+  }
+}
+
 .admin-action-card span,
 .admin-action-card small {
   color: var(--muted);
@@ -6464,6 +6606,7 @@ body.system-zow-site .lead-form.is-highlighted {
   .promotion-grid,
   .route-grid,
   .report-grid,
+  .report-actions,
   .service-strip,
   .operation-model-grid,
   .role-template-grid {
@@ -6595,6 +6738,7 @@ body.system-zow-site .lead-form.is-highlighted {
   .promotion-grid,
   .route-grid,
   .report-grid,
+  .report-actions,
   .service-strip,
   .operation-model-grid,
   .role-template-grid {

@@ -554,11 +554,23 @@ function renderReports() {
       <article><span>Margen potencial</span><strong>${money(grossMargin)}</strong><small>Segun costo, precio y stock actual</small></article>
       <article><span>Stock critico</span><strong>${summary.low_stock || 0}</strong><small>Productos bajo minimo</small></article>
     </section>
+    <section class="report-actions" aria-label="Exportaciones">
+      <article class="report-export-card">
+        <div><strong>Ventas del sistema</strong><span>Descarga operaciones con cliente, metodo de pago, estado y saldos para auditoria.</span></div>
+        <button class="primary-button" type="button" id="exportSalesCsv">Exportar ventas CSV</button>
+      </article>
+      <article class="report-export-card">
+        <div><strong>Inventario valorizado</strong><span>Descarga stock, costo, precio, margen y productos inactivos para control comercial.</span></div>
+        <button class="ghost-button" type="button" id="exportInventoryCsv">Exportar inventario CSV</button>
+      </article>
+    </section>
     <section class="admin-panel">
       <div class="admin-panel-head"><div><p class="eyebrow">Control</p><h3>Productos que requieren accion</h3></div></div>
       <div class="admin-list">${products.filter((product) => isProductActive(product) && Number(product.stock || 0) <= Number(product.min_stock || 0)).map(renderProductRow).join("") || empty("Sin riesgos de inventario")}</div>
     </section>
   `;
+  document.querySelector("#exportSalesCsv")?.addEventListener("click", exportSalesCsv);
+  document.querySelector("#exportInventoryCsv")?.addEventListener("click", exportInventoryCsv);
 }
 
 function renderCatalog() {
@@ -1549,6 +1561,73 @@ function paymentMethods() {
   ];
 }
 function paymentLabel(id) { return paymentMethods().find((method) => method.id === id)?.label || "Efectivo"; }
+function exportSalesCsv() {
+  const rows = sales.map((sale) => ({
+    codigo: sale.code,
+    fecha: formatDateTime(sale.created_at),
+    cliente: sale.customer_name || "Cliente sin registrar",
+    vendedor: sale.seller_name || "",
+    metodo_pago: paymentLabel(sale.payment_method || localSaleMeta[sale.id]?.method || "efectivo"),
+    subtotal: Number(sale.subtotal || 0).toFixed(2),
+    descuento: Number(sale.discount || 0).toFixed(2),
+    impuesto: Number(sale.tax || 0).toFixed(2),
+    total: Number(sale.total || 0).toFixed(2),
+    pagado: Number(sale.amount_paid || sale.cash_received || 0).toFixed(2),
+    saldo: Number(sale.balance_due || 0).toFixed(2),
+    estado: saleStatus(sale)
+  }));
+  downloadCsv(`ventas-${csvDateStamp()}.csv`, rows);
+}
+function exportInventoryCsv() {
+  const rows = products.map((product) => {
+    const cost = Number(product.cost_price || product.costPrice || 0);
+    const price = Number(product.sale_price || product.salePrice || 0);
+    const stock = Number(product.stock || 0);
+    return {
+      codigo: product.code,
+      producto: product.name,
+      categoria: product.category || "",
+      unidad: product.unit || "",
+      stock: stock.toFixed(2),
+      minimo: Number(product.min_stock || product.minStock || 0).toFixed(2),
+      costo: cost.toFixed(2),
+      precio: price.toFixed(2),
+      margen_unitario: (price - cost).toFixed(2),
+      valor_stock: (stock * cost).toFixed(2),
+      activo: isProductActive(product) ? "si" : "no"
+    };
+  });
+  downloadCsv(`inventario-${csvDateStamp()}.csv`, rows);
+}
+function downloadCsv(filename, rows) {
+  if (!rows.length) {
+    window.alert("No hay datos para exportar.");
+    return;
+  }
+  const headers = Object.keys(rows[0]);
+  const csv = [
+    headers.join(","),
+    ...rows.map((row) => headers.map((header) => csvCell(row[header])).join(","))
+  ].join("\n");
+  const blob = new Blob([`\uFEFF${csv}`], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
+function csvCell(value) {
+  const text = String(value ?? "");
+  return /[",\n\r]/.test(text) ? `"${text.replaceAll('"', '""')}"` : text;
+}
+function csvDateStamp() {
+  const now = new Date();
+  const pad = (value) => String(value).padStart(2, "0");
+  return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+}
 function loadJson(key, fallback) {
   try { return JSON.parse(localStorage.getItem(key)) ?? fallback; } catch { return fallback; }
 }
