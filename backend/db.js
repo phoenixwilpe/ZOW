@@ -30,6 +30,7 @@ function initDb() {
       role TEXT NOT NULL CHECK (role IN ('zow_owner', 'admin', 'recepcion_principal', 'recepcion_secundaria', 'funcionario', 'supervisor', 'ventas_admin', 'cajero', 'almacen', 'vendedor')),
       unit_id TEXT NOT NULL,
       position TEXT NOT NULL DEFAULT '',
+      cash_register_number INTEGER NOT NULL DEFAULT 0,
       is_active INTEGER NOT NULL DEFAULT 1,
       is_protected INTEGER NOT NULL DEFAULT 0,
       created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -446,6 +447,7 @@ function migrateSchema() {
   ensureColumn("units", "level", "TEXT NOT NULL DEFAULT 'secundaria'");
   ensureColumn("users", "ci", "TEXT NOT NULL DEFAULT ''");
   ensureColumn("users", "phone", "TEXT NOT NULL DEFAULT ''");
+  ensureColumn("users", "cash_register_number", "INTEGER NOT NULL DEFAULT 0");
   ensureColumn("documents", "applicant_name", "TEXT NOT NULL DEFAULT ''");
   ensureColumn("documents", "applicant_ci", "TEXT NOT NULL DEFAULT ''");
   ensureColumn("documents", "applicant_phone", "TEXT NOT NULL DEFAULT ''");
@@ -509,6 +511,7 @@ function migrateTenantTables() {
         position TEXT NOT NULL DEFAULT '',
         ci TEXT NOT NULL DEFAULT '',
         phone TEXT NOT NULL DEFAULT '',
+        cash_register_number INTEGER NOT NULL DEFAULT 0,
         is_active INTEGER NOT NULL DEFAULT 1,
         is_protected INTEGER NOT NULL DEFAULT 0,
         created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP

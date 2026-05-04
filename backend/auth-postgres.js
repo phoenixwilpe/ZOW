@@ -21,8 +21,9 @@ function requireAuth(req, res, next) {
   jwt.verify(token, JWT_SECRET, { issuer: JWT_ISSUER, audience: JWT_AUDIENCE }, async (error, payload) => {
     if (error) return res.status(401).json({ error: "Token invalido" });
     try {
+      await ensureAuthUsersSchema();
       const user = await pg.get(
-        `SELECT users.id, users.company_id, users.name, users.username, users.role, users.unit_id, users.position, units.name AS unit_name,
+        `SELECT users.id, users.company_id, users.name, users.username, users.role, users.unit_id, users.position, users.cash_register_number, units.name AS unit_name,
                 companies.status AS company_status, companies.starts_at, companies.ends_at
          FROM users
          JOIN units ON units.id = users.unit_id
@@ -64,6 +65,14 @@ function isCompanyExpired(user) {
   if (!user?.ends_at) return false;
   const end = new Date(`${String(user.ends_at).slice(0, 10)}T23:59:59`);
   return Number.isFinite(end.getTime()) && end < new Date();
+}
+
+let authUsersSchemaReady;
+async function ensureAuthUsersSchema() {
+  if (!authUsersSchemaReady) {
+    authUsersSchemaReady = pg.run("ALTER TABLE users ADD COLUMN IF NOT EXISTS cash_register_number integer not null default 0");
+  }
+  await authUsersSchemaReady;
 }
 
 module.exports = { signToken, requireAuth, requireRole, canSeeDocument };

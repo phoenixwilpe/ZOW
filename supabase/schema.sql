@@ -69,6 +69,7 @@ create table if not exists users (
   position text not null default '',
   ci text not null default '',
   phone text not null default '',
+  cash_register_number integer not null default 0,
   is_active boolean not null default true,
   is_protected boolean not null default false,
   created_at timestamptz not null default now()

@@ -443,7 +443,7 @@ function renderFinance() {
         ` : `
           <form class="admin-form" id="cashOpenForm">
             <div class="form-grid">
-              <label>Caja<select id="cashRegisterNumber">${cashRegisterOptions().map((item) => `<option value="${item}">Caja ${item}</option>`).join("")}</select></label>
+              <label>Caja<select id="cashRegisterNumber">${cashRegisterOptions().map((item) => `<option value="${item}" ${preferredCashRegisterNumber() === item ? "selected" : ""}>Caja ${item}</option>`).join("")}</select></label>
               <label>Monto inicial<input id="cashOpeningAmount" type="number" min="0" step="0.01" value="0" /></label>
             </div>
             <button class="primary-button" type="submit">Abrir caja</button>
@@ -975,7 +975,13 @@ function renderVentasUsersPanel() {
               <option value="supervisor" ${editing?.role === "supervisor" ? "selected" : ""}>Supervisor</option>
             </select>
           </label>
-          <label>Unidad / Sucursal
+          <label>Caja asignada
+            <select id="ventasUserCashRegister">
+              <option value="0" ${Number(editing?.cashRegisterNumber || 0) === 0 ? "selected" : ""}>Sin caja fija</option>
+              ${cashRegisterOptions().map((item) => `<option value="${item}" ${Number(editing?.cashRegisterNumber || 0) === item ? "selected" : ""}>Caja ${item}</option>`).join("")}
+            </select>
+          </label>
+          <label>Unidad / area
             <select id="ventasUserUnit" required>
               ${units.map((unit) => `<option value="${unit.id}" ${editing?.unitId === unit.id || (!editing && unit.id === currentUser.unitId) ? "selected" : ""}>${escapeHtml(unit.name)}</option>`).join("")}
             </select>
@@ -1018,7 +1024,7 @@ function renderVentasUserRow(user) {
     <div>
       <strong>${escapeHtml(user.name)}</strong>
       <span>${escapeHtml(user.username)} / ${roleLabel(user.role)}</span>
-      <span>${escapeHtml(user.unitName || "Sin unidad")} / ${escapeHtml(user.position || "Sin cargo")}</span>
+      <span>${escapeHtml(user.unitName || "Sin unidad")} / ${escapeHtml(user.position || "Sin cargo")} / ${user.cashRegisterNumber ? `Caja ${num(user.cashRegisterNumber)}` : "Sin caja fija"}</span>
     </div>
     <div class="admin-row-meta">
       <span class="${user.active ? "ok-text" : "danger-text"}">${user.active ? "Activo" : "Inactivo"}</span>
@@ -1440,7 +1446,8 @@ async function saveVentasUser(event) {
     unitId: value("#ventasUserUnit"),
     position: value("#ventasUserPosition").trim(),
     ci: value("#ventasUserCi").trim(),
-    phone: value("#ventasUserPhone").trim()
+    phone: value("#ventasUserPhone").trim(),
+    cashRegisterNumber: Number(value("#ventasUserCashRegister") || 0)
   };
   if (editingUserId && !payload.password) delete payload.password;
   try {
@@ -1620,6 +1627,10 @@ function cashRegisterOptions() {
   const count = Math.min(Math.max(Math.floor(Number(storeSettings.cashRegisterCount || 1)), 1), 20);
   return Array.from({ length: count }, (_, index) => index + 1);
 }
+function preferredCashRegisterNumber() {
+  const preferred = Number(currentUser?.cashRegisterNumber || 0);
+  return cashRegisterOptions().includes(preferred) ? preferred : 1;
+}
 function exportSalesCsv() {
   const rows = sales.map((sale) => ({
     codigo: sale.code,
@@ -1702,6 +1713,7 @@ function normalizeUser(user) {
     position: user.position || "",
     ci: user.ci || "",
     phone: user.phone || "",
+    cashRegisterNumber: Number(user.cashRegisterNumber ?? user.cash_register_number ?? 0),
     active: user.active ?? user.is_active ?? true,
     protected: user.protected ?? user.is_protected ?? false
   };

@@ -161,7 +161,7 @@ app.post("/api/auth/login", (req, res) => {
 
   const publicData = db
     .prepare(
-      `SELECT users.id, users.company_id, users.name, users.username, users.role, users.unit_id, users.position, users.ci, users.phone,
+      `SELECT users.id, users.company_id, users.name, users.username, users.role, users.unit_id, users.position, users.ci, users.phone, users.cash_register_number,
                 units.name AS unit_name, companies.name AS company_name, companies.slug AS company_slug, companies.plan, companies.billing_period, companies.starts_at, companies.ends_at, companies.status AS company_status
          FROM users
          JOIN units ON units.id = users.unit_id
@@ -289,7 +289,7 @@ app.post("/api/units", requireAuth, requireRole("admin"), (req, res) => {
 app.get("/api/users", requireAuth, requireRole("admin"), (req, res) => {
   const users = db
     .prepare(
-      `SELECT users.id, users.name, users.username, users.role, users.unit_id, users.position, users.ci, users.phone,
+      `SELECT users.id, users.name, users.username, users.role, users.unit_id, users.position, users.ci, users.phone, users.cash_register_number,
               users.is_active, users.is_protected, units.name AS unit_name
        FROM users
        JOIN units ON units.id = users.unit_id
@@ -310,7 +310,8 @@ app.post("/api/users", requireAuth, requireRole("admin"), (req, res) => {
     unitId: String(req.body.unitId || "").trim(),
     position: String(req.body.position || "").trim(),
     ci: String(req.body.ci || "").trim(),
-    phone: String(req.body.phone || "").trim()
+    phone: String(req.body.phone || "").trim(),
+    cashRegisterNumber: clampNumber(req.body.cashRegisterNumber, 0, mapSettings(loadSettings(req.user.company_id)).cashRegisterCount || 1, 0)
   };
 
   if (!user.name || !user.username || !password || !user.unitId) {
@@ -327,16 +328,16 @@ app.post("/api/users", requireAuth, requireRole("admin"), (req, res) => {
 
   const passwordHash = bcrypt.hashSync(password, 12);
   db.prepare(
-    `INSERT INTO users (id, company_id, name, username, password_hash, role, unit_id, position, ci, phone)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-  ).run(user.id, req.user.company_id, user.name, user.username, passwordHash, user.role, user.unitId, user.position, user.ci, user.phone);
+    `INSERT INTO users (id, company_id, name, username, password_hash, role, unit_id, position, ci, phone, cash_register_number)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+  ).run(user.id, req.user.company_id, user.name, user.username, passwordHash, user.role, user.unitId, user.position, user.ci, user.phone, user.cashRegisterNumber);
 
   recordAuditEvent({ req, action: "user_create", entityType: "user", entityId: user.id, description: `Creo usuario ${user.username}`, metadata: { role: user.role } });
   res.status(201).json({ user });
 });
 
 app.patch("/api/users/:id", requireAuth, requireRole("admin"), (req, res) => {
-  const existing = db.prepare("SELECT id, username, role, unit_id, is_protected FROM users WHERE id = ? AND company_id = ?").get(req.params.id, req.user.company_id);
+  const existing = db.prepare("SELECT id, username, role, unit_id, cash_register_number, is_protected FROM users WHERE id = ? AND company_id = ?").get(req.params.id, req.user.company_id);
   if (!existing) return res.status(404).json({ error: "Usuario no encontrado" });
 
   const user = {
@@ -347,7 +348,8 @@ app.patch("/api/users/:id", requireAuth, requireRole("admin"), (req, res) => {
     position: String(req.body.position || "").trim(),
     ci: String(req.body.ci || "").trim(),
     phone: String(req.body.phone || "").trim(),
-    password: String(req.body.password || "").trim()
+    password: String(req.body.password || "").trim(),
+    cashRegisterNumber: clampNumber(req.body.cashRegisterNumber, 0, mapSettings(loadSettings(req.user.company_id)).cashRegisterCount || 1, 0)
   };
 
   if (!user.name || !user.username || !user.unitId) {
@@ -365,12 +367,13 @@ app.patch("/api/users/:id", requireAuth, requireRole("admin"), (req, res) => {
 
   const finalRole = existing.is_protected ? existing.role : user.role;
   const finalUnit = existing.is_protected ? existing.unit_id : user.unitId;
+  const finalCashRegister = existing.is_protected ? Number(existing.cash_register_number || 0) : user.cashRegisterNumber;
 
   db.prepare(
     `UPDATE users
-     SET name = ?, username = ?, role = ?, unit_id = ?, position = ?, ci = ?, phone = ?
+     SET name = ?, username = ?, role = ?, unit_id = ?, position = ?, ci = ?, phone = ?, cash_register_number = ?
      WHERE id = ?`
-  ).run(user.name, user.username, finalRole, finalUnit, user.position, user.ci, user.phone, existing.id);
+  ).run(user.name, user.username, finalRole, finalUnit, user.position, user.ci, user.phone, finalCashRegister, existing.id);
 
   if (user.password) {
     const passwordError = validatePasswordStrength(user.password);
@@ -386,7 +389,7 @@ app.patch("/api/users/:id", requireAuth, requireRole("admin"), (req, res) => {
     description: `Actualizo usuario ${user.username}`,
     metadata: { role: finalRole, passwordChanged: Boolean(user.password) }
   });
-  res.json({ user: db.prepare("SELECT id, company_id, name, username, role, unit_id, position, ci, phone, is_active, is_protected FROM users WHERE id = ?").get(existing.id) });
+  res.json({ user: db.prepare("SELECT id, company_id, name, username, role, unit_id, position, ci, phone, cash_register_number, is_active, is_protected FROM users WHERE id = ?").get(existing.id) });
 });
 
 app.patch("/api/users/:id/status", requireAuth, requireRole("admin"), (req, res) => {
@@ -1709,7 +1712,7 @@ app.get("/api/ventas/cash", requireAuth, requireSystemAccess("ventas_almacen"), 
 
 app.post("/api/ventas/cash/open", requireAuth, requireSystemAccess("ventas_almacen"), requireVentasRole("admin", "ventas_admin", "cajero"), (req, res) => {
   const settings = mapSettings(loadSettings(req.user.company_id));
-  const registerNumber = clampNumber(req.body.registerNumber, 1, settings.cashRegisterCount || 1, 1);
+  const registerNumber = clampNumber(req.body.registerNumber || req.user.cash_register_number, 1, settings.cashRegisterCount || 1, 1);
   const active = db
     .prepare("SELECT id FROM cash_sessions WHERE company_id = ? AND opened_by = ? AND status = 'abierta'")
     .get(req.user.company_id, req.user.id);
@@ -1892,6 +1895,7 @@ function publicUser(user) {
     position: user.position,
     ci: user.ci || "",
     phone: user.phone || "",
+    cashRegisterNumber: Number(user.cash_register_number || 0),
     companyPlan: user.plan || "",
     billingPeriod: user.billing_period || "",
     membershipStartsAt: user.starts_at || "",

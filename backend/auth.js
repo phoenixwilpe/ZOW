@@ -25,7 +25,7 @@ function requireAuth(req, res, next) {
     const payload = jwt.verify(token, JWT_SECRET, { issuer: JWT_ISSUER, audience: JWT_AUDIENCE });
     const user = db
       .prepare(
-        `SELECT users.id, users.company_id, users.name, users.username, users.role, users.unit_id, users.position, units.name AS unit_name,
+        `SELECT users.id, users.company_id, users.name, users.username, users.role, users.unit_id, users.position, users.cash_register_number, units.name AS unit_name,
                 companies.status AS company_status, companies.billing_period, companies.starts_at, companies.ends_at
          FROM users
          JOIN units ON units.id = users.unit_id
