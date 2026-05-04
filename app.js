@@ -4514,12 +4514,32 @@ const iconPaths = {
   send: '<path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/>',
   clip: '<path d="m21.4 11.6-8.5 8.5a6 6 0 0 1-8.5-8.5l9.2-9.2a4 4 0 0 1 5.7 5.7l-9.2 9.2a2 2 0 1 1-2.8-2.8l8.5-8.5"/>',
   download: '<path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/>',
-  search: '<circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>'
+  search: '<circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>',
+  tray: '<path d="M22 12h-6l-2 3h-4l-2-3H2"/><path d="M5.5 5h13L22 12v6a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-6Z"/>',
+  fileText: '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="M14 2v6h6"/><path d="M16 13H8"/><path d="M16 17H8"/><path d="M10 9H8"/>',
+  archive: '<path d="M21 8v13H3V8"/><path d="M1 3h22v5H1z"/><path d="M10 12h4"/>',
+  chart: '<path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/>',
+  settings: '<path d="M12 15.5A3.5 3.5 0 1 0 12 8a3.5 3.5 0 0 0 0 7.5Z"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1-1.5 1.7 1.7 0 0 0-1.9.3l-.1.1A2 2 0 1 1 4.2 17l.1-.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1 1.7 1.7 0 0 0-.3-1.9l-.1-.1A2 2 0 1 1 7 4.2l.1.1a1.7 1.7 0 0 0 1.9.3h.1a1.7 1.7 0 0 0 .9-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.9-.3l.1-.1A2 2 0 1 1 19.8 7l-.1.1a1.7 1.7 0 0 0-.3 1.9v.1a1.7 1.7 0 0 0 1.5.9h.1a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1Z"/>',
+  building: '<path d="M3 21h18"/><path d="M5 21V5a2 2 0 0 1 2-2h7v18"/><path d="M19 21V9h-5"/><path d="M9 7h1"/><path d="M9 11h1"/><path d="M9 15h1"/><path d="M17 13h1"/><path d="M17 17h1"/>',
+  clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
+  folder: '<path d="M3 7a2 2 0 0 1 2-2h5l2 2h7a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/>'
 };
 
 function enhanceInterface() {
   decorateButtons();
+  decorateNavigation();
   animatePanels();
+}
+
+function decorateNavigation() {
+  document.querySelectorAll(".nav-group-toggle, .nav-item").forEach((item) => {
+    if (item.dataset.navIconified) return;
+    const iconName = resolveNavigationIcon(item);
+    if (iconName && iconPaths[iconName]) {
+      item.insertAdjacentHTML("afterbegin", `<span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24">${iconPaths[iconName]}</svg></span>`);
+    }
+    item.dataset.navIconified = "true";
+  });
 }
 
 function decorateButtons() {
@@ -4549,6 +4569,29 @@ function resolveButtonIcon(button) {
   const text = button.textContent.trim().toLowerCase();
   const key = Object.keys(buttonIcons).find((item) => text.includes(item));
   return key ? buttonIcons[key] : "";
+}
+
+function resolveNavigationIcon(item) {
+  const viewIcons = {
+    dashboard: "tray",
+    pendingDerivation: "send",
+    derivedDocuments: "fileText",
+    inbox: "tray",
+    pendingReceipt: "clock",
+    tracking: "search",
+    archive: "archive",
+    reports: "chart",
+    admin: "settings",
+    zowAdmin: "building"
+  };
+  if (item.dataset.view && viewIcons[item.dataset.view]) return viewIcons[item.dataset.view];
+  const text = item.textContent.trim().toLowerCase();
+  if (text.includes("inicio")) return "tray";
+  if (text.includes("recepcion")) return "fileText";
+  if (text.includes("consulta")) return "search";
+  if (text.includes("sistema")) return "settings";
+  if (text.includes("zow")) return "building";
+  return "";
 }
 
 function createButtonRipple(event) {

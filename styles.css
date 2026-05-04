@@ -675,6 +675,66 @@ body.app-ventas .app-shell {
   margin: 0 auto;
 }
 
+body.app-correspondencia {
+  --bg: #eef3f7;
+  --panel: #ffffff;
+  --ink: #1c2633;
+  --muted: #657487;
+  --line: #d7e0ea;
+  --accent: #2563eb;
+  --accent-dark: #1d4ed8;
+  --accent-soft: #dbeafe;
+  --accent-tint: #eff6ff;
+  --side-bg: #172033;
+  --side-line: #2c3a56;
+  --side-muted: #b8c5dc;
+  --side-active: #243b67;
+  --login-a: #13213a;
+  --login-b: #244f9f;
+  --login-panel: #eef5ff;
+  --warn: #a16207;
+  position: relative;
+  background:
+    radial-gradient(circle at 86% 10%, rgb(37 99 235 / 14%), transparent 26vw),
+    radial-gradient(circle at 18% 88%, rgb(14 165 233 / 12%), transparent 28vw),
+    linear-gradient(135deg, rgb(255 255 255 / 74%) 0 22%, transparent 22%),
+    repeating-linear-gradient(90deg, rgb(37 99 235 / 5%) 0 1px, transparent 1px 86px),
+    repeating-linear-gradient(0deg, rgb(30 41 59 / 4%) 0 1px, transparent 1px 86px),
+    var(--bg);
+  background-attachment: fixed;
+}
+
+body.app-correspondencia::before,
+body.app-correspondencia::after {
+  content: "";
+  position: fixed;
+  pointer-events: none;
+  z-index: 0;
+}
+
+body.app-correspondencia::before {
+  inset: 0;
+  background:
+    linear-gradient(120deg, transparent 0 63%, rgb(37 99 235 / 7%) 63% 63.25%, transparent 63.25%),
+    radial-gradient(circle at 68% 52%, rgb(255 255 255 / 72%), transparent 22vw);
+}
+
+body.app-correspondencia::after {
+  right: -120px;
+  bottom: 8vh;
+  width: min(520px, 54vw);
+  aspect-ratio: 1.25;
+  border: 1px solid rgb(37 99 235 / 12%);
+  border-radius: 8px;
+  background:
+    repeating-linear-gradient(0deg, transparent 0 18px, rgb(37 99 235 / 8%) 18px 20px),
+    linear-gradient(135deg, rgb(255 255 255 / 64%), rgb(37 99 235 / 7%));
+  box-shadow: 0 24px 70px rgb(15 23 42 / 8%);
+  opacity: 0.55;
+  transform: rotate(-8deg);
+  animation: documentFloat 13s ease-in-out infinite alternate;
+}
+
 body.app-zow-panel {
   --bg: #f6f6f7;
   --ink: #202226;
@@ -1005,7 +1065,7 @@ button:disabled {
 
 .nav-group-toggle::after {
   content: "+";
-  float: right;
+  margin-left: auto;
   color: color-mix(in srgb, var(--accent-soft) 70%, white);
 }
 
@@ -1033,11 +1093,85 @@ button:disabled {
   transition: transform 160ms ease, background 160ms ease, color 160ms ease;
 }
 
+.nav-group-toggle,
+.nav-item {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+
+.nav-icon {
+  width: 17px;
+  height: 17px;
+  display: inline-grid;
+  place-items: center;
+  flex: 0 0 auto;
+  opacity: 0.82;
+}
+
+.nav-icon svg {
+  width: 17px;
+  height: 17px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.15;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
 .nav-item:hover,
 .nav-item.is-active {
   background: var(--side-active);
   color: #ffffff;
   transform: translateX(2px);
+}
+
+body.app-correspondencia .sidebar {
+  z-index: 1;
+  background:
+    radial-gradient(circle at 28% 4%, rgb(59 130 246 / 20%), transparent 28%),
+    linear-gradient(180deg, #142037, #172033 60%, #101827);
+  box-shadow: 16px 0 60px rgb(15 23 42 / 10%);
+}
+
+body.app-correspondencia .sidebar::after {
+  content: "";
+  position: absolute;
+  inset: auto 18px 20px;
+  height: 120px;
+  pointer-events: none;
+  z-index: 0;
+  background:
+    repeating-linear-gradient(0deg, transparent 0 13px, rgb(255 255 255 / 7%) 13px 14px),
+    linear-gradient(135deg, transparent, rgb(96 165 250 / 12%));
+  border-radius: 8px;
+  opacity: 0.55;
+}
+
+body.app-correspondencia .sidebar > * {
+  position: relative;
+  z-index: 1;
+}
+
+body.app-correspondencia .sidebar-brand img {
+  background:
+    linear-gradient(180deg, rgb(255 255 255 / 96%), rgb(239 246 255 / 92%));
+  box-shadow: 0 18px 40px rgb(15 23 42 / 24%);
+}
+
+body.app-correspondencia .nav-group {
+  background: rgb(255 255 255 / 4%);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 5%);
+}
+
+body.app-correspondencia .nav-item.is-active {
+  background:
+    linear-gradient(135deg, rgb(37 99 235 / 94%), rgb(14 165 233 / 78%));
+  box-shadow: 0 14px 32px rgb(37 99 235 / 22%);
+}
+
+body.app-correspondencia .nav-item:hover {
+  background: rgb(255 255 255 / 10%);
 }
 
 .sidebar-footer {
@@ -1070,6 +1204,60 @@ button:disabled {
   border-radius: 8px;
   padding: 16px;
   box-shadow: 0 12px 34px rgb(31 41 55 / 7%);
+}
+
+body.app-correspondencia .app-shell {
+  position: relative;
+  z-index: 1;
+}
+
+body.app-correspondencia .topbar {
+  position: relative;
+  overflow: hidden;
+  border: 0;
+  background:
+    radial-gradient(circle at 14% 16%, rgb(96 165 250 / 22%), transparent 28%),
+    linear-gradient(135deg, #18243b, #1e3a8a 58%, #0ea5e9);
+  color: white;
+  box-shadow: 0 28px 80px rgb(15 23 42 / 16%);
+}
+
+body.app-correspondencia .topbar::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    linear-gradient(105deg, transparent 0 38%, rgb(255 255 255 / 13%) 41%, transparent 45%),
+    repeating-linear-gradient(90deg, transparent 0 42px, rgb(255 255 255 / 5%) 42px 43px);
+  animation: documentScan 8.5s ease-in-out infinite;
+}
+
+body.app-correspondencia .topbar > * {
+  position: relative;
+  z-index: 1;
+}
+
+body.app-correspondencia .topbar .eyebrow {
+  color: rgb(219 234 254 / 82%);
+}
+
+body.app-correspondencia .topbar .user-badge,
+body.app-correspondencia .topbar .ghost-button,
+body.app-correspondencia .topbar .primary-button,
+body.app-correspondencia .topbar .notification-button {
+  border-color: rgb(255 255 255 / 18%);
+  background: rgb(255 255 255 / 12%);
+  color: white;
+  box-shadow: none;
+  backdrop-filter: blur(12px);
+}
+
+body.app-correspondencia .topbar .primary-button:hover,
+body.app-correspondencia .topbar .ghost-button:hover,
+body.app-correspondencia .topbar .notification-button:hover {
+  background: rgb(255 255 255 / 18%);
+  transform: translateY(-1px);
 }
 
 .eyebrow {
@@ -1252,6 +1440,50 @@ h3 {
   display: block;
   margin-top: 8px;
   font-size: 28px;
+}
+
+body.app-correspondencia .metrics article,
+body.app-correspondencia .document-list,
+body.app-correspondencia .detail-panel,
+body.app-correspondencia .filter-panel,
+body.app-correspondencia .action-menu,
+body.app-correspondencia .workflow-panel,
+body.app-correspondencia .admin-panel,
+body.app-correspondencia .setup-overview article {
+  background:
+    linear-gradient(180deg, rgb(255 255 255 / 90%), rgb(248 251 255 / 84%));
+  border-color: rgb(148 163 184 / 32%);
+  box-shadow: 0 22px 58px rgb(15 23 42 / 8%);
+  backdrop-filter: blur(16px);
+}
+
+body.app-correspondencia .metrics article {
+  transition: transform 160ms ease, box-shadow 160ms ease;
+}
+
+body.app-correspondencia .metrics article::before {
+  height: 4px;
+  background: linear-gradient(90deg, #2563eb, #0ea5e9, #93c5fd);
+}
+
+body.app-correspondencia .metrics article::after {
+  content: "";
+  position: absolute;
+  right: 14px;
+  bottom: 12px;
+  width: 46px;
+  height: 58px;
+  border: 1px solid rgb(37 99 235 / 12%);
+  border-radius: 6px;
+  background:
+    repeating-linear-gradient(0deg, transparent 0 8px, rgb(37 99 235 / 9%) 8px 9px),
+    linear-gradient(180deg, rgb(255 255 255 / 60%), rgb(219 234 254 / 48%));
+  opacity: 0.62;
+}
+
+body.app-correspondencia .metrics article:hover {
+  box-shadow: 0 28px 68px rgb(15 23 42 / 12%);
+  transform: translateY(-2px);
 }
 
 .workspace {
@@ -4784,6 +5016,25 @@ h3 {
   }
 }
 
+@keyframes documentFloat {
+  from {
+    transform: translate3d(0, 0, 0) rotate(-8deg);
+  }
+  to {
+    transform: translate3d(-34px, -18px, 0) rotate(-5deg);
+  }
+}
+
+@keyframes documentScan {
+  0%,
+  64% {
+    transform: translateX(-34%);
+  }
+  100% {
+    transform: translateX(34%);
+  }
+}
+
 .admin-action-card span,
 .admin-action-card small {
   color: var(--muted);
@@ -4979,10 +5230,45 @@ h3 {
   background: #fbfcfc;
 }
 
+body.app-correspondencia .doc-card {
+  position: relative;
+  overflow: hidden;
+  background:
+    linear-gradient(90deg, rgb(37 99 235 / 9%) 0 4px, transparent 4px),
+    linear-gradient(180deg, rgb(255 255 255 / 94%), rgb(248 251 255 / 90%));
+  box-shadow: 0 14px 34px rgb(15 23 42 / 6%);
+  transition: transform 150ms ease, border-color 150ms ease, box-shadow 150ms ease, background 150ms ease;
+}
+
+body.app-correspondencia .doc-card::after {
+  content: "";
+  position: absolute;
+  right: 12px;
+  top: 12px;
+  width: 34px;
+  height: 44px;
+  border: 1px solid rgb(37 99 235 / 14%);
+  border-radius: 5px;
+  background:
+    linear-gradient(135deg, transparent 0 76%, rgb(37 99 235 / 13%) 76%),
+    repeating-linear-gradient(0deg, transparent 0 7px, rgb(37 99 235 / 12%) 7px 8px);
+  opacity: 0.36;
+}
+
 .doc-card:hover,
 .doc-card.is-selected {
   border-color: #72cfc2;
   background: #f0fdfa;
+}
+
+body.app-correspondencia .doc-card:hover,
+body.app-correspondencia .doc-card.is-selected {
+  border-color: rgb(37 99 235 / 48%);
+  background:
+    linear-gradient(90deg, #2563eb 0 4px, transparent 4px),
+    linear-gradient(180deg, rgb(239 246 255 / 96%), rgb(255 255 255 / 92%));
+  box-shadow: 0 24px 52px rgb(37 99 235 / 13%);
+  transform: translateY(-2px);
 }
 
 .doc-card-header {
@@ -5020,6 +5306,12 @@ h3 {
 .status-pill {
   background: #e0f2fe;
   color: var(--info);
+}
+
+body.app-correspondencia .status-pill,
+body.app-correspondencia .code-pill,
+body.app-correspondencia .priority-pill {
+  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 45%);
 }
 
 .status-pill.atendido,
@@ -5101,6 +5393,20 @@ h3 {
   font-size: 12px;
 }
 
+body.app-correspondencia .notification-button:not(.hidden) strong {
+  animation: notificationPulse 1.8s ease-in-out infinite;
+}
+
+@keyframes notificationPulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgb(245 158 11 / 34%);
+  }
+  50% {
+    box-shadow: 0 0 0 7px rgb(245 158 11 / 0%);
+  }
+}
+
 .notification-list {
   display: flex;
   flex-wrap: wrap;
@@ -5136,6 +5442,19 @@ h3 {
   border-radius: 8px;
   padding: 12px;
   background: #fbfcfc;
+}
+
+body.app-correspondencia .detail-grid div,
+body.app-correspondencia .institutional-block div {
+  background:
+    linear-gradient(180deg, rgb(255 255 255 / 86%), rgb(239 246 255 / 48%));
+  transition: transform 150ms ease, border-color 150ms ease;
+}
+
+body.app-correspondencia .detail-grid div:hover,
+body.app-correspondencia .institutional-block div:hover {
+  border-color: rgb(37 99 235 / 28%);
+  transform: translateY(-1px);
 }
 
 .institutional-block {
@@ -5221,6 +5540,24 @@ textarea {
   border-left: 3px solid #99d8ce;
   padding: 0 0 14px 12px;
   margin-left: 5px;
+}
+
+body.app-correspondencia .timeline-item {
+  position: relative;
+  border-left-color: rgb(37 99 235 / 38%);
+}
+
+body.app-correspondencia .timeline-item::before {
+  content: "";
+  position: absolute;
+  left: -7px;
+  top: 2px;
+  width: 11px;
+  height: 11px;
+  border: 2px solid white;
+  border-radius: 50%;
+  background: #2563eb;
+  box-shadow: 0 0 0 4px rgb(37 99 235 / 12%);
 }
 
 .timeline-item strong {
@@ -5317,6 +5654,10 @@ dialog::backdrop {
     border-bottom: 1px solid var(--side-line);
   }
 
+  body.app-correspondencia .sidebar::after {
+    display: none;
+  }
+
   .sidebar-brand {
     border-bottom: 0;
     padding-bottom: 0;
@@ -5329,6 +5670,7 @@ dialog::backdrop {
 
   .nav {
     display: flex;
+    align-items: flex-start;
     gap: 10px;
     overflow-x: auto;
     padding-bottom: 2px;
