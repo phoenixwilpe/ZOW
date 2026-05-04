@@ -40,7 +40,7 @@ let cashClosures = [];
 let selectedKardex = null;
 let localSaleMeta = loadJson(LOCAL_SALE_META_KEY, {});
 let historyFilter = { status: "", method: "", date: "" };
-let storeSettings = { companyName: "", storeName: "", currency: "BOB", taxId: "", phone: "", address: "", ticketNote: "" };
+let storeSettings = { companyName: "", storeName: "", currency: "BOB", taxId: "", phone: "", address: "", ticketNote: "", cashRegisterCount: 1 };
 
 const starterProducts = [
   { code: "AB-001", name: "Agua mineral 600 ml", category: "Bebidas", unit: "Botella", costPrice: 2.1, salePrice: 4, minStock: 24, stock: 96 },
@@ -431,6 +431,7 @@ function renderFinance() {
       <article><span>${cashLabel}</span><strong>${cash.pendingSales?.length || 0}</strong></article>
       <article><span>${totalLabel}</span><strong>${money(cash.total || 0)}</strong></article>
       <article><span>Efectivo esperado</span><strong>${money(expectedCash)}</strong></article>
+      <article><span>Cajas configuradas</span><strong>${num(storeSettings.cashRegisterCount || 1)}</strong></article>
       <article><span>Ultimo cierre</span><strong>${lastClosure ? escapeHtml(lastClosure.code) : "Sin cierres"}</strong></article>
       <article><span>Diferencia acumulada</span><strong class="${Math.abs(totalClosureDifference) > 0 ? "warn-text" : "ok-text"}">${money(totalClosureDifference)}</strong></article>
     </section>
@@ -438,9 +439,15 @@ function renderFinance() {
       <section class="admin-panel">
         <div class="admin-panel-head"><div><p class="eyebrow">Apertura</p><h3>${cashSession?.status === "abierta" ? "Caja abierta" : "Abrir caja"}</h3></div></div>
         ${cashSession?.status === "abierta" ? `
-          <div class="cash-status-card"><strong>${money(cashSession.openingAmount)}</strong><span>Apertura por ${escapeHtml(cashSession.openedBy)} / ${formatDateTime(cashSession.openedAt)}</span></div>
+          <div class="cash-status-card"><strong>Caja ${num(cashSession.registerNumber)} / ${money(cashSession.openingAmount)}</strong><span>Apertura por ${escapeHtml(cashSession.openedBy)} / ${formatDateTime(cashSession.openedAt)}</span></div>
         ` : `
-          <form class="admin-form" id="cashOpenForm"><label>Monto inicial<input id="cashOpeningAmount" type="number" min="0" step="0.01" value="0" /></label><button class="primary-button" type="submit">Abrir caja</button></form>
+          <form class="admin-form" id="cashOpenForm">
+            <div class="form-grid">
+              <label>Caja<select id="cashRegisterNumber">${cashRegisterOptions().map((item) => `<option value="${item}">Caja ${item}</option>`).join("")}</select></label>
+              <label>Monto inicial<input id="cashOpeningAmount" type="number" min="0" step="0.01" value="0" /></label>
+            </div>
+            <button class="primary-button" type="submit">Abrir caja</button>
+          </form>
         `}
       </section>
       <section class="admin-panel">
@@ -735,6 +742,7 @@ function renderSettings() {
           <label>Nombre legal<input id="storeCompanyName" type="text" value="${escapeHtml(storeSettings.companyName || currentUser.companyName || "")}" required /></label>
           <label>Nombre comercial<input id="storeName" type="text" value="${escapeHtml(storeSettings.storeName || "")}" placeholder="Sucursal central" /></label>
           <label>Moneda<input id="storeCurrency" type="text" value="${escapeHtml(storeSettings.currency || "BOB")}" required /></label>
+          <label>Cantidad de cajas<input id="storeCashRegisterCount" type="number" min="1" max="20" step="1" value="${Number(storeSettings.cashRegisterCount || 1)}" /></label>
           <label>NIT / Identificacion<input id="storeTaxId" type="text" value="${escapeHtml(storeSettings.taxId || "")}" /></label>
           <label>Telefono<input id="storePhone" type="tel" value="${escapeHtml(storeSettings.phone || "")}" /></label>
           <label>Direccion<input id="storeAddress" type="text" value="${escapeHtml(storeSettings.address || "")}" /></label>
@@ -748,7 +756,7 @@ function renderSettings() {
       <div class="operation-model-grid">
         <article><span>Tienda 1 persona</span><strong>Encargado de sistema</strong><small>Puede configurar, vender, cerrar caja, registrar productos y ajustar stock.</small></article>
         <article><span>Tienda 2 personas</span><strong>Operador integral + encargado</strong><small>El operador integral atiende venta, caja e inventario diario sin tocar el panel ZOW.</small></article>
-        <article><span>Empresa grande</span><strong>Roles separados</strong><small>Cajero, almacen, vendedor, supervisor y administrador ventas por area o sucursal.</small></article>
+        <article><span>Empresa grande</span><strong>Cajas separadas</strong><small>Cajeros, almacen, vendedor y supervisor trabajan con permisos separados en el mismo punto de atencion.</small></article>
       </div>
     </section>
   `;
@@ -856,7 +864,7 @@ function renderCashClosureRow(closure) {
   return `<article class="admin-row cash-closure-row">
     <div>
       <strong>${escapeHtml(closure.code)}</strong>
-      <span>${formatDateTime(closure.createdAt)} / ${closure.saleCount} venta${closure.saleCount === 1 ? "" : "s"}</span>
+      <span>Caja ${num(closure.registerNumber)} / ${formatDateTime(closure.createdAt)} / ${closure.saleCount} venta${closure.saleCount === 1 ? "" : "s"}</span>
       <span>Apertura ${money(closure.openingAmount)} / Ventas ${money(closure.totalSales)} / Movimientos ${money(closure.movementTotal)}</span>
     </div>
     <div class="admin-row-meta">
@@ -1204,7 +1212,7 @@ function openCashSession(event) {
   event.preventDefault();
   apiRequest("/ventas/cash/open", {
     method: "POST",
-    body: { openingAmount: Number(value("#cashOpeningAmount") || 0) }
+    body: { registerNumber: Number(value("#cashRegisterNumber") || 1), openingAmount: Number(value("#cashOpeningAmount") || 0) }
   }).then(async () => {
     ventasMessage = "Caja abierta correctamente.";
     await render();
@@ -1252,7 +1260,7 @@ function printCashClosure(closureId) {
   const printable = window.open("", "_blank", "width=440,height=720");
   if (!printable) return;
   const difference = Number(closure.differenceAmount || 0);
-  printable.document.write(`<!doctype html><html><head><meta charset="UTF-8"><title>Cierre ${escapeHtml(closure.code)}</title><style>body{font-family:Arial,sans-serif;padding:20px;max-width:340px;color:#111}h1{font-size:18px;text-align:center;margin:0 0 8px}.muted{color:#555;font-size:12px;text-align:center}.row{display:flex;justify-content:space-between;border-bottom:1px dashed #aaa;padding:8px 0}.total{font-weight:800;font-size:17px}.diff{font-weight:800;color:${difference === 0 ? "#15803d" : "#b45309"}}button{margin-bottom:12px}.sign{margin-top:34px;border-top:1px solid #111;text-align:center;padding-top:8px;font-size:12px}</style></head><body><button onclick="window.print()">Imprimir</button><h1>${escapeHtml(storeSettings.storeName || storeSettings.companyName || currentUser.companyName || "Zow Ventas-Almacen")}</h1><p class="muted">Cierre de caja ${escapeHtml(closure.code)}<br>${formatDateTime(closure.createdAt)}</p><div class="row"><span>Monto apertura</span><strong>${money(closure.openingAmount)}</strong></div><div class="row"><span>Total ventas</span><strong>${money(closure.totalSales)}</strong></div><div class="row"><span>Movimientos</span><strong>${money(closure.movementTotal)}</strong></div><div class="row total"><span>Esperado</span><strong>${money(closure.expectedAmount)}</strong></div><div class="row"><span>Contado</span><strong>${money(closure.countedAmount)}</strong></div><div class="row diff"><span>Diferencia</span><strong>${money(difference)}</strong></div><div class="row"><span>Ventas cerradas</span><strong>${closure.saleCount}</strong></div><div class="sign">Firma cajero / responsable</div></body></html>`);
+  printable.document.write(`<!doctype html><html><head><meta charset="UTF-8"><title>Cierre ${escapeHtml(closure.code)}</title><style>body{font-family:Arial,sans-serif;padding:20px;max-width:340px;color:#111}h1{font-size:18px;text-align:center;margin:0 0 8px}.muted{color:#555;font-size:12px;text-align:center}.row{display:flex;justify-content:space-between;border-bottom:1px dashed #aaa;padding:8px 0}.total{font-weight:800;font-size:17px}.diff{font-weight:800;color:${difference === 0 ? "#15803d" : "#b45309"}}button{margin-bottom:12px}.sign{margin-top:34px;border-top:1px solid #111;text-align:center;padding-top:8px;font-size:12px}</style></head><body><button onclick="window.print()">Imprimir</button><h1>${escapeHtml(storeSettings.storeName || storeSettings.companyName || currentUser.companyName || "Zow Ventas-Almacen")}</h1><p class="muted">Cierre de caja ${escapeHtml(closure.code)}<br>Caja ${num(closure.registerNumber)} / ${formatDateTime(closure.createdAt)}</p><div class="row"><span>Monto apertura</span><strong>${money(closure.openingAmount)}</strong></div><div class="row"><span>Total ventas</span><strong>${money(closure.totalSales)}</strong></div><div class="row"><span>Movimientos</span><strong>${money(closure.movementTotal)}</strong></div><div class="row total"><span>Esperado</span><strong>${money(closure.expectedAmount)}</strong></div><div class="row"><span>Contado</span><strong>${money(closure.countedAmount)}</strong></div><div class="row diff"><span>Diferencia</span><strong>${money(difference)}</strong></div><div class="row"><span>Ventas cerradas</span><strong>${closure.saleCount}</strong></div><div class="sign">Firma cajero / responsable</div></body></html>`);
   printable.document.close();
   printable.focus();
 }
@@ -1359,7 +1367,8 @@ async function saveStoreSettings(event) {
       taxId: value("#storeTaxId"),
       phone: value("#storePhone"),
       address: value("#storeAddress"),
-      ticketNote: value("#storeTicketNote")
+      ticketNote: value("#storeTicketNote"),
+      cashRegisterCount: Number(value("#storeCashRegisterCount") || 1)
     }
   });
   storeSettings = response.settings;
@@ -1607,6 +1616,10 @@ function paymentMethods() {
   ];
 }
 function paymentLabel(id) { return paymentMethods().find((method) => method.id === id)?.label || "Efectivo"; }
+function cashRegisterOptions() {
+  const count = Math.min(Math.max(Math.floor(Number(storeSettings.cashRegisterCount || 1)), 1), 20);
+  return Array.from({ length: count }, (_, index) => index + 1);
+}
 function exportSalesCsv() {
   const rows = sales.map((sale) => ({
     codigo: sale.code,
@@ -1707,6 +1720,7 @@ function normalizeCashSession(session) {
   return {
     id: session.id,
     openingAmount: Number(session.opening_amount ?? session.openingAmount ?? 0),
+    registerNumber: Number(session.register_number ?? session.registerNumber ?? 1),
     openedBy: session.opened_by_name || session.openedBy || currentUser?.name || "",
     openedAt: session.opened_at || session.openedAt || "",
     status: session.status || ""
@@ -1726,6 +1740,7 @@ function normalizeCashClosure(closure) {
   return {
     id: closure.id,
     code: closure.code || "",
+    registerNumber: Number(closure.register_number ?? closure.registerNumber ?? 1),
     openingAmount: Number(closure.opening_amount ?? closure.openingAmount ?? 0),
     totalSales: Number(closure.total_sales ?? closure.totalSales ?? 0),
     movementTotal: Number(closure.movement_total ?? closure.movementTotal ?? 0),

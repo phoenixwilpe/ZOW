@@ -84,6 +84,7 @@ create table if not exists organization_settings (
   phone text not null default '',
   address text not null default '',
   ticket_note text not null default '',
+  cash_register_count integer not null default 1,
   logo_bucket text not null default '',
   logo_path text not null default '',
   logo_name text not null default '',
@@ -292,6 +293,10 @@ create table if not exists sales_orders (
   total numeric not null default 0,
   cash_received numeric not null default 0,
   change_amount numeric not null default 0,
+  payment_method text not null default 'efectivo',
+  amount_paid numeric not null default 0,
+  balance_due numeric not null default 0,
+  payment_status text not null default 'pagada',
   status text not null default 'confirmada',
   cash_closed boolean not null default false,
   created_by text not null references users(id),
@@ -314,11 +319,39 @@ create table if not exists cash_closures (
   id text primary key,
   company_id text not null references companies(id) on delete cascade,
   code text not null,
+  register_number integer not null default 1,
+  opening_amount numeric not null default 0,
   total_sales numeric not null default 0,
+  movement_total numeric not null default 0,
+  expected_amount numeric not null default 0,
+  counted_amount numeric not null default 0,
+  difference_amount numeric not null default 0,
   sale_count integer not null default 0,
   created_by text not null references users(id),
   created_at timestamptz not null default now(),
   unique (company_id, code)
+);
+
+create table if not exists cash_sessions (
+  id text primary key,
+  company_id text not null references companies(id) on delete cascade,
+  opened_by text not null references users(id),
+  register_number integer not null default 1,
+  opening_amount numeric not null default 0,
+  status text not null default 'abierta',
+  opened_at timestamptz not null default now(),
+  closed_at timestamptz
+);
+
+create table if not exists cash_movements (
+  id text primary key,
+  company_id text not null references companies(id) on delete cascade,
+  session_id text not null references cash_sessions(id) on delete cascade,
+  type text not null,
+  amount numeric not null default 0,
+  reason text not null default '',
+  created_by text not null references users(id),
+  created_at timestamptz not null default now()
 );
 
 create table if not exists inventory_movements (
@@ -348,6 +381,8 @@ create index if not exists idx_leads_priority on leads(priority, created_at desc
 create index if not exists idx_lead_history_lead on lead_history(lead_id, created_at desc);
 create index if not exists idx_inventory_products_company on inventory_products(company_id, name);
 create index if not exists idx_sales_orders_company on sales_orders(company_id, created_at desc);
+create index if not exists idx_cash_sessions_company on cash_sessions(company_id, status, opened_at);
+create index if not exists idx_cash_movements_session on cash_movements(session_id, created_at);
 create index if not exists idx_inventory_movements_product on inventory_movements(product_id, created_at desc);
 
 alter table companies enable row level security;
@@ -366,6 +401,8 @@ alter table sales_customers enable row level security;
 alter table sales_orders enable row level security;
 alter table sales_order_items enable row level security;
 alter table cash_closures enable row level security;
+alter table cash_sessions enable row level security;
+alter table cash_movements enable row level security;
 alter table inventory_movements enable row level security;
 
 -- El backend de Vercel usara SUPABASE_SERVICE_ROLE_KEY, por eso RLS no bloquea al servidor.

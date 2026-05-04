@@ -1239,16 +1239,17 @@ app.patch("/api/ventas/settings", requireAuth, requireSystemAccess("ventas_almac
     taxId: String(req.body.taxId || "").trim(),
     phone: String(req.body.phone || "").trim(),
     address: String(req.body.address || "").trim(),
-    ticketNote: String(req.body.ticketNote || "").trim()
+    ticketNote: String(req.body.ticketNote || "").trim(),
+    cashRegisterCount: clampNumber(req.body.cashRegisterCount ?? current.cashRegisterCount, 1, 20, 1)
   };
   if (!settings.companyName) return res.status(400).json({ error: "Nombre de empresa obligatorio" });
   if (!settings.currency) return res.status(400).json({ error: "Moneda obligatoria" });
 
   db.prepare(
     `INSERT INTO organization_settings (
-       id, company_id, company_name, store_name, currency, tax_id, phone, address, ticket_note, updated_at
+       id, company_id, company_name, store_name, currency, tax_id, phone, address, ticket_note, cash_register_count, updated_at
      )
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
      ON CONFLICT(id) DO UPDATE SET
        company_name = excluded.company_name,
        store_name = excluded.store_name,
@@ -1257,6 +1258,7 @@ app.patch("/api/ventas/settings", requireAuth, requireSystemAccess("ventas_almac
        phone = excluded.phone,
        address = excluded.address,
        ticket_note = excluded.ticket_note,
+       cash_register_count = excluded.cash_register_count,
        updated_at = excluded.updated_at`
   ).run(
     req.user.company_id,
@@ -1268,6 +1270,7 @@ app.patch("/api/ventas/settings", requireAuth, requireSystemAccess("ventas_almac
     settings.phone,
     settings.address,
     settings.ticketNote,
+    settings.cashRegisterCount,
     new Date().toISOString()
   );
 
@@ -1695,28 +1698,37 @@ app.get("/api/ventas/cash", requireAuth, requireSystemAccess("ventas_almacen"), 
         )
         .all(req.user.company_id, activeSession.id)
     : [];
+  const cashierScopeUserId = activeSession ? activeSession.opened_by : req.user.id;
+  const shouldScopeSales = Boolean(activeSession) || ownOnly;
   const pendingSales = db
-    .prepare(`SELECT * FROM sales_orders WHERE company_id = ? AND status = 'confirmada' AND cash_closed = 0 ${ownOnly ? "AND created_by = ?" : ""} ORDER BY created_at DESC`)
-    .all(...(ownOnly ? [req.user.company_id, req.user.id] : [req.user.company_id]));
+    .prepare(`SELECT * FROM sales_orders WHERE company_id = ? AND status = 'confirmada' AND cash_closed = 0 ${shouldScopeSales ? "AND created_by = ?" : ""} ORDER BY created_at DESC`)
+    .all(...(shouldScopeSales ? [req.user.company_id, cashierScopeUserId] : [req.user.company_id]));
   const total = pendingSales.reduce((sum, sale) => sum + payableToCash(sale), 0);
   res.json({ pendingSales, total, activeSession, movements });
 });
 
 app.post("/api/ventas/cash/open", requireAuth, requireSystemAccess("ventas_almacen"), requireVentasRole("admin", "ventas_admin", "cajero"), (req, res) => {
+  const settings = mapSettings(loadSettings(req.user.company_id));
+  const registerNumber = clampNumber(req.body.registerNumber, 1, settings.cashRegisterCount || 1, 1);
   const active = db
     .prepare("SELECT id FROM cash_sessions WHERE company_id = ? AND opened_by = ? AND status = 'abierta'")
     .get(req.user.company_id, req.user.id);
   if (active) return res.status(400).json({ error: "Ya tienes una caja abierta" });
+  const busyRegister = db
+    .prepare("SELECT id FROM cash_sessions WHERE company_id = ? AND register_number = ? AND status = 'abierta'")
+    .get(req.user.company_id, registerNumber);
+  if (busyRegister) return res.status(400).json({ error: `La caja ${registerNumber} ya esta abierta` });
   const session = {
     id: randomUUID(),
+    registerNumber,
     openingAmount: Number(req.body.openingAmount || 0),
     openedAt: new Date().toISOString()
   };
   if (session.openingAmount < 0) return res.status(400).json({ error: "El monto inicial no puede ser negativo" });
   db.prepare(
-    `INSERT INTO cash_sessions (id, company_id, opened_by, opening_amount, status, opened_at)
-     VALUES (?, ?, ?, ?, 'abierta', ?)`
-  ).run(session.id, req.user.company_id, req.user.id, session.openingAmount, session.openedAt);
+    `INSERT INTO cash_sessions (id, company_id, opened_by, register_number, opening_amount, status, opened_at)
+     VALUES (?, ?, ?, ?, ?, 'abierta', ?)`
+  ).run(session.id, req.user.company_id, req.user.id, session.registerNumber, session.openingAmount, session.openedAt);
   res.status(201).json({
     session: db.prepare("SELECT * FROM cash_sessions WHERE id = ?").get(session.id)
   });
@@ -1745,12 +1757,11 @@ app.post("/api/ventas/cash/movements", requireAuth, requireSystemAccess("ventas_
 });
 
 app.post("/api/ventas/cash/close", requireAuth, requireSystemAccess("ventas_almacen"), requireVentasRole("admin", "ventas_admin", "cajero"), (req, res) => {
-  const ownOnly = ventasOwnOnly(req.user.role);
   const session = db
     .prepare("SELECT * FROM cash_sessions WHERE company_id = ? AND opened_by = ? AND status = 'abierta'")
     .get(req.user.company_id, req.user.id);
   if (!session) return res.status(400).json({ error: "No tienes una caja abierta" });
-  const pendingSales = db.prepare(`SELECT * FROM sales_orders WHERE company_id = ? AND status = 'confirmada' AND cash_closed = 0 ${ownOnly ? "AND created_by = ?" : ""}`).all(...(ownOnly ? [req.user.company_id, req.user.id] : [req.user.company_id]));
+  const pendingSales = db.prepare("SELECT * FROM sales_orders WHERE company_id = ? AND status = 'confirmada' AND cash_closed = 0 AND created_by = ?").all(req.user.company_id, session.opened_by);
   const now = new Date().toISOString();
   const closureId = randomUUID();
   const code = buildNextCashCode(req.user.company_id, now);
@@ -1766,12 +1777,12 @@ app.post("/api/ventas/cash/close", requireAuth, requireSystemAccess("ventas_alma
   try {
   db.prepare(
     `INSERT INTO cash_closures (
-       id, company_id, code, opening_amount, total_sales, movement_total, expected_amount,
+       id, company_id, code, register_number, opening_amount, total_sales, movement_total, expected_amount,
        counted_amount, difference_amount, sale_count, created_by, created_at
      )
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-  ).run(closureId, req.user.company_id, code, openingAmount, total, movementTotal, expectedAmount, countedAmount, differenceAmount, pendingSales.length, req.user.id, now);
-  db.prepare(`UPDATE sales_orders SET cash_closed = 1 WHERE company_id = ? AND status = 'confirmada' AND cash_closed = 0 ${ownOnly ? "AND created_by = ?" : ""}`).run(...(ownOnly ? [req.user.company_id, req.user.id] : [req.user.company_id]));
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+  ).run(closureId, req.user.company_id, code, Number(session.register_number || 1), openingAmount, total, movementTotal, expectedAmount, countedAmount, differenceAmount, pendingSales.length, req.user.id, now);
+  db.prepare("UPDATE sales_orders SET cash_closed = 1 WHERE company_id = ? AND status = 'confirmada' AND cash_closed = 0 AND created_by = ?").run(req.user.company_id, session.opened_by);
   db.prepare("UPDATE cash_sessions SET status = 'cerrada', closed_at = ? WHERE id = ? AND company_id = ?").run(now, session.id, req.user.company_id);
   db.exec("COMMIT");
   } catch (error) {
@@ -2041,9 +2052,16 @@ function mapSettings(settings = {}) {
     phone: settings.phone || "",
     address: settings.address || "",
     ticketNote: settings.ticket_note || "",
+    cashRegisterCount: clampNumber(settings.cash_register_count, 1, 20, 1),
     logoName: settings.logo_name || "",
     logoUrl: settings.logo_path ? `/${settings.logo_path}` : ""
   };
+}
+
+function clampNumber(value, min, max, fallback) {
+  const number = Math.floor(Number(value));
+  if (!Number.isFinite(number)) return fallback;
+  return Math.min(Math.max(number, min), max);
 }
 
 function buildNextDocumentCode(companyId, year, date = new Date().toISOString()) {

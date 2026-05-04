@@ -1062,15 +1062,16 @@ app.patch("/api/ventas/settings", requireAuth, async (req, res) => {
     taxId: String(req.body.taxId || "").trim(),
     phone: String(req.body.phone || "").trim(),
     address: String(req.body.address || "").trim(),
-    ticketNote: String(req.body.ticketNote || "").trim()
+    ticketNote: String(req.body.ticketNote || "").trim(),
+    cashRegisterCount: clampNumber(req.body.cashRegisterCount ?? current.cashRegisterCount, 1, 20, 1)
   };
   if (!settings.companyName) return res.status(400).json({ error: "Nombre de empresa obligatorio" });
   if (!settings.currency) return res.status(400).json({ error: "Moneda obligatoria" });
   await pg.run(
     `INSERT INTO organization_settings (
-       id, company_id, company_name, store_name, currency, tax_id, phone, address, ticket_note, updated_at
+       id, company_id, company_name, store_name, currency, tax_id, phone, address, ticket_note, cash_register_count, updated_at
      )
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, now())
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, now())
      ON CONFLICT(id) DO UPDATE SET
        company_name = excluded.company_name,
        store_name = excluded.store_name,
@@ -1079,8 +1080,9 @@ app.patch("/api/ventas/settings", requireAuth, async (req, res) => {
        phone = excluded.phone,
        address = excluded.address,
        ticket_note = excluded.ticket_note,
+       cash_register_count = excluded.cash_register_count,
        updated_at = now()`,
-    [req.user.company_id, req.user.company_id, settings.companyName, settings.storeName, settings.currency, settings.taxId, settings.phone, settings.address, settings.ticketNote]
+    [req.user.company_id, req.user.company_id, settings.companyName, settings.storeName, settings.currency, settings.taxId, settings.phone, settings.address, settings.ticketNote, settings.cashRegisterCount]
   );
   res.json({ settings: await mapSettings(await loadSettings(req.user.company_id)) });
 });
@@ -1514,9 +1516,11 @@ app.get("/api/ventas/cash", requireAuth, async (req, res) => {
         [req.user.company_id, activeSession.id]
       )
     : [];
+  const cashierScopeUserId = activeSession ? activeSession.opened_by : req.user.id;
+  const shouldScopeSales = Boolean(activeSession) || ownOnly;
   const pendingSales = await pg.all(
-    `SELECT * FROM sales_orders WHERE company_id = ? AND status = 'confirmada' AND cash_closed = false ${ownOnly ? "AND created_by = ?" : ""} ORDER BY created_at DESC`,
-    ownOnly ? [req.user.company_id, req.user.id] : [req.user.company_id]
+    `SELECT * FROM sales_orders WHERE company_id = ? AND status = 'confirmada' AND cash_closed = false ${shouldScopeSales ? "AND created_by = ?" : ""} ORDER BY created_at DESC`,
+    shouldScopeSales ? [req.user.company_id, cashierScopeUserId] : [req.user.company_id]
   );
   const total = pendingSales.reduce((sum, sale) => sum + payableToCash(sale), 0);
   res.json({ pendingSales, total, activeSession, movements });
@@ -1526,15 +1530,19 @@ app.post("/api/ventas/cash/open", requireAuth, async (req, res) => {
   if (!(await requireSystemAccess("ventas_almacen", req, res))) return;
   if (!requireVentasRole(req, res, "admin", "ventas_admin", "cajero")) return;
   await ensureVentasSchema();
+  const settings = await mapSettings(await loadSettings(req.user.company_id));
+  const registerNumber = clampNumber(req.body.registerNumber, 1, settings.cashRegisterCount || 1, 1);
   const active = await pg.get("SELECT id FROM cash_sessions WHERE company_id = ? AND opened_by = ? AND status = 'abierta'", [req.user.company_id, req.user.id]);
   if (active) return res.status(400).json({ error: "Ya tienes una caja abierta" });
+  const busyRegister = await pg.get("SELECT id FROM cash_sessions WHERE company_id = ? AND register_number = ? AND status = 'abierta'", [req.user.company_id, registerNumber]);
+  if (busyRegister) return res.status(400).json({ error: `La caja ${registerNumber} ya esta abierta` });
   const sessionId = randomUUID();
   const openingAmount = Number(req.body.openingAmount || 0);
   if (openingAmount < 0) return res.status(400).json({ error: "El monto inicial no puede ser negativo" });
   await pg.run(
-    `INSERT INTO cash_sessions (id, company_id, opened_by, opening_amount, status, opened_at)
-     VALUES (?, ?, ?, ?, 'abierta', now())`,
-    [sessionId, req.user.company_id, req.user.id, openingAmount]
+    `INSERT INTO cash_sessions (id, company_id, opened_by, register_number, opening_amount, status, opened_at)
+     VALUES (?, ?, ?, ?, ?, 'abierta', now())`,
+    [sessionId, req.user.company_id, req.user.id, registerNumber, openingAmount]
   );
   res.status(201).json({ session: await pg.get("SELECT * FROM cash_sessions WHERE id = ?", [sessionId]) });
 });
@@ -1566,12 +1574,11 @@ app.post("/api/ventas/cash/close", requireAuth, async (req, res) => {
   if (!(await requireSystemAccess("ventas_almacen", req, res))) return;
   if (!requireVentasRole(req, res, "admin", "ventas_admin", "cajero")) return;
   await ensureVentasSchema();
-  const ownOnly = ventasOwnOnly(req.user.role);
   const session = await pg.get("SELECT * FROM cash_sessions WHERE company_id = ? AND opened_by = ? AND status = 'abierta'", [req.user.company_id, req.user.id]);
   if (!session) return res.status(400).json({ error: "No tienes una caja abierta" });
   const pendingSales = await pg.all(
-    `SELECT * FROM sales_orders WHERE company_id = ? AND status = 'confirmada' AND cash_closed = false ${ownOnly ? "AND created_by = ?" : ""}`,
-    ownOnly ? [req.user.company_id, req.user.id] : [req.user.company_id]
+    "SELECT * FROM sales_orders WHERE company_id = ? AND status = 'confirmada' AND cash_closed = false AND created_by = ?",
+    [req.user.company_id, session.opened_by]
   );
   const closureId = randomUUID();
   const total = pendingSales.reduce((sum, sale) => sum + payableToCash(sale), 0);
@@ -1586,15 +1593,15 @@ app.post("/api/ventas/cash/close", requireAuth, async (req, res) => {
   await pg.tx(async (client) => {
     await client.run(
       `INSERT INTO cash_closures (
-         id, company_id, code, opening_amount, total_sales, movement_total, expected_amount,
+         id, company_id, code, register_number, opening_amount, total_sales, movement_total, expected_amount,
          counted_amount, difference_amount, sale_count, created_by, created_at
        )
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, now())`,
-      [closureId, req.user.company_id, code, openingAmount, total, movementTotal, expectedAmount, countedAmount, differenceAmount, pendingSales.length, req.user.id]
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, now())`,
+      [closureId, req.user.company_id, code, Number(session.register_number || 1), openingAmount, total, movementTotal, expectedAmount, countedAmount, differenceAmount, pendingSales.length, req.user.id]
     );
     await client.run(
-      `UPDATE sales_orders SET cash_closed = true WHERE company_id = ? AND status = 'confirmada' AND cash_closed = false ${ownOnly ? "AND created_by = ?" : ""}`,
-      ownOnly ? [req.user.company_id, req.user.id] : [req.user.company_id]
+      "UPDATE sales_orders SET cash_closed = true WHERE company_id = ? AND status = 'confirmada' AND cash_closed = false AND created_by = ?",
+      [req.user.company_id, session.opened_by]
     );
     await client.run("UPDATE cash_sessions SET status = 'cerrada', closed_at = now() WHERE id = ? AND company_id = ?", [session.id, req.user.company_id]);
   });
@@ -1792,6 +1799,7 @@ async function mapSettings(settings = {}) {
     phone: settings?.phone || "",
     address: settings?.address || "",
     ticketNote: settings?.ticket_note || "",
+    cashRegisterCount: clampNumber(settings?.cash_register_count, 1, 20, 1),
     logoName: settings?.logo_name || "",
     logoUrl
   };
@@ -1813,7 +1821,8 @@ async function ensureSettingsSchema() {
       pg.run("ALTER TABLE organization_settings ADD COLUMN IF NOT EXISTS logo_path text not null default ''"),
       pg.run("ALTER TABLE organization_settings ADD COLUMN IF NOT EXISTS logo_name text not null default ''"),
       pg.run("ALTER TABLE organization_settings ADD COLUMN IF NOT EXISTS logo_mime text not null default ''"),
-      pg.run("ALTER TABLE organization_settings ADD COLUMN IF NOT EXISTS logo_updated_at timestamptz")
+      pg.run("ALTER TABLE organization_settings ADD COLUMN IF NOT EXISTS logo_updated_at timestamptz"),
+      pg.run("ALTER TABLE organization_settings ADD COLUMN IF NOT EXISTS cash_register_count integer not null default 1")
     ]);
   }
   await settingsSchemaReady;
@@ -2101,6 +2110,12 @@ function payableToCash(sale) {
   return sale.payment_method === "credito" ? Number(sale.amount_paid || 0) : Number(sale.total || 0);
 }
 
+function clampNumber(value, min, max, fallback) {
+  const number = Math.floor(Number(value));
+  if (!Number.isFinite(number)) return fallback;
+  return Math.min(Math.max(number, min), max);
+}
+
 let ventasSchemaReady;
 async function ensureVentasSchema() {
   if (!ventasSchemaReady) {
@@ -2225,6 +2240,7 @@ async function ensureVentasSchema() {
           id text primary key,
           company_id text not null references companies(id) on delete cascade,
           code text not null,
+          register_number integer not null default 1,
           opening_amount numeric not null default 0,
           total_sales numeric not null default 0,
           movement_total numeric not null default 0,
@@ -2242,6 +2258,7 @@ async function ensureVentasSchema() {
           id text primary key,
           company_id text not null references companies(id) on delete cascade,
           opened_by text not null references users(id),
+          register_number integer not null default 1,
           opening_amount numeric not null default 0,
           status text not null default 'abierta',
           opened_at timestamptz not null default now(),
@@ -2281,6 +2298,7 @@ async function ensureVentasSchema() {
       await pg.run("CREATE INDEX IF NOT EXISTS idx_purchase_suppliers_company ON purchase_suppliers(company_id, name)");
       await pg.run("CREATE INDEX IF NOT EXISTS idx_purchase_orders_company ON purchase_orders(company_id, created_at)");
       await pg.run("ALTER TABLE cash_closures ADD COLUMN IF NOT EXISTS opening_amount numeric not null default 0");
+      await pg.run("ALTER TABLE cash_closures ADD COLUMN IF NOT EXISTS register_number integer not null default 1");
       await pg.run("ALTER TABLE cash_closures ADD COLUMN IF NOT EXISTS movement_total numeric not null default 0");
       await pg.run("ALTER TABLE cash_closures ADD COLUMN IF NOT EXISTS expected_amount numeric not null default 0");
       await pg.run("ALTER TABLE cash_closures ADD COLUMN IF NOT EXISTS counted_amount numeric not null default 0");
@@ -2289,6 +2307,7 @@ async function ensureVentasSchema() {
       await pg.run("ALTER TABLE sales_orders ADD COLUMN IF NOT EXISTS amount_paid numeric not null default 0");
       await pg.run("ALTER TABLE sales_orders ADD COLUMN IF NOT EXISTS balance_due numeric not null default 0");
       await pg.run("ALTER TABLE sales_orders ADD COLUMN IF NOT EXISTS payment_status text not null default 'pagada'");
+      await pg.run("ALTER TABLE cash_sessions ADD COLUMN IF NOT EXISTS register_number integer not null default 1");
       await pg.run("UPDATE sales_orders SET amount_paid = total WHERE amount_paid = 0 AND payment_method <> 'credito' AND status <> 'anulada'");
     })();
   }

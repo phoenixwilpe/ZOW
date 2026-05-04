@@ -181,6 +181,7 @@ function initDb() {
       phone TEXT NOT NULL DEFAULT '',
       address TEXT NOT NULL DEFAULT '',
       ticket_note TEXT NOT NULL DEFAULT '',
+      cash_register_count INTEGER NOT NULL DEFAULT 1,
       logo_bucket TEXT NOT NULL DEFAULT '',
       logo_path TEXT NOT NULL DEFAULT '',
       logo_name TEXT NOT NULL DEFAULT '',
@@ -354,6 +355,7 @@ function initDb() {
       company_id TEXT NOT NULL,
       code TEXT NOT NULL,
       opening_amount REAL NOT NULL DEFAULT 0,
+      register_number INTEGER NOT NULL DEFAULT 1,
       total_sales REAL NOT NULL DEFAULT 0,
       movement_total REAL NOT NULL DEFAULT 0,
       expected_amount REAL NOT NULL DEFAULT 0,
@@ -371,6 +373,7 @@ function initDb() {
       id TEXT PRIMARY KEY,
       company_id TEXT NOT NULL,
       opened_by TEXT NOT NULL,
+      register_number INTEGER NOT NULL DEFAULT 1,
       opening_amount REAL NOT NULL DEFAULT 0,
       status TEXT NOT NULL DEFAULT 'abierta',
       opened_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -427,6 +430,7 @@ function migrateSchema() {
   ensureColumn("organization_settings", "phone", "TEXT NOT NULL DEFAULT ''");
   ensureColumn("organization_settings", "address", "TEXT NOT NULL DEFAULT ''");
   ensureColumn("organization_settings", "ticket_note", "TEXT NOT NULL DEFAULT ''");
+  ensureColumn("organization_settings", "cash_register_count", "INTEGER NOT NULL DEFAULT 1");
   ensureColumn("organization_settings", "logo_bucket", "TEXT NOT NULL DEFAULT ''");
   ensureColumn("organization_settings", "logo_path", "TEXT NOT NULL DEFAULT ''");
   ensureColumn("organization_settings", "logo_name", "TEXT NOT NULL DEFAULT ''");
@@ -456,6 +460,7 @@ function migrateSchema() {
   ensureColumn("leads", "next_action_at", "TEXT NOT NULL DEFAULT ''");
   ensureColumn("leads", "priority", "TEXT NOT NULL DEFAULT 'media'");
   ensureColumn("cash_closures", "opening_amount", "REAL NOT NULL DEFAULT 0");
+  ensureColumn("cash_closures", "register_number", "INTEGER NOT NULL DEFAULT 1");
   ensureColumn("cash_closures", "movement_total", "REAL NOT NULL DEFAULT 0");
   ensureColumn("cash_closures", "expected_amount", "REAL NOT NULL DEFAULT 0");
   ensureColumn("cash_closures", "counted_amount", "REAL NOT NULL DEFAULT 0");
@@ -464,6 +469,7 @@ function migrateSchema() {
   ensureColumn("sales_orders", "amount_paid", "REAL NOT NULL DEFAULT 0");
   ensureColumn("sales_orders", "balance_due", "REAL NOT NULL DEFAULT 0");
   ensureColumn("sales_orders", "payment_status", "TEXT NOT NULL DEFAULT 'pagada'");
+  ensureColumn("cash_sessions", "register_number", "INTEGER NOT NULL DEFAULT 1");
   db.prepare("UPDATE sales_orders SET amount_paid = total WHERE amount_paid = 0 AND payment_method <> 'credito' AND status <> 'anulada'").run();
   db.prepare("CREATE INDEX IF NOT EXISTS idx_leads_priority ON leads(priority, created_at)").run();
   db.prepare("CREATE INDEX IF NOT EXISTS idx_lead_history_lead ON lead_history(lead_id, created_at)").run();
