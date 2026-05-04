@@ -2220,6 +2220,15 @@ body.app-correspondencia .metrics article:hover {
   margin-bottom: 14px;
 }
 
+.cash-closure-row {
+  grid-template-columns: minmax(260px, 1fr) auto;
+  align-items: center;
+}
+
+.cash-closure-row .admin-row-meta {
+  justify-content: flex-end;
+}
+
 .history-filters label {
   display: grid;
   gap: 5px;
@@ -6051,9 +6060,14 @@ dialog::backdrop {
   }
 
   .admin-row,
+  .cash-closure-row,
   .renewal-list article,
   .compact-audit-list .admin-row {
     grid-template-columns: 1fr;
+  }
+
+  .cash-closure-row .admin-row-meta {
+    justify-content: flex-start;
   }
 
   .workflow-panel {

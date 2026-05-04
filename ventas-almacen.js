@@ -36,6 +36,7 @@ let paymentDraft = { method: "efectivo", received: 0 };
 let suspendedSales = loadJson(SUSPENDED_SALES_KEY, []);
 let cashSession = null;
 let cashMovements = [];
+let cashClosures = [];
 let selectedKardex = null;
 let localSaleMeta = loadJson(LOCAL_SALE_META_KEY, {});
 let historyFilter = { status: "", method: "", date: "" };
@@ -195,7 +196,7 @@ async function render() {
   try {
     await assertVentasAccess();
     const canReadPurchases = canAccessView("purchases");
-    const [settingsResponse, summaryResponse, productsResponse, customersResponse, categoriesResponse, salesResponse, cashResponse, suppliersResponse, purchasesResponse, receivablesResponse, usersResponse, unitsResponse] = await Promise.all([
+    const [settingsResponse, summaryResponse, productsResponse, customersResponse, categoriesResponse, salesResponse, cashResponse, cashHistoryResponse, suppliersResponse, purchasesResponse, receivablesResponse, usersResponse, unitsResponse] = await Promise.all([
       apiRequest("/ventas/settings"),
       apiRequest("/ventas/summary"),
       apiRequest("/ventas/products"),
@@ -203,6 +204,7 @@ async function render() {
       apiRequest("/ventas/categories"),
       apiRequest("/ventas/sales"),
       apiRequest("/ventas/cash"),
+      canAccessView("finance") ? apiRequest("/ventas/cash/history") : Promise.resolve({ closures: [] }),
       canReadPurchases ? apiRequest("/ventas/suppliers") : Promise.resolve({ suppliers: [] }),
       canReadPurchases ? apiRequest("/ventas/purchases") : Promise.resolve({ purchases: [] }),
       canAccessView("customers") ? apiRequest("/ventas/receivables") : Promise.resolve({ receivables: [] }),
@@ -223,6 +225,7 @@ async function render() {
     cash = cashResponse || { pendingSales: [], total: 0 };
     cashSession = normalizeCashSession(cash.activeSession);
     cashMovements = (cash.movements || []).map(normalizeCashMovement);
+    cashClosures = (cashHistoryResponse.closures || []).map(normalizeCashClosure);
     renderLoggedIn();
   } catch (error) {
     renderLoggedOut();
@@ -421,11 +424,15 @@ function renderFinance() {
   const totalLabel = canSeeAllSales() ? "Monto pendiente" : "Mi monto pendiente";
   const expectedCash = cashExpectedTotal();
   const movementsTotal = cashMovementsTotal();
+  const lastClosure = cashClosures[0];
+  const totalClosureDifference = cashClosures.reduce((sum, closure) => sum + Number(closure.differenceAmount || 0), 0);
   mainList().innerHTML = `
     <section class="setup-overview">
       <article><span>${cashLabel}</span><strong>${cash.pendingSales?.length || 0}</strong></article>
       <article><span>${totalLabel}</span><strong>${money(cash.total || 0)}</strong></article>
       <article><span>Efectivo esperado</span><strong>${money(expectedCash)}</strong></article>
+      <article><span>Ultimo cierre</span><strong>${lastClosure ? escapeHtml(lastClosure.code) : "Sin cierres"}</strong></article>
+      <article><span>Diferencia acumulada</span><strong class="${Math.abs(totalClosureDifference) > 0 ? "warn-text" : "ok-text"}">${money(totalClosureDifference)}</strong></article>
     </section>
     <section class="cashier-grid">
       <section class="admin-panel">
@@ -462,10 +469,20 @@ function renderFinance() {
       <div class="admin-panel-head"><div><p class="eyebrow">Historial movimientos</p><h3>Turno actual</h3></div></div>
       <div class="admin-list">${cashMovements.slice(0, 8).map(renderCashMovementRow).join("") || empty("Sin movimientos manuales")}</div>
     </section>
+    <section class="admin-panel">
+      <div class="admin-panel-head">
+        <div><p class="eyebrow">Arqueos</p><h3>Historial de cierres de caja</h3></div>
+        <span>${cashClosures.length} cierre${cashClosures.length === 1 ? "" : "s"}</span>
+      </div>
+      <div class="admin-list">${cashClosures.slice(0, 10).map(renderCashClosureRow).join("") || empty("Sin cierres registrados")}</div>
+    </section>
   `;
   document.querySelector("#cashOpenForm")?.addEventListener("submit", openCashSession);
   document.querySelector("#cashMovementForm")?.addEventListener("submit", addCashMovement);
   document.querySelector("#cashCloseForm")?.addEventListener("submit", closeCashSession);
+  document.querySelectorAll("[data-print-closure]").forEach((button) => {
+    button.addEventListener("click", () => printCashClosure(button.dataset.printClosure));
+  });
 }
 
 function renderHistory() {
@@ -831,6 +848,24 @@ function saleStatus(sale) {
 
 function renderCashMovementRow(movement) {
   return `<article class="admin-row"><div><strong>${movement.type === "ingreso" ? "Ingreso" : "Egreso"} ${money(movement.amount)}</strong><span>${escapeHtml(movement.reason)}</span><span>${formatDateTime(movement.createdAt)} / ${escapeHtml(movement.user)}</span></div></article>`;
+}
+
+function renderCashClosureRow(closure) {
+  const difference = Number(closure.differenceAmount || 0);
+  const differenceClass = difference === 0 ? "ok-text" : Math.abs(difference) <= 1 ? "warn-text" : "danger-text";
+  return `<article class="admin-row cash-closure-row">
+    <div>
+      <strong>${escapeHtml(closure.code)}</strong>
+      <span>${formatDateTime(closure.createdAt)} / ${closure.saleCount} venta${closure.saleCount === 1 ? "" : "s"}</span>
+      <span>Apertura ${money(closure.openingAmount)} / Ventas ${money(closure.totalSales)} / Movimientos ${money(closure.movementTotal)}</span>
+    </div>
+    <div class="admin-row-meta">
+      <span>Esperado ${money(closure.expectedAmount)}</span>
+      <span>Contado ${money(closure.countedAmount)}</span>
+      <span class="${differenceClass}">Diferencia ${money(difference)}</span>
+      <button class="ghost-button" type="button" data-print-closure="${closure.id}">Imprimir cierre</button>
+    </div>
+  </article>`;
 }
 
 function renderVentasCommandCenter() {
@@ -1209,6 +1244,17 @@ async function closeCashSession(event) {
     ventasMessage = error.message || "No se pudo cerrar la caja.";
     renderMain();
   }
+}
+
+function printCashClosure(closureId) {
+  const closure = cashClosures.find((item) => item.id === closureId);
+  if (!closure) return;
+  const printable = window.open("", "_blank", "width=440,height=720");
+  if (!printable) return;
+  const difference = Number(closure.differenceAmount || 0);
+  printable.document.write(`<!doctype html><html><head><meta charset="UTF-8"><title>Cierre ${escapeHtml(closure.code)}</title><style>body{font-family:Arial,sans-serif;padding:20px;max-width:340px;color:#111}h1{font-size:18px;text-align:center;margin:0 0 8px}.muted{color:#555;font-size:12px;text-align:center}.row{display:flex;justify-content:space-between;border-bottom:1px dashed #aaa;padding:8px 0}.total{font-weight:800;font-size:17px}.diff{font-weight:800;color:${difference === 0 ? "#15803d" : "#b45309"}}button{margin-bottom:12px}.sign{margin-top:34px;border-top:1px solid #111;text-align:center;padding-top:8px;font-size:12px}</style></head><body><button onclick="window.print()">Imprimir</button><h1>${escapeHtml(storeSettings.storeName || storeSettings.companyName || currentUser.companyName || "Zow Ventas-Almacen")}</h1><p class="muted">Cierre de caja ${escapeHtml(closure.code)}<br>${formatDateTime(closure.createdAt)}</p><div class="row"><span>Monto apertura</span><strong>${money(closure.openingAmount)}</strong></div><div class="row"><span>Total ventas</span><strong>${money(closure.totalSales)}</strong></div><div class="row"><span>Movimientos</span><strong>${money(closure.movementTotal)}</strong></div><div class="row total"><span>Esperado</span><strong>${money(closure.expectedAmount)}</strong></div><div class="row"><span>Contado</span><strong>${money(closure.countedAmount)}</strong></div><div class="row diff"><span>Diferencia</span><strong>${money(difference)}</strong></div><div class="row"><span>Ventas cerradas</span><strong>${closure.saleCount}</strong></div><div class="sign">Firma cajero / responsable</div></body></html>`);
+  printable.document.close();
+  printable.focus();
 }
 
 function cashMovementsTotal() {
@@ -1674,6 +1720,20 @@ function normalizeCashMovement(movement) {
     reason: movement.reason || "",
     createdAt: movement.created_at || movement.createdAt || "",
     user: movement.created_by_name || movement.user || ""
+  };
+}
+function normalizeCashClosure(closure) {
+  return {
+    id: closure.id,
+    code: closure.code || "",
+    openingAmount: Number(closure.opening_amount ?? closure.openingAmount ?? 0),
+    totalSales: Number(closure.total_sales ?? closure.totalSales ?? 0),
+    movementTotal: Number(closure.movement_total ?? closure.movementTotal ?? 0),
+    expectedAmount: Number(closure.expected_amount ?? closure.expectedAmount ?? 0),
+    countedAmount: Number(closure.counted_amount ?? closure.countedAmount ?? 0),
+    differenceAmount: Number(closure.difference_amount ?? closure.differenceAmount ?? 0),
+    saleCount: Number(closure.sale_count ?? closure.saleCount ?? 0),
+    createdAt: closure.created_at || closure.createdAt || ""
   };
 }
 function canAccessView(view) { return accessibleViewsForRole(currentUser?.role).includes(view); }
