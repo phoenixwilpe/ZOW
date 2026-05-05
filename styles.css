@@ -3777,6 +3777,79 @@ body.app-correspondencia .metrics article:hover {
   width: min(720px, calc(100vw - 24px));
 }
 
+.sale-detail-modal {
+  width: min(760px, calc(100vw - 24px));
+}
+
+.sale-detail-summary {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.sale-detail-summary article,
+.sale-detail-card,
+.sale-detail-items article {
+  border: 1px solid color-mix(in srgb, var(--accent) 16%, var(--line));
+  border-radius: 8px;
+  background: linear-gradient(135deg, white, color-mix(in srgb, var(--accent-tint) 34%, white));
+}
+
+.sale-detail-summary article {
+  display: grid;
+  gap: 5px;
+  padding: 12px;
+}
+
+.sale-detail-summary span,
+.sale-detail-card span,
+.sale-detail-items span {
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 850;
+}
+
+.sale-detail-card {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 12px;
+  padding: 12px;
+}
+
+.sale-detail-card div {
+  min-width: 0;
+  display: grid;
+  gap: 5px;
+}
+
+.sale-detail-items {
+  display: grid;
+  gap: 8px;
+  max-height: min(42vh, 360px);
+  overflow: auto;
+  padding-right: 4px;
+}
+
+.sale-detail-items article {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+}
+
+.sale-detail-items div {
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+}
+
+.sale-detail-items b {
+  color: var(--accent-dark);
+}
+
 .touch-payment-layout {
   display: grid;
   gap: 14px;
@@ -9225,6 +9298,15 @@ body.system-zow-site .site-footer {
   .quick-cash-grid,
   .touch-sale-actions {
     grid-template-columns: 1fr;
+  }
+
+  .sale-detail-summary,
+  .sale-detail-card {
+    grid-template-columns: 1fr;
+  }
+
+  .sale-detail-items {
+    max-height: none;
   }
 
   .last-sale-receipt {

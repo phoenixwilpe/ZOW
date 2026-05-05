@@ -70,6 +70,9 @@ const categoryForm = document.querySelector("#categoryForm");
 const paymentModal = document.querySelector("#paymentModal");
 const paymentForm = document.querySelector("#paymentForm");
 const paymentModalContent = document.querySelector("#paymentModalContent");
+const saleDetailModal = document.querySelector("#saleDetailModal");
+const saleDetailTitle = document.querySelector("#saleDetailTitle");
+const saleDetailContent = document.querySelector("#saleDetailContent");
 const ventasMenuToggle = document.querySelector("#ventasMenuToggle");
 const ventasLoginScene = document.querySelector(".advanced-sales-scene");
 let ventasLoginSceneFrame = 0;
@@ -143,6 +146,7 @@ document.querySelector("#cancelCustomerModal").addEventListener("click", () => c
 document.querySelector("#closeCategoryModal").addEventListener("click", () => categoryModal.close());
 document.querySelector("#cancelCategoryModal").addEventListener("click", () => categoryModal.close());
 document.querySelector("#closePaymentModal").addEventListener("click", () => paymentModal.close());
+document.querySelector("#closeSaleDetailModal").addEventListener("click", () => saleDetailModal.close());
 
 document.addEventListener("keydown", (event) => {
   if (!currentUser || activeView !== "sell") return;
@@ -568,7 +572,7 @@ function renderHistory() {
     const meta = localSaleMeta[sale.id] || {};
     const status = saleStatus(sale);
     if (historyFilter.status && status !== historyFilter.status) return false;
-    if (historyFilter.method && meta.method !== historyFilter.method) return false;
+    if (historyFilter.method && (sale.payment_method || meta.method) !== historyFilter.method) return false;
     if (historyFilter.date && !String(sale.created_at || "").startsWith(historyFilter.date)) return false;
     return true;
   });
@@ -587,6 +591,7 @@ function renderHistory() {
   document.querySelector("#historyDate")?.addEventListener("change", (event) => { historyFilter.date = event.target.value; renderMain(); });
   document.querySelector("#historyMethod")?.addEventListener("change", (event) => { historyFilter.method = event.target.value; renderMain(); });
   document.querySelector("#historyStatus")?.addEventListener("change", (event) => { historyFilter.status = event.target.value; renderMain(); });
+  document.querySelectorAll("[data-detail-sale]").forEach((button) => button.addEventListener("click", () => showSaleDetail(button.dataset.detailSale)));
   document.querySelectorAll("[data-reprint-sale]").forEach((button) => button.addEventListener("click", () => reprintSale(button.dataset.reprintSale)));
   document.querySelectorAll("[data-void-sale]").forEach((button) => button.addEventListener("click", () => voidSale(button.dataset.voidSale)));
 }
@@ -926,7 +931,7 @@ function renderHistorySaleRow(sale) {
   const canVoid = status !== "anulada" && !sale.cash_closed;
   return `<article class="admin-row">
     <div><strong>${escapeHtml(sale.code)}</strong><span>${escapeHtml(sale.customer_name || "Cliente sin registrar")} / ${formatDateTime(sale.created_at)}</span><span>Metodo: ${escapeHtml(paymentLabel(sale.payment_method || meta.method || "efectivo"))} / Pagado ${money(sale.amount_paid || sale.cash_received || 0)}</span></div>
-    <div class="admin-row-meta"><span>Total ${money(sale.total)}</span>${Number(sale.balance_due || 0) > 0 ? `<span class="warn-text">Debe ${money(sale.balance_due)}</span>` : ""}<span class="${status === "anulada" ? "danger-text" : status === "pagada" ? "ok-text" : "warn-text"}">${status}</span><button class="ghost-button" type="button" data-reprint-sale="${sale.id}">Reimprimir</button>${canVoid ? `<button class="ghost-button danger-action" type="button" data-void-sale="${sale.id}">Anular</button>` : `<span class="muted-text">${status === "anulada" ? "Stock devuelto" : "Caja cerrada"}</span>`}</div>
+    <div class="admin-row-meta"><span>Total ${money(sale.total)}</span>${Number(sale.balance_due || 0) > 0 ? `<span class="warn-text">Debe ${money(sale.balance_due)}</span>` : ""}<span class="${status === "anulada" ? "danger-text" : status === "pagada" ? "ok-text" : "warn-text"}">${status}</span><button class="ghost-button" type="button" data-detail-sale="${sale.id}">Ver detalle</button><button class="ghost-button" type="button" data-reprint-sale="${sale.id}">Reimprimir</button>${canVoid ? `<button class="ghost-button danger-action" type="button" data-void-sale="${sale.id}">Anular</button>` : `<span class="muted-text">${status === "anulada" ? "Stock devuelto" : "Caja cerrada"}</span>`}</div>
   </article>`;
 }
 
@@ -1449,6 +1454,62 @@ async function reprintSale(saleId) {
     ventasMessage = error.message || "No se pudo recuperar el comprobante.";
     renderMain();
   }
+}
+
+async function showSaleDetail(saleId) {
+  try {
+    const response = await apiRequest(`/ventas/sales/${saleId}`);
+    renderSaleDetail(response.sale, response.items || []);
+    saleDetailModal.showModal();
+  } catch (error) {
+    ventasMessage = error.message || "No se pudo recuperar el detalle de la venta.";
+    renderMain();
+  }
+}
+
+function renderSaleDetail(sale, items) {
+  const status = saleStatus(sale);
+  saleDetailTitle.textContent = sale.code || "Comprobante";
+  saleDetailContent.innerHTML = `
+    <section class="sale-detail-summary">
+      <article><span>Estado</span><strong class="${status === "anulada" ? "danger-text" : status === "pagada" ? "ok-text" : "warn-text"}">${escapeHtml(status)}</strong></article>
+      <article><span>Total</span><strong>${money(sale.total)}</strong></article>
+      <article><span>Metodo</span><strong>${escapeHtml(paymentLabel(sale.payment_method || "efectivo"))}</strong></article>
+      <article><span>Fecha</span><strong>${formatDateTime(sale.created_at)}</strong></article>
+    </section>
+    <section class="sale-detail-card">
+      <div>
+        <span>Cliente</span>
+        <strong>${escapeHtml(sale.customer_name || "Cliente sin registrar")}</strong>
+      </div>
+      <div>
+        <span>Cajero</span>
+        <strong>${escapeHtml(sale.seller_name || currentUser.name || "Usuario")}</strong>
+      </div>
+      <div>
+        <span>Pago</span>
+        <strong>Pagado ${money(sale.amount_paid || sale.cash_received || 0)} / Cambio ${money(sale.change_amount || 0)}</strong>
+      </div>
+      ${Number(sale.balance_due || 0) > 0 ? `<div><span>Saldo pendiente</span><strong class="warn-text">${money(sale.balance_due)}</strong></div>` : ""}
+    </section>
+    <div class="sale-detail-items">
+      ${items.map((item) => `
+        <article>
+          <div><strong>${escapeHtml(item.product_name)}</strong><span>${num(item.quantity)} x ${money(item.unit_price)}</span></div>
+          <b>${money(item.total)}</b>
+        </article>
+      `).join("") || empty("Sin productos registrados")}
+    </div>
+    <div class="modal-actions">
+      <button class="ghost-button" type="button" id="detailPrintSale">Reimprimir</button>
+      ${status !== "anulada" && !sale.cash_closed ? `<button class="ghost-button danger-action" type="button" id="detailVoidSale">Anular venta</button>` : ""}
+    </div>
+  `;
+  saleDetailContent.querySelector("#detailPrintSale")?.addEventListener("click", () => printTicket(sale, items));
+  saleDetailContent.querySelector("#detailVoidSale")?.addEventListener("click", async () => {
+    saleDetailModal.close();
+    await voidSale(sale.id);
+  });
 }
 
 async function voidSale(saleId) {
