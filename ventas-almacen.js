@@ -69,6 +69,25 @@ const paymentModal = document.querySelector("#paymentModal");
 const paymentForm = document.querySelector("#paymentForm");
 const paymentModalContent = document.querySelector("#paymentModalContent");
 const ventasMenuToggle = document.querySelector("#ventasMenuToggle");
+const ventasLoginScene = document.querySelector(".advanced-sales-scene");
+let ventasLoginSceneFrame = 0;
+
+ventasLoginScene?.addEventListener("pointermove", (event) => {
+  if (ventasLoginSceneFrame) return;
+  ventasLoginSceneFrame = requestAnimationFrame(() => {
+    const rect = ventasLoginScene.getBoundingClientRect();
+    const tiltY = ((event.clientX - rect.left) / rect.width - 0.5) * 14;
+    const tiltX = ((event.clientY - rect.top) / rect.height - 0.5) * -12;
+    ventasLoginScene.style.setProperty("--scene-tilt-x", `${tiltX}deg`);
+    ventasLoginScene.style.setProperty("--scene-tilt-y", `${tiltY}deg`);
+    ventasLoginSceneFrame = 0;
+  });
+});
+
+ventasLoginScene?.addEventListener("pointerleave", () => {
+  ventasLoginScene.style.removeProperty("--scene-tilt-x");
+  ventasLoginScene.style.removeProperty("--scene-tilt-y");
+});
 
 loginForm.addEventListener("submit", async (event) => {
   event.preventDefault();
