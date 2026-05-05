@@ -1636,15 +1636,19 @@ app.post("/api/ventas/products/:id/movements", requireAuth, async (req, res) => 
   if (!product) return res.status(404).json({ error: "Producto no encontrado" });
   const type = String(req.body.type || "entrada");
   const quantity = Number(req.body.quantity || 0);
-  if (!["entrada", "salida", "ajuste"].includes(type) || quantity <= 0) return res.status(400).json({ error: "Movimiento invalido" });
-  const signedQuantity = type === "salida" ? -quantity : quantity;
+  if (!["entrada", "salida", "ajuste"].includes(type) || !Number.isFinite(quantity) || quantity < 0 || (type !== "ajuste" && quantity <= 0)) {
+    return res.status(400).json({ error: "Movimiento invalido" });
+  }
+  if (type === "salida" && quantity > Number(product.stock || 0)) return res.status(400).json({ error: "La salida supera el stock disponible" });
+  const signedQuantity = type === "ajuste" ? quantity - Number(product.stock || 0) : type === "salida" ? -quantity : quantity;
+  const movementQuantity = type === "ajuste" ? signedQuantity : quantity;
   await pg.tx(async (client) => {
     await client.run(
       `INSERT INTO inventory_movements (id, company_id, product_id, type, quantity, reference, note, created_by, created_at)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, now())`,
-      [randomUUID(), req.user.company_id, product.id, type, quantity, String(req.body.reference || ""), String(req.body.note || ""), req.user.id]
+      [randomUUID(), req.user.company_id, product.id, type, movementQuantity, String(req.body.reference || ""), String(req.body.note || ""), req.user.id]
     );
-    await client.run("UPDATE inventory_products SET stock = stock + ?, updated_at = now() WHERE id = ? AND company_id = ?", [signedQuantity, product.id, req.user.company_id]);
+    await client.run("UPDATE inventory_products SET stock = ?, updated_at = now() WHERE id = ? AND company_id = ?", [Math.max(Number(product.stock || 0) + signedQuantity, 0), product.id, req.user.company_id]);
   });
   res.json({ product: await pg.get("SELECT * FROM inventory_products WHERE id = ?", [product.id]) });
 });

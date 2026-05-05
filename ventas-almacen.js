@@ -5,6 +5,7 @@ const TOKEN_KEY = "zowVentasAlmacen.token";
 const SESSION_KEY = "zowVentasAlmacen.session";
 const SUSPENDED_SALES_KEY = "zowVentasAlmacen.suspendedSales";
 const LOCAL_SALE_META_KEY = "zowVentasAlmacen.saleMeta";
+const FAVORITE_PRODUCTS_KEY = "zowVentasAlmacen.favoriteProducts";
 
 /**
  * @typedef {{ id:string, code:string, name:string, category:string, stock:number, sale_price:number, cost_price:number }} Product
@@ -41,8 +42,10 @@ let cashMovements = [];
 let cashClosures = [];
 let selectedKardex = null;
 let localSaleMeta = loadJson(LOCAL_SALE_META_KEY, {});
+let favoriteProducts = loadJson(FAVORITE_PRODUCTS_KEY, []);
 let historyFilter = { status: "", method: "", date: "" };
 let storeSettings = { companyName: "", storeName: "", currency: "BOB", taxId: "", phone: "", address: "", ticketNote: "", cashRegisterCount: 1 };
+let stockMovementDraft = { productId: "", type: "entrada" };
 
 const starterProducts = [
   { code: "AB-001", name: "Agua mineral 600 ml", category: "Bebidas", unit: "Botella", costPrice: 2.1, salePrice: 4, minStock: 24, stock: 96 },
@@ -67,6 +70,8 @@ const customerModal = document.querySelector("#customerModal");
 const customerForm = document.querySelector("#customerForm");
 const categoryModal = document.querySelector("#categoryModal");
 const categoryForm = document.querySelector("#categoryForm");
+const stockMovementModal = document.querySelector("#stockMovementModal");
+const stockMovementForm = document.querySelector("#stockMovementForm");
 const paymentModal = document.querySelector("#paymentModal");
 const paymentForm = document.querySelector("#paymentForm");
 const paymentModalContent = document.querySelector("#paymentModalContent");
@@ -145,6 +150,8 @@ document.querySelector("#closeCustomerModal").addEventListener("click", () => cu
 document.querySelector("#cancelCustomerModal").addEventListener("click", () => customerModal.close());
 document.querySelector("#closeCategoryModal").addEventListener("click", () => categoryModal.close());
 document.querySelector("#cancelCategoryModal").addEventListener("click", () => categoryModal.close());
+document.querySelector("#closeStockMovementModal").addEventListener("click", () => stockMovementModal.close());
+document.querySelector("#cancelStockMovementModal").addEventListener("click", () => stockMovementModal.close());
 document.querySelector("#closePaymentModal").addEventListener("click", () => paymentModal.close());
 document.querySelector("#closeSaleDetailModal").addEventListener("click", () => saleDetailModal.close());
 
@@ -213,6 +220,9 @@ categoryForm.addEventListener("submit", async (event) => {
   categoryModal.close();
   await render();
 });
+
+stockMovementForm.addEventListener("submit", saveStockMovement);
+document.querySelector("#stockMovementType")?.addEventListener("change", () => updateStockMovementLabels());
 
 render();
 
@@ -370,6 +380,10 @@ function renderAlerts() {
 function renderSell() {
   setCount(`${saleCart.length} item${saleCart.length === 1 ? "" : "s"}`);
   const sellProducts = filteredProducts().filter(isProductActive);
+  const favoriteSellProducts = favoriteProducts
+    .map((productId) => products.find((product) => product.id === productId))
+    .filter((product) => product && isProductActive(product) && Number(product.stock || 0) > 0)
+    .slice(0, 8);
   const totals = cartTotals();
   const categories = productCategories();
   const isCashOpen = cashSession?.status === "abierta";
@@ -393,6 +407,11 @@ function renderSell() {
         </div>
         ${ventasMessage ? `<div class="pos-toast">${escapeHtml(ventasMessage)}</div>` : ""}
         ${lastSaleReceipt ? renderLastSaleReceipt() : ""}
+        <div class="pos-quick-status">
+          <article><span>Turno</span><strong>${isCashOpen ? `Caja ${num(cashSession.registerNumber)}` : "Sin caja"}</strong></article>
+          <article><span>Items</span><strong>${num(saleCart.length)}</strong></article>
+          <article><span>Total</span><strong>${money(totals.total)}</strong></article>
+        </div>
         ${!isCashOpen ? `
           <div class="pos-cash-warning">
             <div><strong>Abre una caja antes de vender</strong><span>El sistema necesita una caja activa para registrar pagos y cierres.</span></div>
@@ -411,6 +430,12 @@ function renderSell() {
             ${categories.slice(0, 10).map((category) => `<button class="${productSearch === category ? "is-active" : ""}" type="button" data-product-filter="${escapeHtml(category)}">${escapeHtml(category)}</button>`).join("")}
           </div>
         </div>
+        ${favoriteSellProducts.length ? `
+          <div class="pos-section-block pos-products-block">
+            <div class="pos-section-title"><strong>Favoritos de mostrador</strong><span>Productos rapidos para pantalla tactil</span></div>
+            <div class="product-suggestion-grid touch-product-grid">${favoriteSellProducts.map(renderSellProduct).join("")}</div>
+          </div>
+        ` : ""}
         <div class="pos-section-block pos-products-block">
           <div class="pos-section-title"><strong>Productos disponibles</strong><span>Toca para agregar al carrito</span></div>
           <div class="product-suggestion-grid touch-product-grid">${sellProducts.slice(0, 24).map(renderSellProduct).join("") || empty("Sin productos con esa busqueda")}</div>
@@ -483,6 +508,7 @@ function renderSell() {
     renderMain();
   }));
   document.querySelectorAll("[data-add-product]").forEach((button) => button.addEventListener("click", () => addToCart(button.dataset.addProduct)));
+  document.querySelectorAll("[data-toggle-favorite]").forEach((button) => button.addEventListener("click", () => toggleFavoriteProduct(button.dataset.toggleFavorite)));
   document.querySelectorAll("[data-remove-cart]").forEach((button) => button.addEventListener("click", () => removeFromCart(button.dataset.removeCart)));
   document.querySelectorAll("[data-cart-dec]").forEach((button) => button.addEventListener("click", () => updateCartQuantity(button.dataset.cartDec, -1)));
   document.querySelectorAll("[data-cart-inc]").forEach((button) => button.addEventListener("click", () => updateCartQuantity(button.dataset.cartInc, 1)));
@@ -501,6 +527,7 @@ function renderFinance() {
   const movementsTotal = cashMovementsTotal();
   const lastClosure = cashClosures[0];
   const totalClosureDifference = cashClosures.reduce((sum, closure) => sum + Number(closure.differenceAmount || 0), 0);
+  const paymentBreakdown = cashPaymentBreakdown();
   mainList().innerHTML = `
     <section class="setup-overview">
       <article><span>${cashLabel}</span><strong>${cash.pendingSales?.length || 0}</strong></article>
@@ -542,10 +569,17 @@ function renderFinance() {
           <div class="form-grid">
             <label>Efectivo esperado<input type="text" value="${money(expectedCash)}" readonly /></label>
             <label>Efectivo contado<input id="cashCountedAmount" type="number" min="0" step="0.01" value="${expectedCash.toFixed(2)}" /></label>
+            <label class="span-2">Observacion si hay diferencia<input id="cashClosureNote" type="text" placeholder="Ej: faltante por vuelto, sobrante, revision pendiente" /></label>
           </div>
           <button class="primary-button" type="submit" ${cashSession?.status === "abierta" ? "" : "disabled"}>Cerrar caja</button>
         </form>
       </section>
+    </section>
+    <section class="admin-panel">
+      <div class="admin-panel-head"><div><p class="eyebrow">Metodos de pago</p><h3>Resumen del turno actual</h3></div></div>
+      <div class="payment-breakdown-grid">
+        ${paymentBreakdown.map((item) => `<article><span>${escapeHtml(item.label)}</span><strong>${money(item.total)}</strong><small>${num(item.count)} operacion${item.count === 1 ? "" : "es"}</small></article>`).join("")}
+      </div>
     </section>
     <section class="admin-panel">
       <div class="admin-panel-head"><div><p class="eyebrow">Historial movimientos</p><h3>Turno actual</h3></div></div>
@@ -767,8 +801,17 @@ function renderSupplierRow(supplier) {
 
 function renderInventory() {
   const inventoryProducts = filteredProducts({ includeInactive: true });
+  const activeCount = products.filter(isProductActive).length;
+  const outOfStock = products.filter((product) => isProductActive(product) && Number(product.stock || 0) <= 0).length;
+  const lowStock = products.filter((product) => isProductActive(product) && Number(product.stock || 0) > 0 && Number(product.stock || 0) <= Number(product.min_stock || 0)).length;
   setCount(`${products.length} producto${products.length === 1 ? "" : "s"}`);
   mainList().innerHTML = `
+    <section class="inventory-health-grid">
+      <article><span>Activos</span><strong>${num(activeCount)}</strong></article>
+      <article><span>Sin stock</span><strong class="${outOfStock ? "danger-text" : "ok-text"}">${num(outOfStock)}</strong></article>
+      <article><span>Bajo minimo</span><strong class="${lowStock ? "warn-text" : "ok-text"}">${num(lowStock)}</strong></article>
+      <article><span>Favoritos POS</span><strong>${num(favoriteProducts.length)}</strong></article>
+    </section>
     <section class="admin-panel">
       <div class="admin-panel-head">
         <div><p class="eyebrow">Control de stock</p><h3>Inventario operativo</h3></div>
@@ -793,6 +836,9 @@ function renderInventory() {
   });
   document.querySelectorAll("[data-stock-history]").forEach((button) => {
     button.addEventListener("click", () => viewStockHistory(button.dataset.stockHistory));
+  });
+  document.querySelectorAll("[data-toggle-favorite]").forEach((button) => {
+    button.addEventListener("click", () => toggleFavoriteProduct(button.dataset.toggleFavorite));
   });
   document.querySelector("#closeKardex")?.addEventListener("click", () => {
     selectedKardex = null;
@@ -859,7 +905,7 @@ function renderInventoryProductRow(product) {
       <span class="${Number(product.stock || 0) <= Number(product.min_stock || 0) ? "danger-text" : "ok-text"}">${Number(product.stock || 0) <= Number(product.min_stock || 0) ? "Bajo minimo" : "Stock OK"}</span>
       <div class="mini-action-row">
         <button class="ghost-button" type="button" data-stock-history="${product.id}">Kardex</button>
-        ${canMoveStock ? `<button class="ghost-button" type="button" data-edit-product="${product.id}">Editar</button><button class="ghost-button" type="button" data-stock-move="${product.id}" data-type="entrada">Entrada</button><button class="ghost-button" type="button" data-stock-move="${product.id}" data-type="salida">Salida</button><button class="ghost-button" type="button" data-stock-move="${product.id}" data-type="ajuste">Ajuste</button><button class="ghost-button ${active ? "danger-action" : ""}" type="button" data-product-status="${product.id}">${active ? "Desactivar" : "Reactivar"}</button>` : ""}
+        ${canMoveStock ? `<button class="ghost-button" type="button" data-edit-product="${product.id}">Editar</button><button class="ghost-button" type="button" data-stock-move="${product.id}" data-type="entrada">Entrada</button><button class="ghost-button" type="button" data-stock-move="${product.id}" data-type="salida">Salida</button><button class="ghost-button" type="button" data-stock-move="${product.id}" data-type="ajuste">Ajuste</button><button class="ghost-button" type="button" data-toggle-favorite="${product.id}">${favoriteProducts.includes(product.id) ? "Quitar favorito" : "Favorito POS"}</button><button class="ghost-button ${active ? "danger-action" : ""}" type="button" data-product-status="${product.id}">${active ? "Desactivar" : "Reactivar"}</button>` : ""}
       </div>
     </div>
   </article>`;
@@ -881,8 +927,9 @@ function renderKardexPanel() {
 }
 
 function renderStockMovementRow(movement) {
-  const sign = movement.type === "salida" ? "-" : "+";
-  return `<article class="admin-row"><div><strong>${escapeHtml(movement.type)} ${sign}${num(movement.quantity)}</strong><span>${escapeHtml(movement.reference || "Sin referencia")} / ${escapeHtml(movement.note || "Sin nota")}</span><span>${formatDateTime(movement.created_at || movement.createdAt)} / ${escapeHtml(movement.created_by_name || movement.user || "Usuario")}</span></div></article>`;
+  const quantity = Number(movement.quantity || 0);
+  const sign = quantity < 0 || movement.type === "salida" ? "-" : "+";
+  return `<article class="admin-row"><div><strong>${escapeHtml(movement.type)} ${sign}${num(Math.abs(quantity))}</strong><span>${escapeHtml(movement.reference || "Sin referencia")} / ${escapeHtml(movement.note || "Sin nota")}</span><span>${formatDateTime(movement.created_at || movement.createdAt)} / ${escapeHtml(movement.created_by_name || movement.user || "Usuario")}</span></div></article>`;
 }
 
 function renderSellProduct(product) {
@@ -1358,6 +1405,11 @@ async function closeCashSession(event) {
   event.preventDefault();
   const counted = Number(value("#cashCountedAmount") || 0);
   const expected = cashExpectedTotal();
+  const note = value("#cashClosureNote").trim();
+  if (Math.abs(counted - expected) > 0.009 && !note) {
+    ventasMessage = "Cuando la caja no cuadra, la observacion es obligatoria antes de cerrar.";
+    return renderMain();
+  }
   if (!confirm(`Cerrar caja? Diferencia: ${money(counted - expected)}`)) return;
   try {
     await apiRequest("/ventas/cash/close", { method: "POST", body: { countedAmount: counted } });
@@ -1387,6 +1439,19 @@ function cashMovementsTotal() {
 function cashExpectedTotal() {
   const opening = cashSession?.status === "abierta" ? Number(cashSession.openingAmount || 0) : 0;
   return opening + Number(cash.total || 0) + cashMovementsTotal();
+}
+
+function cashPaymentBreakdown() {
+  const pendingSales = cash.pendingSales || [];
+  return paymentMethods().map((method) => {
+    const methodSales = pendingSales.filter((sale) => (sale.payment_method || "efectivo") === method.id);
+    return {
+      id: method.id,
+      label: method.label,
+      total: methodSales.reduce((sum, sale) => sum + Number(sale.amount_paid || sale.cash_received || sale.total || 0), 0),
+      count: methodSales.length
+    };
+  }).filter((item) => item.count || ["efectivo", "tarjeta", "qr"].includes(item.id));
 }
 
 function openProductModal(productId = "") {
@@ -1423,7 +1488,23 @@ function openCategoryModal() {
 function printTicket(sale, items) {
   const printable = window.open("", "_blank", "width=420,height=720");
   if (!printable) return;
-  printable.document.write(`<!doctype html><html><head><meta charset="UTF-8"><title>Ticket ${escapeHtml(sale.code)}</title><style>body{font-family:Arial,sans-serif;padding:18px;max-width:320px;color:#111}h1{font-size:18px;text-align:center;margin:0 0 6px}p{line-height:1.4}table{width:100%;border-collapse:collapse}td{padding:5px 0;border-bottom:1px dashed #aaa}.total{font-weight:800;font-size:18px}.center{text-align:center}.muted{color:#555;font-size:12px}button{margin-bottom:12px}</style></head><body><button onclick="window.print()">Imprimir</button><h1>${escapeHtml(storeSettings.storeName || storeSettings.companyName || currentUser.companyName || "Zow Ventas-Almacen")}</h1><p class="center muted">${escapeHtml(storeSettings.taxId ? `NIT ${storeSettings.taxId}` : "")}<br>${escapeHtml(storeSettings.address || "")}<br>${escapeHtml(storeSettings.phone || "")}</p><p>${escapeHtml(sale.code)}<br>${formatDateTime(sale.created_at)}<br>Cajero: ${escapeHtml(currentUser.name || "")}</p><table>${items.map((item) => `<tr><td>${escapeHtml(item.product_name)} x ${item.quantity}</td><td>${money(item.total)}</td></tr>`).join("")}</table><p>Subtotal ${money(sale.subtotal)}<br>Descuento ${money(sale.discount)}</p><p class="total">Total ${money(sale.total)}</p><p>Metodo ${escapeHtml(paymentLabel(sale.payment_method || paymentDraft.method || "efectivo"))}<br>Pagado ${money(sale.amount_paid || sale.cash_received || 0)}<br>Cambio ${money(sale.change_amount)}${Number(sale.balance_due || 0) > 0 ? `<br>Saldo pendiente ${money(sale.balance_due)}` : ""}</p><p class="center muted">${escapeHtml(storeSettings.ticketNote || "Gracias por su compra")}</p></body></html>`);
+  const title = storeSettings.storeName || storeSettings.companyName || currentUser.companyName || "Zow Ventas-Almacen";
+  printable.document.write(`<!doctype html><html><head><meta charset="UTF-8"><title>Ticket ${escapeHtml(sale.code)}</title><style>
+    *{box-sizing:border-box}body{font-family:Arial,sans-serif;margin:0;padding:14px;max-width:330px;color:#111;background:#fff}
+    .toolbar{margin-bottom:10px}.toolbar button{width:100%;border:0;border-radius:8px;padding:10px;background:#111;color:#fff;font-weight:800}
+    h1{font-size:17px;text-align:center;margin:0 0 5px;text-transform:uppercase}.center{text-align:center}.muted{color:#555;font-size:11px;line-height:1.35}
+    .ticket-box{border:1px solid #111;border-radius:8px;padding:9px;margin:10px 0}.row{display:flex;justify-content:space-between;gap:10px;padding:5px 0;border-bottom:1px dashed #aaa}.row:last-child{border-bottom:0}
+    table{width:100%;border-collapse:collapse;margin-top:8px}td{padding:6px 0;border-bottom:1px dashed #aaa;font-size:12px;vertical-align:top}td:last-child{text-align:right;font-weight:700}
+    .total{font-weight:900;font-size:18px}.barcode{height:34px;margin:10px 24px;background:repeating-linear-gradient(90deg,#111 0 2px,transparent 2px 5px,#111 5px 6px,transparent 6px 10px)}
+    .foot{margin-top:10px;text-align:center;font-size:11px;color:#555}.sign{margin-top:18px;border-top:1px solid #111;text-align:center;padding-top:6px;font-size:10px;color:#444}
+    @media print{.toolbar{display:none}body{padding:0}}
+  </style></head><body><div class="toolbar"><button onclick="window.print()">Imprimir comprobante</button></div>
+  <h1>${escapeHtml(title)}</h1>
+  <p class="center muted">${escapeHtml(storeSettings.taxId ? `NIT ${storeSettings.taxId}` : "")}<br>${escapeHtml(storeSettings.address || "")}<br>${escapeHtml(storeSettings.phone || "")}</p>
+  <div class="ticket-box"><div class="row"><span>Comprobante</span><strong>${escapeHtml(sale.code)}</strong></div><div class="row"><span>Fecha</span><strong>${formatDateTime(sale.created_at)}</strong></div><div class="row"><span>Cajero</span><strong>${escapeHtml(currentUser.name || sale.seller_name || "")}</strong></div><div class="row"><span>Cliente</span><strong>${escapeHtml(sale.customer_name || "S/R")}</strong></div></div>
+  <table>${items.map((item) => `<tr><td>${escapeHtml(item.product_name)}<br><span class="muted">${num(item.quantity)} x ${money(item.unit_price)}</span></td><td>${money(item.total)}</td></tr>`).join("")}</table>
+  <div class="ticket-box"><div class="row"><span>Subtotal</span><strong>${money(sale.subtotal)}</strong></div><div class="row"><span>Descuento</span><strong>${money(sale.discount)}</strong></div><div class="row total"><span>Total</span><strong>${money(sale.total)}</strong></div><div class="row"><span>Metodo</span><strong>${escapeHtml(paymentLabel(sale.payment_method || paymentDraft.method || "efectivo"))}</strong></div><div class="row"><span>Pagado</span><strong>${money(sale.amount_paid || sale.cash_received || 0)}</strong></div><div class="row"><span>Cambio</span><strong>${money(sale.change_amount)}</strong></div>${Number(sale.balance_due || 0) > 0 ? `<div class="row"><span>Saldo</span><strong>${money(sale.balance_due)}</strong></div>` : ""}</div>
+  <div class="barcode"></div><p class="foot">${escapeHtml(storeSettings.ticketNote || "Gracias por su compra")}</p><p class="foot">Sistema ZOW SAAS / Wilmar Peinado B.</p></body></html>`);
   printable.document.close();
   printable.focus();
 }
@@ -1659,20 +1740,68 @@ function applyRoleTemplate(template) {
 async function openStockMovement(productId, type) {
   const product = products.find((item) => item.id === productId);
   if (!product) return;
-  const quantityValue = window.prompt(`Cantidad para ${type} de ${product.name}`, "1");
-  if (quantityValue === null) return;
-  const quantity = Number(quantityValue);
-  if (!Number.isFinite(quantity) || quantity <= 0) {
+  stockMovementDraft = { productId, type };
+  stockMovementForm.reset();
+  document.querySelector("#stockMovementTitle").textContent = type === "entrada" ? "Entrada de stock" : type === "salida" ? "Salida de stock" : "Ajuste exacto de stock";
+  document.querySelector("#stockMovementProduct").innerHTML = `<strong>${escapeHtml(product.name)}</strong><span>Stock actual ${num(product.stock)} / Minimo ${num(product.min_stock)}</span>`;
+  document.querySelector("#stockMovementType").value = type;
+  document.querySelector("#stockMovementQuantity").value = type === "ajuste" ? Number(product.stock || 0) : 1;
+  document.querySelector("#stockMovementReference").value = type === "entrada" ? "Reposicion" : type === "salida" ? "Merma / salida interna" : "Conteo fisico";
+  updateStockMovementLabels();
+  stockMovementModal.showModal();
+}
+
+function updateStockMovementLabels() {
+  const type = value("#stockMovementType");
+  const label = document.querySelector("#stockMovementQuantityLabel");
+  const input = document.querySelector("#stockMovementQuantity");
+  if (!label || !input) return;
+  label.textContent = type === "ajuste" ? "Stock final contado" : "Cantidad";
+  input.min = type === "ajuste" ? "0" : "0.01";
+}
+
+async function saveStockMovement(event) {
+  event.preventDefault();
+  const product = products.find((item) => item.id === stockMovementDraft.productId);
+  if (!product) return;
+  const type = value("#stockMovementType");
+  const quantity = Number(value("#stockMovementQuantity"));
+  const reference = value("#stockMovementReference").trim();
+  const note = value("#stockMovementNote").trim();
+  if (!reference || !note) {
+    window.alert("La referencia y observacion son obligatorias para auditar el Kardex.");
+    return;
+  }
+  if (!Number.isFinite(quantity) || quantity < 0 || (type !== "ajuste" && quantity <= 0)) {
     window.alert("Ingresa una cantidad valida.");
     return;
   }
-  const reference = window.prompt("Referencia del movimiento", type === "entrada" ? "Compra / reposicion" : "Control de stock") || "";
-  const note = window.prompt("Nota interna", "") || "";
-  await apiRequest(`/ventas/products/${product.id}/movements`, {
-    method: "POST",
-    body: { type, quantity, reference, note }
-  });
-  await render();
+  if (type === "salida" && quantity > Number(product.stock || 0)) {
+    window.alert("La salida no puede superar el stock disponible.");
+    return;
+  }
+  try {
+    await apiRequest(`/ventas/products/${product.id}/movements`, {
+      method: "POST",
+      body: { type, quantity, reference, note }
+    });
+    stockMovementModal.close();
+    ventasMessage = "Movimiento guardado y Kardex actualizado.";
+    activeView = "inventory";
+    selectedKardex = null;
+    await render();
+  } catch (error) {
+    window.alert(error.message || "No se pudo guardar el movimiento.");
+  }
+}
+
+function toggleFavoriteProduct(productId) {
+  favoriteProducts = favoriteProducts.includes(productId)
+    ? favoriteProducts.filter((id) => id !== productId)
+    : [productId, ...favoriteProducts].slice(0, 12);
+  persistJson(FAVORITE_PRODUCTS_KEY, favoriteProducts);
+  ventasMessage = favoriteProducts.includes(productId) ? "Producto marcado como favorito del POS." : "Producto quitado de favoritos.";
+  renderMain();
 }
 
 async function viewStockHistory(productId) {
@@ -1934,8 +2063,8 @@ function accessibleViewsForRole(role) {
   const views = {
     admin: ["sell", "summary", "alerts", "finance", "history", "routes", "promotions", "reports", "catalog", "customers", "inventory", "purchases", "users", "settings"],
     ventas_admin: ["sell", "summary", "alerts", "finance", "history", "routes", "promotions", "reports", "catalog", "customers", "inventory", "purchases", "settings"],
-    cajero: ["sell", "finance", "history", "customers", "summary"],
-    vendedor: ["sell", "customers", "summary"],
+    cajero: ["sell", "finance", "history"],
+    vendedor: ["sell", "customers", "history"],
     almacen: ["inventory", "purchases", "alerts", "routes", "reports", "catalog", "summary"],
     supervisor: ["sell", "summary", "alerts", "finance", "history", "routes", "promotions", "reports", "catalog", "customers", "inventory", "purchases"],
     funcionario: ["sell", "routes", "customers", "summary"]

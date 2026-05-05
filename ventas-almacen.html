@@ -250,6 +250,39 @@
       </form>
     </dialog>
 
+    <dialog id="stockMovementModal">
+      <form id="stockMovementForm" method="dialog" class="modal-body">
+        <div class="modal-header">
+          <div>
+            <p class="eyebrow">Inventario</p>
+            <h2 id="stockMovementTitle">Movimiento de stock</h2>
+          </div>
+          <button class="icon-button" type="button" id="closeStockMovementModal" aria-label="Cerrar">x</button>
+        </div>
+        <div class="stock-movement-product" id="stockMovementProduct"></div>
+        <div class="form-grid">
+          <label>
+            Tipo
+            <select id="stockMovementType">
+              <option value="entrada">Entrada</option>
+              <option value="salida">Salida</option>
+              <option value="ajuste">Ajuste exacto</option>
+            </select>
+          </label>
+          <label>
+            <span id="stockMovementQuantityLabel">Cantidad</span>
+            <input id="stockMovementQuantity" type="number" min="0" step="0.01" value="1" required />
+          </label>
+          <label class="span-2">Referencia<input id="stockMovementReference" type="text" required placeholder="Compra, merma, conteo fisico, devolucion" /></label>
+          <label class="span-2">Motivo / observacion<input id="stockMovementNote" type="text" required placeholder="Detalle obligatorio para auditoria de Kardex" /></label>
+        </div>
+        <div class="modal-actions">
+          <button class="ghost-button" type="button" id="cancelStockMovementModal">Cancelar</button>
+          <button class="primary-button" type="submit">Guardar movimiento</button>
+        </div>
+      </form>
+    </dialog>
+
     <dialog id="paymentModal">
       <form id="paymentForm" method="dialog" class="modal-body payment-modal-body">
         <div class="modal-header">

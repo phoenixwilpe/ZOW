@@ -1806,8 +1806,10 @@ app.post("/api/ventas/products/:id/movements", requireAuth, requireSystemAccess(
   if (!product) return res.status(404).json({ error: "Producto no encontrado" });
   const type = String(req.body.type || "entrada");
   const quantity = Number(req.body.quantity || 0);
-  if (!["entrada", "salida", "ajuste"].includes(type) || quantity <= 0) return res.status(400).json({ error: "Movimiento invalido" });
-  const signedQuantity = type === "salida" ? -quantity : quantity;
+  if (!["entrada", "salida", "ajuste"].includes(type) || !Number.isFinite(quantity) || quantity < 0 || (type !== "ajuste" && quantity <= 0)) return res.status(400).json({ error: "Movimiento invalido" });
+  if (type === "salida" && quantity > Number(product.stock || 0)) return res.status(400).json({ error: "La salida supera el stock disponible" });
+  const signedQuantity = type === "ajuste" ? quantity - Number(product.stock || 0) : type === "salida" ? -quantity : quantity;
+  const movementQuantity = type === "ajuste" ? signedQuantity : quantity;
   const now = new Date().toISOString();
 
   db.prepare(
@@ -1818,13 +1820,13 @@ app.post("/api/ventas/products/:id/movements", requireAuth, requireSystemAccess(
     req.user.company_id,
     product.id,
     type,
-    quantity,
+    movementQuantity,
     String(req.body.reference || ""),
     String(req.body.note || ""),
     req.user.id,
     now
   );
-  db.prepare("UPDATE inventory_products SET stock = stock + ?, updated_at = ? WHERE id = ? AND company_id = ?").run(signedQuantity, now, product.id, req.user.company_id);
+  db.prepare("UPDATE inventory_products SET stock = ?, updated_at = ? WHERE id = ? AND company_id = ?").run(Math.max(Number(product.stock || 0) + signedQuantity, 0), now, product.id, req.user.company_id);
   res.json({ product: db.prepare("SELECT * FROM inventory_products WHERE id = ?").get(product.id) });
 });
 
