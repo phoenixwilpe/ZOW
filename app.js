@@ -438,6 +438,25 @@ const documentForm = document.querySelector("#documentForm");
 const movementForm = document.querySelector("#movementForm");
 const uploadForm = document.querySelector("#uploadForm");
 const notificationBtn = document.querySelector("#notificationBtn");
+const correspondenceLoginScene = document.querySelector(".advanced-correspondence-scene");
+let correspondenceLoginSceneFrame = 0;
+
+correspondenceLoginScene?.addEventListener("pointermove", (event) => {
+  if (correspondenceLoginSceneFrame) return;
+  correspondenceLoginSceneFrame = requestAnimationFrame(() => {
+    const rect = correspondenceLoginScene.getBoundingClientRect();
+    const tiltY = ((event.clientX - rect.left) / rect.width - 0.5) * 12;
+    const tiltX = ((event.clientY - rect.top) / rect.height - 0.5) * -10;
+    correspondenceLoginScene.style.setProperty("--doc-tilt-x", `${tiltX}deg`);
+    correspondenceLoginScene.style.setProperty("--doc-tilt-y", `${tiltY}deg`);
+    correspondenceLoginSceneFrame = 0;
+  });
+});
+
+correspondenceLoginScene?.addEventListener("pointerleave", () => {
+  correspondenceLoginScene.style.removeProperty("--doc-tilt-x");
+  correspondenceLoginScene.style.removeProperty("--doc-tilt-y");
+});
 
 loginForm.addEventListener("submit", async (event) => {
   event.preventDefault();
