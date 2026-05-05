@@ -46,6 +46,7 @@ let favoriteProducts = loadJson(FAVORITE_PRODUCTS_KEY, []);
 let historyFilter = { status: "", method: "", date: "" };
 let storeSettings = { companyName: "", storeName: "", currency: "BOB", taxId: "", phone: "", address: "", ticketNote: "", cashRegisterCount: 1 };
 let stockMovementDraft = { productId: "", type: "entrada" };
+let receivablePaymentDraft = { saleId: "" };
 
 const starterProducts = [
   { code: "AB-001", name: "Agua mineral 600 ml", category: "Bebidas", unit: "Botella", costPrice: 2.1, salePrice: 4, minStock: 24, stock: 96 },
@@ -72,6 +73,8 @@ const categoryModal = document.querySelector("#categoryModal");
 const categoryForm = document.querySelector("#categoryForm");
 const stockMovementModal = document.querySelector("#stockMovementModal");
 const stockMovementForm = document.querySelector("#stockMovementForm");
+const receivablePaymentModal = document.querySelector("#receivablePaymentModal");
+const receivablePaymentForm = document.querySelector("#receivablePaymentForm");
 const paymentModal = document.querySelector("#paymentModal");
 const paymentForm = document.querySelector("#paymentForm");
 const paymentModalContent = document.querySelector("#paymentModalContent");
@@ -152,6 +155,8 @@ document.querySelector("#closeCategoryModal").addEventListener("click", () => ca
 document.querySelector("#cancelCategoryModal").addEventListener("click", () => categoryModal.close());
 document.querySelector("#closeStockMovementModal").addEventListener("click", () => stockMovementModal.close());
 document.querySelector("#cancelStockMovementModal").addEventListener("click", () => stockMovementModal.close());
+document.querySelector("#closeReceivablePaymentModal").addEventListener("click", () => receivablePaymentModal.close());
+document.querySelector("#cancelReceivablePaymentModal").addEventListener("click", () => receivablePaymentModal.close());
 document.querySelector("#closePaymentModal").addEventListener("click", () => paymentModal.close());
 document.querySelector("#closeSaleDetailModal").addEventListener("click", () => saleDetailModal.close());
 
@@ -223,6 +228,7 @@ categoryForm.addEventListener("submit", async (event) => {
 
 stockMovementForm.addEventListener("submit", saveStockMovement);
 document.querySelector("#stockMovementType")?.addEventListener("change", () => updateStockMovementLabels());
+receivablePaymentForm.addEventListener("submit", saveReceivablePayment);
 
 render();
 
@@ -716,12 +722,15 @@ function renderCatalog() {
 }
 
 function renderCustomers() {
+  const totalDebt = receivables.reduce((sum, sale) => sum + Number(sale.balance_due || 0), 0);
+  const oldestDebt = receivables.slice().sort((a, b) => new Date(a.created_at) - new Date(b.created_at))[0];
   setCount(`${customers.length} cliente${customers.length === 1 ? "" : "s"}`);
   mainList().innerHTML = `
     <section class="setup-overview">
       <article><span>Clientes</span><strong>${customers.length}</strong></article>
       <article><span>Cuentas por cobrar</span><strong>${receivables.length}</strong></article>
-      <article><span>Saldo pendiente</span><strong>${money(receivables.reduce((sum, sale) => sum + Number(sale.balance_due || 0), 0))}</strong></article>
+      <article><span>Saldo pendiente</span><strong>${money(totalDebt)}</strong></article>
+      <article><span>Mas antigua</span><strong>${oldestDebt ? formatDateTime(oldestDebt.created_at) : "Sin deuda"}</strong></article>
     </section>
     <section class="admin-panel">
       <div class="admin-panel-head"><div><p class="eyebrow">Cuentas por cobrar</p><h3>Ventas al credito</h3></div></div>
@@ -740,7 +749,16 @@ function renderCustomers() {
 }
 
 function renderReceivableRow(sale) {
-  return `<article class="admin-row"><div><strong>${escapeHtml(sale.code)}</strong><span>${escapeHtml(sale.customer_name || "Cliente sin registrar")} / ${formatDateTime(sale.created_at)}</span><span>Pagado ${money(sale.amount_paid)} de ${money(sale.total)}</span></div><div class="admin-row-meta"><span class="warn-text">Debe ${money(sale.balance_due)}</span><button class="primary-button" type="button" data-pay-receivable="${sale.id}">Registrar pago</button></div></article>`;
+  const paidPercent = Math.min(100, Math.round((Number(sale.amount_paid || 0) / Math.max(Number(sale.total || 1), 1)) * 100));
+  return `<article class="admin-row receivable-row">
+    <div>
+      <strong>${escapeHtml(sale.code)}</strong>
+      <span>${escapeHtml(sale.customer_name || "Cliente sin registrar")} / ${formatDateTime(sale.created_at)}</span>
+      <span>Pagado ${money(sale.amount_paid)} de ${money(sale.total)}</span>
+      <div class="receivable-progress"><i style="width:${paidPercent}%"></i></div>
+    </div>
+    <div class="admin-row-meta"><span class="warn-text">Debe ${money(sale.balance_due)}</span><button class="primary-button" type="button" data-pay-receivable="${sale.id}">Registrar pago</button></div>
+  </article>`;
 }
 
 function renderPurchases() {
@@ -1818,22 +1836,37 @@ async function viewStockHistory(productId) {
 async function payReceivable(saleId) {
   const sale = receivables.find((item) => item.id === saleId);
   if (!sale) return;
-  const amountValue = window.prompt(`Monto a pagar de ${sale.code}. Saldo: ${money(sale.balance_due)}`, Number(sale.balance_due || 0).toFixed(2));
-  if (amountValue === null) return;
-  const amount = Number(amountValue);
+  receivablePaymentDraft = { saleId };
+  receivablePaymentForm.reset();
+  document.querySelector("#receivablePaymentTitle").textContent = `Pago ${sale.code}`;
+  document.querySelector("#receivablePaymentInfo").innerHTML = `
+    <div><span>Cliente</span><strong>${escapeHtml(sale.customer_name || "Cliente sin registrar")}</strong></div>
+    <div><span>Total venta</span><strong>${money(sale.total)}</strong></div>
+    <div><span>Pagado</span><strong>${money(sale.amount_paid)}</strong></div>
+    <div><span>Saldo</span><strong class="warn-text">${money(sale.balance_due)}</strong></div>
+  `;
+  document.querySelector("#receivablePaymentAmount").value = Number(sale.balance_due || 0).toFixed(2);
+  receivablePaymentModal.showModal();
+}
+
+async function saveReceivablePayment(event) {
+  event.preventDefault();
+  const sale = receivables.find((item) => item.id === receivablePaymentDraft.saleId);
+  if (!sale) return;
+  const amount = Number(value("#receivablePaymentAmount") || 0);
+  const method = value("#receivablePaymentMethod") || "efectivo";
   if (!Number.isFinite(amount) || amount <= 0 || amount > Number(sale.balance_due || 0)) {
-    window.alert("Ingresa un monto valido.");
+    window.alert("Ingresa un monto valido. No puede superar el saldo pendiente.");
     return;
   }
-  const method = window.prompt("Metodo de pago: efectivo, tarjeta, transferencia, qr o mixto", "efectivo") || "efectivo";
   try {
     await apiRequest(`/ventas/sales/${sale.id}/pay`, { method: "POST", body: { amount, paymentMethod: method } });
+    receivablePaymentModal.close();
     ventasMessage = "Pago registrado. La cuenta por cobrar fue actualizada.";
     activeView = "customers";
     await render();
   } catch (error) {
-    ventasMessage = error.message || "No se pudo registrar el pago.";
-    renderMain();
+    window.alert(error.message || "No se pudo registrar el pago.");
   }
 }
 
