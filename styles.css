@@ -3451,6 +3451,39 @@ body.app-correspondencia .metrics article:hover {
   font-weight: 900;
 }
 
+.last-sale-receipt {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+  border: 1px solid rgb(15 159 110 / 20%);
+  border-radius: 8px;
+  padding: 12px;
+  background:
+    linear-gradient(135deg, rgb(255 255 255 / 94%), rgb(236 253 245 / 92%)),
+    radial-gradient(circle at 88% 16%, rgb(15 159 110 / 18%), transparent 34%);
+  box-shadow: 0 16px 36px rgb(15 32 28 / 9%);
+}
+
+.last-sale-receipt div {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+
+.last-sale-receipt span,
+.last-sale-receipt small {
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 850;
+}
+
+.last-sale-receipt strong {
+  color: var(--accent-dark);
+  font-size: 1.08rem;
+}
+
 .pos-cash-warning,
 .pos-stock-note {
   border-radius: 8px;
@@ -9192,6 +9225,11 @@ body.system-zow-site .site-footer {
   .quick-cash-grid,
   .touch-sale-actions {
     grid-template-columns: 1fr;
+  }
+
+  .last-sale-receipt {
+    align-items: stretch;
+    flex-direction: column;
   }
 
   .pos-section-block {

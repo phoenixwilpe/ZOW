@@ -29,6 +29,7 @@ let cash = { pendingSales: [], total: 0 };
 let summary = {};
 let saleCart = [];
 let posMobilePanel = "products";
+let lastSaleReceipt = null;
 let editingUserId = "";
 let editingProductId = "";
 let productSearch = "";
@@ -387,6 +388,7 @@ function renderSell() {
           <div class="touch-shortcuts"><span>${escapeHtml(cashState)}</span><span>F2 Buscar</span><span>F4 Cobrar</span></div>
         </div>
         ${ventasMessage ? `<div class="pos-toast">${escapeHtml(ventasMessage)}</div>` : ""}
+        ${lastSaleReceipt ? renderLastSaleReceipt() : ""}
         ${!isCashOpen ? `
           <div class="pos-cash-warning">
             <div><strong>Abre una caja antes de vender</strong><span>El sistema necesita una caja activa para registrar pagos y cierres.</span></div>
@@ -435,6 +437,7 @@ function renderSell() {
             <div class="pos-section-title"><strong>Acciones de venta</strong><span>Gestiona la operacion sin salir de caja</span></div>
             <div class="quick-action-row touch-sale-actions">
               <button class="ghost-button" type="button" id="newSaleBtn">Nueva</button>
+              <button class="ghost-button" type="button" id="quickCashBtn" ${saleCart.length && isCashOpen ? "" : "disabled"}>Efectivo exacto</button>
               <button class="ghost-button" type="button" id="suspendSaleBtn">Suspender</button>
               <button class="ghost-button" type="button" id="recoverSaleBtn">Recuperar (${suspendedSales.length})</button>
               <button class="ghost-button danger-action" type="button" id="cancelSaleBtn">Cancelar</button>
@@ -461,12 +464,16 @@ function renderSell() {
   }));
   document.querySelector("#scanAddBtn")?.addEventListener("click", scanAddProduct);
   document.querySelector("#newSaleBtn")?.addEventListener("click", newSale);
+  document.querySelector("#quickCashBtn")?.addEventListener("click", quickCheckoutCash);
   document.querySelector("#suspendSaleBtn")?.addEventListener("click", suspendCurrentSale);
   document.querySelector("#recoverSaleBtn")?.addEventListener("click", recoverSuspendedSale);
   document.querySelector("#cancelSaleBtn")?.addEventListener("click", () => {
     if (saleCart.length && confirm("Cancelar la venta actual?")) cancelCurrentSale();
   });
   document.querySelector("#chargeSaleBtn")?.addEventListener("click", openPaymentModal);
+  document.querySelector("[data-last-sale-reprint]")?.addEventListener("click", () => {
+    if (lastSaleReceipt) printTicket(lastSaleReceipt.sale, lastSaleReceipt.items);
+  });
   document.querySelectorAll("[data-pos-panel]").forEach((button) => button.addEventListener("click", () => {
     posMobilePanel = button.dataset.posPanel || "products";
     renderMain();
@@ -883,6 +890,19 @@ function renderSellProduct(product) {
   </button>`;
 }
 
+function renderLastSaleReceipt() {
+  const sale = lastSaleReceipt?.sale;
+  if (!sale) return "";
+  return `<article class="last-sale-receipt">
+    <div>
+      <span>Ultima venta emitida</span>
+      <strong>${escapeHtml(sale.code)}</strong>
+      <small>${money(sale.total)} / ${escapeHtml(paymentLabel(sale.payment_method || "efectivo"))}</small>
+    </div>
+    <button class="ghost-button" type="button" data-last-sale-reprint>Reimprimir</button>
+  </article>`;
+}
+
 function renderCartItem(item) {
   const lineSubtotal = item.quantity * item.salePrice;
   return `<article class="cart-line touch-cart-line">
@@ -1163,6 +1183,7 @@ function scanAddProduct() {
 function newSale() {
   saleCart = [];
   productSearch = "";
+  lastSaleReceipt = null;
   posMobilePanel = "products";
   renderMain();
 }
@@ -1199,6 +1220,13 @@ function openPaymentModal() {
   paymentDraft.received = paymentDraft.method === "efectivo" ? total : total;
   renderPaymentModal();
   paymentModal.showModal();
+}
+
+function quickCheckoutCash() {
+  if (!saleCart.length) return;
+  paymentDraft.method = "efectivo";
+  paymentDraft.received = cartTotals().total;
+  openPaymentModal();
 }
 
 function renderPaymentModal() {
@@ -1274,7 +1302,11 @@ async function submitSale(event) {
   });
   localSaleMeta[response.sale.id] = { method: paymentDraft.method, status: response.sale.payment_status || "pagada", received: Number(paymentDraft.received || totals.total), createdAt: new Date().toISOString() };
   persistJson(LOCAL_SALE_META_KEY, localSaleMeta);
+  lastSaleReceipt = { sale: response.sale, items: response.items };
   saleCart = [];
+  productSearch = "";
+  posMobilePanel = "products";
+  ventasMessage = `Venta ${response.sale.code} registrada correctamente.`;
   paymentModal.close();
   await render();
   printTicket(response.sale, response.items);
