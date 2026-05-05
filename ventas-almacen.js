@@ -28,6 +28,7 @@ let receivables = [];
 let cash = { pendingSales: [], total: 0 };
 let summary = {};
 let saleCart = [];
+let posMobilePanel = "products";
 let editingUserId = "";
 let editingProductId = "";
 let productSearch = "";
@@ -372,7 +373,11 @@ function renderSell() {
     .map((item) => products.find((product) => product.id === item.productId))
     .filter((product) => product && Number(product.stock || 0) <= Number(product.min_stock || 0));
   mainList().innerHTML = `
-    <section class="pos-shell touch-pos-shell">
+    <section class="pos-shell touch-pos-shell pos-mode-${posMobilePanel}">
+      <div class="pos-mobile-switch" aria-label="Vista de venta movil">
+        <button class="${posMobilePanel === "products" ? "is-active" : ""}" type="button" data-pos-panel="products">Productos</button>
+        <button class="${posMobilePanel === "cart" ? "is-active" : ""}" type="button" data-pos-panel="cart">Carrito <strong>${saleCart.length}</strong></button>
+      </div>
       <section class="admin-panel pos-products touch-panel">
         <div class="touch-pos-head">
           <div>
@@ -462,6 +467,10 @@ function renderSell() {
     if (saleCart.length && confirm("Cancelar la venta actual?")) cancelCurrentSale();
   });
   document.querySelector("#chargeSaleBtn")?.addEventListener("click", openPaymentModal);
+  document.querySelectorAll("[data-pos-panel]").forEach((button) => button.addEventListener("click", () => {
+    posMobilePanel = button.dataset.posPanel || "products";
+    renderMain();
+  }));
   document.querySelectorAll("[data-add-product]").forEach((button) => button.addEventListener("click", () => addToCart(button.dataset.addProduct)));
   document.querySelectorAll("[data-remove-cart]").forEach((button) => button.addEventListener("click", () => removeFromCart(button.dataset.removeCart)));
   document.querySelectorAll("[data-cart-dec]").forEach((button) => button.addEventListener("click", () => updateCartQuantity(button.dataset.cartDec, -1)));
@@ -1102,6 +1111,7 @@ function addToCart(productId) {
   ventasMessage = "";
   if (existing) existing.quantity += 1;
   else saleCart.push({ productId, name: product.name, quantity: 1, salePrice: Number(product.sale_price || 0), discount: 0 });
+  if (isMobilePos()) posMobilePanel = "cart";
   renderMain();
 }
 
@@ -1140,6 +1150,10 @@ function cartTotals() {
   return { subtotal, discount, tax, total: Math.max(subtotal - discount + tax, 0) };
 }
 
+function isMobilePos() {
+  return window.matchMedia("(max-width: 720px)").matches;
+}
+
 function scanAddProduct() {
   const term = productSearch.trim().toLowerCase();
   const product = products.find((item) => [item.code, item.name].some((value) => String(value || "").toLowerCase() === term)) || filteredProducts()[0];
@@ -1149,12 +1163,14 @@ function scanAddProduct() {
 function newSale() {
   saleCart = [];
   productSearch = "";
+  posMobilePanel = "products";
   renderMain();
 }
 
 function cancelCurrentSale() {
   saleCart = [];
   ventasMessage = "Venta cancelada.";
+  posMobilePanel = "products";
   renderMain();
 }
 
@@ -1171,6 +1187,7 @@ function recoverSuspendedSale() {
   if (!suspendedSales.length) return;
   const recovered = suspendedSales.shift();
   saleCart = recovered.items || [];
+  posMobilePanel = "cart";
   persistJson(SUSPENDED_SALES_KEY, suspendedSales);
   ventasMessage = "Venta recuperada.";
   renderMain();

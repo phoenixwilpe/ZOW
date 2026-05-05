@@ -3377,6 +3377,10 @@ body.app-correspondencia .metrics article:hover {
   overflow: hidden;
 }
 
+.pos-mobile-switch {
+  display: none;
+}
+
 .touch-panel,
 .touch-cart-panel {
   min-width: 0;
@@ -7135,6 +7139,65 @@ dialog::backdrop {
   .workflow-panel {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .ventas-touch-shell[data-active-view="sell"] .content-grid {
+    gap: 10px;
+  }
+
+  .touch-pos-shell {
+    display: block;
+  }
+
+  .pos-mobile-switch {
+    position: sticky;
+    top: 8px;
+    z-index: 5;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+    margin-bottom: 10px;
+    padding: 6px;
+    border: 1px solid color-mix(in srgb, var(--accent) 20%, var(--line));
+    border-radius: 12px;
+    background: rgb(255 255 255 / 90%);
+    box-shadow: 0 16px 42px rgb(15 32 28 / 12%);
+    backdrop-filter: blur(14px);
+  }
+
+  .pos-mobile-switch button {
+    min-height: 48px;
+    border: 0;
+    border-radius: 9px;
+    background: transparent;
+    color: var(--muted);
+    font-weight: 950;
+  }
+
+  .pos-mobile-switch button.is-active {
+    background: linear-gradient(135deg, var(--accent-dark), var(--accent));
+    color: white;
+    box-shadow: 0 12px 28px color-mix(in srgb, var(--accent) 28%, transparent);
+  }
+
+  .pos-mobile-switch strong {
+    display: inline-grid;
+    min-width: 24px;
+    min-height: 24px;
+    margin-left: 5px;
+    place-items: center;
+    border-radius: 999px;
+    background: rgb(255 255 255 / 22%);
+  }
+
+  .touch-pos-shell.pos-mode-products .touch-cart-panel,
+  .touch-pos-shell.pos-mode-cart .touch-panel {
+    display: none;
+  }
+
+  .touch-pos-shell.pos-mode-products .touch-panel,
+  .touch-pos-shell.pos-mode-cart .touch-cart-panel {
+    display: grid;
   }
 
   .toolbar select {
