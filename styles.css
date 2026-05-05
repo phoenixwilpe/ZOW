@@ -998,6 +998,202 @@ body.app-ventas .login-card .primary-button {
   box-shadow: 0 18px 42px rgb(15 159 110 / 22%);
 }
 
+body.app-correspondencia .correspondence-login-screen {
+  background:
+    radial-gradient(circle at 20% 12%, rgb(37 99 235 / 20%), transparent 28rem),
+    radial-gradient(circle at 86% 82%, rgb(14 165 233 / 16%), transparent 28rem),
+    linear-gradient(135deg, #071228 0%, #132a58 48%, #eef5ff 48%, #ffffff 100%);
+}
+
+body.app-correspondencia .login-layout {
+  border: 1px solid rgb(37 99 235 / 18%);
+  box-shadow: 0 34px 120px rgb(7 18 40 / 30%);
+}
+
+body.app-correspondencia .login-intro {
+  background:
+    radial-gradient(circle at 14% 12%, rgb(96 165 250 / 26%), transparent 34%),
+    radial-gradient(circle at 86% 82%, rgb(14 165 233 / 18%), transparent 36%),
+    linear-gradient(145deg, #071228, #132a58 58%, #2563eb);
+}
+
+body.app-correspondencia .login-intro::before {
+  background-image:
+    linear-gradient(rgb(255 255 255 / 6%) 1px, transparent 1px),
+    linear-gradient(90deg, rgb(255 255 255 / 5%) 1px, transparent 1px),
+    linear-gradient(135deg, transparent 0 48%, rgb(147 197 253 / 16%) 48% 49%, transparent 49% 100%);
+  background-size: 34px 34px, 34px 34px, 128px 128px;
+}
+
+body.app-correspondencia .login-intro::after {
+  right: -18%;
+  bottom: -18%;
+  width: 56%;
+  height: 54%;
+  border-radius: 50%;
+  transform: none;
+  background:
+    repeating-linear-gradient(90deg, transparent 0 14px, rgb(255 255 255 / 10%) 14px 16px, transparent 16px 32px),
+    radial-gradient(circle, rgb(255 255 255 / 11%), transparent 66%);
+}
+
+.correspondence-login-scene {
+  position: relative;
+  min-height: 245px;
+  display: grid;
+  place-items: center;
+  isolation: isolate;
+  perspective: 900px;
+}
+
+.doc-orbit {
+  position: absolute;
+  inset: 10px 4% 0;
+  display: grid;
+  place-items: center;
+  transform: rotateX(62deg) rotateZ(-18deg);
+}
+
+.doc-orbit span {
+  position: absolute;
+  width: min(380px, 78vw);
+  aspect-ratio: 1;
+  border: 1px solid rgb(147 197 253 / 24%);
+  border-radius: 50%;
+  box-shadow: inset 0 0 42px rgb(37 99 235 / 10%);
+}
+
+.doc-orbit span:nth-child(2) {
+  width: min(280px, 64vw);
+  border-color: rgb(14 165 233 / 22%);
+}
+
+.doc-orbit span:nth-child(3) {
+  width: min(185px, 48vw);
+  border-color: rgb(255 255 255 / 18%);
+}
+
+.doc-folder-3d {
+  position: relative;
+  width: min(300px, 72vw);
+  min-height: 175px;
+  transform: rotateX(58deg) rotateZ(-14deg);
+  transform-style: preserve-3d;
+  border: 1px solid rgb(255 255 255 / 22%);
+  border-radius: 18px;
+  background:
+    linear-gradient(145deg, rgb(255 255 255 / 18%), rgb(37 99 235 / 18%)),
+    linear-gradient(135deg, #dbeafe, #60a5fa);
+  box-shadow:
+    0 34px 80px rgb(0 0 0 / 24%),
+    inset 0 1px 0 rgb(255 255 255 / 55%);
+}
+
+.doc-tab {
+  position: absolute;
+  top: -22px;
+  left: 22px;
+  width: 112px;
+  height: 44px;
+  border-radius: 14px 14px 0 0;
+  background: linear-gradient(135deg, #bfdbfe, #60a5fa);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 62%);
+}
+
+.doc-page {
+  position: absolute;
+  left: 38px;
+  right: 34px;
+  height: 92px;
+  display: grid;
+  gap: 8px;
+  align-content: start;
+  padding: 18px;
+  border-radius: 12px;
+  background: rgb(255 255 255 / 88%);
+  box-shadow: 0 16px 34px rgb(15 23 42 / 16%);
+  transform: translateZ(26px) rotateX(-10deg);
+}
+
+.doc-page.page-a {
+  top: 26px;
+}
+
+.doc-page.page-b {
+  top: 54px;
+  opacity: 0.78;
+  transform: translateZ(12px) rotateX(-10deg) translateX(20px);
+}
+
+.doc-page i {
+  height: 8px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #2563eb, rgb(14 165 233 / 44%));
+}
+
+.doc-page i:nth-child(2) {
+  width: 72%;
+}
+
+.doc-page i:nth-child(3) {
+  width: 46%;
+}
+
+.doc-folder-3d strong {
+  position: absolute;
+  right: 18px;
+  bottom: 15px;
+  color: rgb(255 255 255 / 88%);
+  font-size: 1.2rem;
+  letter-spacing: 0;
+}
+
+.doc-flow-chip {
+  position: absolute;
+  display: grid;
+  gap: 3px;
+  border: 1px solid rgb(255 255 255 / 18%);
+  border-radius: 8px;
+  padding: 10px 12px;
+  background: rgb(255 255 255 / 12%);
+  box-shadow: 0 20px 48px rgb(0 0 0 / 18%);
+  backdrop-filter: blur(12px);
+}
+
+.doc-flow-chip span {
+  color: rgb(219 234 254 / 70%);
+  font-size: 0.7rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.doc-flow-chip strong {
+  color: #ffffff;
+  font-size: 0.94rem;
+}
+
+.doc-flow-chip.chip-in {
+  left: 2%;
+  top: 30%;
+}
+
+.doc-flow-chip.chip-out {
+  right: 0;
+  bottom: 18%;
+}
+
+body.app-correspondencia .login-card {
+  background:
+    radial-gradient(circle at 92% 8%, rgb(37 99 235 / 10%), transparent 34%),
+    linear-gradient(180deg, rgb(255 255 255 / 96%), rgb(248 251 255 / 94%));
+}
+
+body.app-correspondencia .login-card .primary-button {
+  min-height: 54px;
+  background: linear-gradient(135deg, #1d4ed8, #0ea5e9);
+  box-shadow: 0 18px 42px rgb(37 99 235 / 22%);
+}
+
 .login-copy {
   max-width: 590px;
 }
@@ -7906,6 +8102,22 @@ body.system-zow-site .site-footer {
 }
 
 @media (max-width: 980px) {
+  .correspondence-login-scene {
+    min-height: 190px;
+  }
+
+  .doc-folder-3d {
+    width: min(250px, 70vw);
+    min-height: 150px;
+  }
+
+  .doc-flow-chip {
+    position: relative;
+    inset: auto !important;
+    width: fit-content;
+    margin-top: -18px;
+  }
+
   body.app-ventas .login-highlights {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -7999,6 +8211,28 @@ body.system-zow-site .site-footer {
 }
 
 @media (max-width: 640px) {
+  .correspondence-login-scene {
+    min-height: 138px;
+  }
+
+  .doc-orbit,
+  .doc-flow-chip {
+    display: none;
+  }
+
+  .doc-folder-3d {
+    width: min(220px, 86vw);
+    min-height: 118px;
+    transform: rotateX(54deg) rotateZ(-12deg) scale(0.86);
+  }
+
+  .doc-page {
+    left: 28px;
+    right: 24px;
+    height: 70px;
+    padding: 14px;
+  }
+
   body.app-ventas .login-copy h1 {
     font-size: clamp(2rem, 13vw, 3rem);
   }
