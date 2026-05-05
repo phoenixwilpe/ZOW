@@ -347,7 +347,11 @@ function renderSell() {
   const sellProducts = filteredProducts().filter(isProductActive);
   const totals = cartTotals();
   const categories = productCategories();
-  const cashState = cashSession?.status === "abierta" ? `Caja abierta / ${money(cashExpectedTotal())}` : "Caja sin abrir";
+  const isCashOpen = cashSession?.status === "abierta";
+  const cashState = isCashOpen ? `Caja ${num(cashSession.registerNumber)} abierta / ${money(cashExpectedTotal())}` : "Caja sin abrir";
+  const lowStockInCart = saleCart
+    .map((item) => products.find((product) => product.id === item.productId))
+    .filter((product) => product && Number(product.stock || 0) <= Number(product.min_stock || 0));
   mainList().innerHTML = `
     <section class="pos-shell touch-pos-shell">
       <section class="admin-panel pos-products touch-panel">
@@ -359,9 +363,16 @@ function renderSell() {
           <div class="touch-shortcuts"><span>${escapeHtml(cashState)}</span><span>F2 Buscar</span><span>F4 Cobrar</span></div>
         </div>
         ${ventasMessage ? `<div class="pos-toast">${escapeHtml(ventasMessage)}</div>` : ""}
+        ${!isCashOpen ? `
+          <div class="pos-cash-warning">
+            <div><strong>Abre una caja antes de vender</strong><span>El sistema necesita una caja activa para registrar pagos y cierres.</span></div>
+            <button class="primary-button" type="button" id="goOpenCashBtn">Abrir caja</button>
+          </div>
+        ` : ""}
         <div class="pos-search-row">
           <label class="toolbar-search touch-search">Buscar o escanear<input id="productSearchInput" type="search" value="${escapeHtml(productSearch)}" placeholder="Codigo, barras o nombre del producto" /></label>
           <button class="primary-button touch-action" type="button" id="scanAddBtn">Agregar</button>
+          ${productSearch ? `<button class="ghost-button touch-action" type="button" id="clearSearchBtn">Limpiar</button>` : ""}
         </div>
         <div class="pos-category-rail">
           <button class="${productSearch ? "" : "is-active"}" type="button" data-product-filter="">Todos</button>
@@ -375,7 +386,11 @@ function renderSell() {
           <strong>${money(totals.total)}</strong>
         </div>
         <form class="admin-form" id="saleForm">
-          <label class="touch-customer-select">Cliente<select id="saleCustomer"><option value="">Cliente sin registrar</option>${customers.map((c) => `<option value="${c.id}">${escapeHtml(c.name)}</option>`).join("")}</select></label>
+          <div class="pos-customer-row">
+            <label class="touch-customer-select">Cliente<select id="saleCustomer"><option value="">Cliente sin registrar</option>${customers.map((c) => `<option value="${c.id}">${escapeHtml(c.name)}</option>`).join("")}</select></label>
+            <button class="ghost-button" type="button" id="quickCustomerBtn">Nuevo cliente</button>
+          </div>
+          ${lowStockInCart.length ? `<div class="pos-stock-note"><strong>Atencion stock bajo:</strong> ${lowStockInCart.map((product) => escapeHtml(product.name)).join(", ")}</div>` : ""}
           <div class="pos-cart-list touch-cart-list">${saleCart.map(renderCartItem).join("") || empty("Toca un producto para agregarlo")}</div>
           <div class="sale-total-card">
             <div><span>Subtotal</span><strong>${money(totals.subtotal)}</strong></div>
@@ -389,12 +404,21 @@ function renderSell() {
             <button class="ghost-button" type="button" id="recoverSaleBtn">Recuperar (${suspendedSales.length})</button>
             <button class="ghost-button danger-action" type="button" id="cancelSaleBtn">Cancelar</button>
           </div>
-          <button class="primary-button touch-charge-button" type="button" id="chargeSaleBtn" ${saleCart.length ? "" : "disabled"}>Cobrar ${money(totals.total)}</button>
+          <button class="primary-button touch-charge-button" type="button" id="chargeSaleBtn" ${saleCart.length && isCashOpen ? "" : "disabled"}>${isCashOpen ? `Cobrar ${money(totals.total)}` : "Abre caja para cobrar"}</button>
         </form>
       </section>
     </section>
   `;
   bindProductSearch();
+  document.querySelector("#goOpenCashBtn")?.addEventListener("click", () => {
+    activeView = "finance";
+    renderMain();
+  });
+  document.querySelector("#quickCustomerBtn")?.addEventListener("click", openCustomerModal);
+  document.querySelector("#clearSearchBtn")?.addEventListener("click", () => {
+    productSearch = "";
+    renderMain();
+  });
   document.querySelectorAll("[data-product-filter]").forEach((button) => button.addEventListener("click", () => {
     productSearch = button.dataset.productFilter || "";
     renderMain();
@@ -1139,7 +1163,7 @@ function renderPaymentModal() {
   paymentModalContent.innerHTML = `
     <div class="touch-payment-layout">
       <div class="payment-total touch-payment-total"><span>Total a pagar</span><strong>${money(totals.total)}</strong><small>${saleCart.length} item${saleCart.length === 1 ? "" : "s"} en carrito</small></div>
-      <div class="payment-method-grid touch-payment-methods">${paymentMethods().map((method) => `<button class="${paymentDraft.method === method.id ? "is-active" : ""}" type="button" data-payment-method="${method.id}">${method.label}</button>`).join("")}</div>
+      <div class="payment-method-grid touch-payment-methods">${paymentMethods().map((method) => `<button class="${paymentDraft.method === method.id ? "is-active" : ""}" type="button" data-payment-method="${method.id}"><span>${method.icon}</span><strong>${method.label}</strong></button>`).join("")}</div>
       ${isCredit ? `<div class="cloud-safe-note"><strong>Venta al credito</strong><span>Quedara saldo pendiente de ${money(balanceDue)} en cuentas por cobrar.</span></div>` : `<div class="quick-cash-grid">${quickAmounts.map((amount) => `<button type="button" data-quick-cash="${amount}">${money(amount)}</button>`).join("")}</div>`}
       <div class="form-grid touch-payment-fields">
         <label>${isCredit ? "Anticipo recibido" : "Monto recibido"}<input id="paymentReceived" type="number" min="0" step="0.01" value="${Number(paymentDraft.received || 0).toFixed(2)}" /></label>
@@ -1614,12 +1638,12 @@ function formatDateTime(date) { return new Intl.DateTimeFormat("es-BO", { day: "
 function roleLabel(role) { return { admin: "Encargado de sistema", recepcion_principal: "Recepcion principal", recepcion_secundaria: "Recepcion secundaria", funcionario: "Funcionario", supervisor: "Supervisor", ventas_admin: "Operador integral", cajero: "Cajero", almacen: "Almacen", vendedor: "Vendedor" }[role] || role; }
 function paymentMethods() {
   return [
-    { id: "efectivo", label: "Efectivo" },
-    { id: "tarjeta", label: "Tarjeta" },
-    { id: "transferencia", label: "Transferencia" },
-    { id: "qr", label: "QR" },
-    { id: "mixto", label: "Pago mixto" },
-    { id: "credito", label: "Credito" }
+    { id: "efectivo", label: "Efectivo", icon: "$" },
+    { id: "tarjeta", label: "Tarjeta", icon: "CARD" },
+    { id: "transferencia", label: "Transferencia", icon: "TRF" },
+    { id: "qr", label: "QR", icon: "QR" },
+    { id: "mixto", label: "Pago mixto", icon: "MIX" },
+    { id: "credito", label: "Credito", icon: "CR" }
   ];
 }
 function paymentLabel(id) { return paymentMethods().find((method) => method.id === id)?.label || "Efectivo"; }
