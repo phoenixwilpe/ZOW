@@ -3616,6 +3616,51 @@ body.app-correspondencia .metrics article:hover {
   font-size: clamp(1.4rem, 2vw, 1.9rem);
 }
 
+.pos-section-block {
+  border: 1px solid color-mix(in srgb, var(--accent) 16%, var(--line));
+  border-radius: 8px;
+  padding: 12px;
+  background:
+    radial-gradient(circle at 96% 0%, rgb(15 159 110 / 7%), transparent 32%),
+    linear-gradient(180deg, rgb(255 255 255 / 82%), rgb(247 252 249 / 70%));
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 74%);
+}
+
+.pos-section-block + .pos-section-block {
+  margin-top: 12px;
+}
+
+.pos-section-title {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid color-mix(in srgb, var(--accent) 12%, var(--line));
+}
+
+.pos-section-title strong,
+.pos-section-title span {
+  display: block;
+}
+
+.pos-section-title span {
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 780;
+}
+
+.pos-total-block {
+  margin-top: 12px;
+}
+
+.pos-actions-block {
+  background:
+    radial-gradient(circle at 100% 0%, rgb(245 158 11 / 10%), transparent 30%),
+    linear-gradient(180deg, rgb(255 255 255 / 86%), rgb(255 251 235 / 58%));
+}
+
 .touch-cart-list {
   max-height: none;
   min-height: 0;
@@ -8699,12 +8744,14 @@ body.system-zow-site .site-footer {
 
 @media (max-width: 980px) {
   .correspondence-login-scene {
-    min-height: 190px;
+    min-height: clamp(154px, 31vw, 190px);
+    transform: scale(0.92);
+    transform-origin: center;
   }
 
   .document-folder-3d {
-    width: min(250px, 70vw);
-    min-height: 150px;
+    width: min(250px, 66vw);
+    min-height: clamp(128px, 22vw, 150px);
   }
 
   .route-node {
@@ -8717,7 +8764,9 @@ body.system-zow-site .site-footer {
   }
 
   body.app-ventas .ventas-login-scene {
-    min-height: 150px;
+    min-height: clamp(138px, 28vw, 150px);
+    transform: scale(0.92);
+    transform-origin: center;
   }
 
   .ventas-workspace {
@@ -8805,24 +8854,92 @@ body.system-zow-site .site-footer {
 }
 
 @media (max-width: 640px) {
+  .login-screen {
+    align-items: flex-start;
+    min-height: 100dvh;
+    padding: 8px;
+  }
+
+  .login-layout {
+    width: min(100%, 430px);
+    max-height: none;
+    min-height: 0;
+    overflow: visible;
+    border-radius: 12px;
+  }
+
+  .login-card,
+  .login-intro {
+    padding: 18px;
+  }
+
+  .login-intro {
+    gap: 14px;
+  }
+
+  .login-copy h1 {
+    font-size: clamp(1.85rem, 9vw, 2.45rem);
+  }
+
+  .login-copy p:not(.eyebrow),
+  .login-notice p {
+    font-size: 0.9rem;
+  }
+
+  .login-highlights {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .login-highlights div {
+    min-height: 62px;
+    padding: 9px;
+  }
+
+  .login-highlights strong {
+    font-size: 0.8rem;
+  }
+
+  .login-highlights span {
+    font-size: 0.72rem;
+    line-height: 1.18;
+  }
+
   .correspondence-login-scene {
-    min-height: 138px;
+    min-height: clamp(122px, 34vw, 150px);
+    margin: -8px 0 -4px;
+    transform: scale(0.74);
+    transform-origin: center;
+  }
+
+  .correspondence-backdrop span {
+    width: 116px;
+    height: 76px;
+    opacity: 0.34;
+  }
+
+  .document-folder-3d {
+    width: min(218px, 76vw);
+    min-height: 118px;
+    transform: rotateX(54deg) rotateZ(-12deg) translateZ(42px) scale(0.86);
   }
 
   .route-orbit,
-  .document-route-map,
-  .route-packet,
-  .hologram-core,
   .holo-panels,
   .data-vault-ring,
   .document-stamp-3d {
     display: none;
   }
 
-  .document-folder-3d {
-    width: min(220px, 86vw);
-    min-height: 118px;
-    transform: rotateX(54deg) rotateZ(-12deg) translateZ(42px) scale(0.86);
+  .document-route-map,
+  .route-packet,
+  .hologram-core {
+    display: block;
+  }
+
+  .hologram-core {
+    width: 88px;
+    height: 88px;
   }
 
   .control-sheet {
@@ -8852,7 +8969,34 @@ body.system-zow-site .site-footer {
   }
 
   body.app-ventas .ventas-login-scene {
+    display: grid !important;
+    min-height: clamp(118px, 34vw, 145px);
+    margin: -10px 0 -4px;
+    transform: scale(0.72);
+    transform-origin: center;
+  }
+
+  body.app-ventas .sales-depth-grid,
+  body.app-ventas .sales-orbit {
     display: none;
+  }
+
+  body.app-ventas .warehouse-rack-3d {
+    left: 3%;
+    top: 25%;
+    width: 126px;
+    height: 82px;
+  }
+
+  body.app-ventas .pos-terminal-3d {
+    right: 4%;
+    top: 20%;
+    width: 166px;
+    height: 108px;
+  }
+
+  body.app-ventas .sales-scan-beam {
+    opacity: 0.68;
   }
 
   .ventas-touch-shell[data-active-view="sell"] .topbar {
@@ -8985,6 +9129,46 @@ body.system-zow-site .site-footer {
   .quick-cash-grid,
   .touch-sale-actions {
     grid-template-columns: 1fr;
+  }
+
+  .pos-section-block {
+    padding: 10px;
+  }
+
+  .pos-section-title {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 3px;
+  }
+
+  .pos-search-row {
+    grid-template-columns: 1fr;
+  }
+
+  .pos-search-row .touch-action {
+    width: 100%;
+  }
+
+  .pos-category-rail {
+    padding-bottom: 4px;
+    overflow-x: auto;
+  }
+
+  .pos-category-rail button {
+    flex: 0 0 auto;
+  }
+
+  .touch-product-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .touch-product-card {
+    min-height: 128px;
+  }
+
+  .sale-total-card {
+    gap: 7px;
   }
 
   .touch-pos-head,

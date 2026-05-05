@@ -393,11 +393,17 @@ function renderSell() {
           <button class="primary-button touch-action" type="button" id="scanAddBtn">Agregar</button>
           ${productSearch ? `<button class="ghost-button touch-action" type="button" id="clearSearchBtn">Limpiar</button>` : ""}
         </div>
-        <div class="pos-category-rail">
-          <button class="${productSearch ? "" : "is-active"}" type="button" data-product-filter="">Todos</button>
-          ${categories.slice(0, 10).map((category) => `<button class="${productSearch === category ? "is-active" : ""}" type="button" data-product-filter="${escapeHtml(category)}">${escapeHtml(category)}</button>`).join("")}
+        <div class="pos-section-block">
+          <div class="pos-section-title"><strong>Categorias</strong><span>Filtra rapido por familia</span></div>
+          <div class="pos-category-rail">
+            <button class="${productSearch ? "" : "is-active"}" type="button" data-product-filter="">Todos</button>
+            ${categories.slice(0, 10).map((category) => `<button class="${productSearch === category ? "is-active" : ""}" type="button" data-product-filter="${escapeHtml(category)}">${escapeHtml(category)}</button>`).join("")}
+          </div>
         </div>
-        <div class="product-suggestion-grid touch-product-grid">${sellProducts.slice(0, 24).map(renderSellProduct).join("") || empty("Sin productos con esa busqueda")}</div>
+        <div class="pos-section-block pos-products-block">
+          <div class="pos-section-title"><strong>Productos disponibles</strong><span>Toca para agregar al carrito</span></div>
+          <div class="product-suggestion-grid touch-product-grid">${sellProducts.slice(0, 24).map(renderSellProduct).join("") || empty("Sin productos con esa busqueda")}</div>
+        </div>
       </section>
       <section class="admin-panel pos-cart touch-cart-panel">
         <div class="touch-cart-head">
@@ -411,17 +417,23 @@ function renderSell() {
           </div>
           ${lowStockInCart.length ? `<div class="pos-stock-note"><strong>Atencion stock bajo:</strong> ${lowStockInCart.map((product) => escapeHtml(product.name)).join(", ")}</div>` : ""}
           <div class="pos-cart-list touch-cart-list">${saleCart.map(renderCartItem).join("") || empty("Toca un producto para agregarlo")}</div>
-          <div class="sale-total-card">
-            <div><span>Subtotal</span><strong>${money(totals.subtotal)}</strong></div>
-            <div><span>Descuentos</span><strong>${money(totals.discount)}</strong></div>
-            <div><span>Impuestos</span><strong>${money(totals.tax)}</strong></div>
-            <div class="is-total"><span>Total</span><strong>${money(totals.total)}</strong></div>
+          <div class="pos-section-block pos-total-block">
+            <div class="pos-section-title"><strong>Resumen de cobro</strong><span>Totales de la venta actual</span></div>
+            <div class="sale-total-card">
+              <div><span>Subtotal</span><strong>${money(totals.subtotal)}</strong></div>
+              <div><span>Descuentos</span><strong>${money(totals.discount)}</strong></div>
+              <div><span>Impuestos</span><strong>${money(totals.tax)}</strong></div>
+              <div class="is-total"><span>Total</span><strong>${money(totals.total)}</strong></div>
+            </div>
           </div>
-          <div class="quick-action-row touch-sale-actions">
-            <button class="ghost-button" type="button" id="newSaleBtn">Nueva</button>
-            <button class="ghost-button" type="button" id="suspendSaleBtn">Suspender</button>
-            <button class="ghost-button" type="button" id="recoverSaleBtn">Recuperar (${suspendedSales.length})</button>
-            <button class="ghost-button danger-action" type="button" id="cancelSaleBtn">Cancelar</button>
+          <div class="pos-section-block pos-actions-block">
+            <div class="pos-section-title"><strong>Acciones de venta</strong><span>Gestiona la operacion sin salir de caja</span></div>
+            <div class="quick-action-row touch-sale-actions">
+              <button class="ghost-button" type="button" id="newSaleBtn">Nueva</button>
+              <button class="ghost-button" type="button" id="suspendSaleBtn">Suspender</button>
+              <button class="ghost-button" type="button" id="recoverSaleBtn">Recuperar (${suspendedSales.length})</button>
+              <button class="ghost-button danger-action" type="button" id="cancelSaleBtn">Cancelar</button>
+            </div>
           </div>
           <button class="primary-button touch-charge-button" type="button" id="chargeSaleBtn" ${saleCart.length && isCashOpen ? "" : "disabled"}>${isCashOpen ? `Cobrar ${money(totals.total)}` : "Abre caja para cobrar"}</button>
         </form>
