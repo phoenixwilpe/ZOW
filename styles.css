@@ -6119,12 +6119,13 @@ body.system-zow-site .site-scroll-progress {
   position: fixed;
   inset: 0 auto auto 0;
   z-index: 60;
-  width: calc(var(--scroll-progress) * 100%);
+  width: 100%;
   height: 3px;
   background: linear-gradient(90deg, #2563eb, #00b8d9, #22c55e);
   box-shadow: 0 0 18px rgb(37 99 235 / 42%);
   transform-origin: left center;
-  transition: width 120ms linear;
+  transform: scaleX(var(--scroll-progress));
+  will-change: transform;
 }
 
 body.system-zow-site .site-header {
@@ -7033,6 +7034,8 @@ body.system-zow-site .zow-symbol i {
   opacity: 0.75;
   transform: rotateX(62deg) rotateZ(0deg);
   animation: zowLogoOrbit 4.8s linear infinite;
+  animation-play-state: paused;
+  will-change: transform;
 }
 
 body.system-zow-site .zow-symbol.small i {
@@ -7041,6 +7044,7 @@ body.system-zow-site .zow-symbol.small i {
 
 body.system-zow-site .site-brand:hover .zow-symbol i {
   border-color: rgb(34 197 94 / 42%);
+  animation-play-state: running;
 }
 
 body.system-zow-site .site-menu-toggle {
@@ -7078,7 +7082,8 @@ body.system-zow-site #zowHeroCanvas {
   z-index: 0;
   width: 110%;
   height: 100%;
-  filter: drop-shadow(0 30px 70px rgb(0 184 217 / 16%));
+  filter: drop-shadow(0 18px 42px rgb(0 184 217 / 12%));
+  pointer-events: none;
 }
 
 body.system-zow-site .tech-orbit-stack {
@@ -7124,6 +7129,7 @@ body.system-zow-site .tech-command-panel {
     radial-gradient(circle at 88% 20%, rgb(37 99 235 / 18%), transparent 28%);
   transform: rotateX(var(--tilt-x)) rotateY(var(--tilt-y)) translateZ(0);
   animation: zowFloatPanel 5.8s ease-in-out infinite;
+  will-change: transform;
 }
 
 body.system-zow-site .tech-command-panel .holo-main {
@@ -7176,6 +7182,7 @@ body.system-zow-site .floating-tech-card {
   backdrop-filter: blur(18px);
   transform-style: preserve-3d;
   animation: zowFloatCard 4.8s ease-in-out infinite;
+  will-change: transform;
 }
 
 body.system-zow-site .floating-tech-card strong {
@@ -7390,6 +7397,30 @@ body.system-zow-site .service-card p {
   line-height: 1.58;
 }
 
+body.system-zow-site .site-section {
+  content-visibility: auto;
+  contain-intrinsic-size: 720px;
+}
+
+body.system-zow-site .site-hero,
+body.system-zow-site .site-header,
+body.system-zow-site .site-footer {
+  content-visibility: visible;
+}
+
+@media (max-width: 760px) {
+  body.app-correspondencia::after,
+  .ventas-touch-shell::after,
+  .ventas-touch-shell .topbar::after {
+    animation: none;
+  }
+
+  body.app-correspondencia::after,
+  .ventas-touch-shell::after {
+    opacity: 0.28;
+  }
+}
+
 @keyframes zowOrbitSpin {
   to { transform: rotateZ(360deg); }
 }
@@ -7518,7 +7549,18 @@ body.system-zow-site .service-card p {
   }
 
   body.system-zow-site .tech-hero-visual {
-    min-height: 520px;
+    min-height: 430px;
+  }
+
+  body.system-zow-site #zowHeroCanvas,
+  body.system-zow-site .tech-orbit-stack {
+    display: none;
+  }
+
+  body.system-zow-site .tech-command-panel,
+  body.system-zow-site .floating-tech-card {
+    animation: none;
+    will-change: auto;
   }
 
   body.system-zow-site .floating-tech-card {
@@ -7546,6 +7588,22 @@ body.system-zow-site .service-card p {
   body.system-zow-site .capability-grid article,
   body.system-zow-site .service-card {
     min-height: auto;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: 0.001ms !important;
+  }
+
+  body.system-zow-site #zowHeroCanvas,
+  body.system-zow-site .tech-orbit-stack {
+    display: none;
   }
 }
 

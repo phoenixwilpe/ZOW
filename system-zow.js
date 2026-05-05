@@ -13,6 +13,8 @@ const siteNav = document.querySelector("#siteNav");
 const siteBrand = document.querySelector(".site-brand");
 const scrollProgress = document.querySelector(".site-scroll-progress");
 const navLinks = [...document.querySelectorAll("[data-nav-link]")];
+const prefersReducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+const lowPowerViewport = window.matchMedia("(max-width: 760px)").matches;
 const planLabels = {
   mensual: "Mensual",
   trimestral: "Trimestral",
@@ -86,6 +88,8 @@ document.querySelectorAll("[data-plan-request]").forEach((button) => {
   });
 });
 
+let navigationTicking = false;
+
 function updateNavigationState() {
   const maxScroll = Math.max(document.documentElement.scrollHeight - window.innerHeight, 1);
   const progress = Math.min(Math.max(window.scrollY / maxScroll, 0), 1);
@@ -101,7 +105,14 @@ function updateNavigationState() {
 }
 
 updateNavigationState();
-window.addEventListener("scroll", updateNavigationState, { passive: true });
+window.addEventListener("scroll", () => {
+  if (navigationTicking) return;
+  navigationTicking = true;
+  requestAnimationFrame(() => {
+    updateNavigationState();
+    navigationTicking = false;
+  });
+}, { passive: true });
 
 navLinks.forEach((link) => {
   link.addEventListener("pointermove", (event) => {
@@ -142,34 +153,50 @@ const heroCanvas = document.querySelector("#zowHeroCanvas");
 const heroContext = heroCanvas?.getContext("2d");
 let heroNodes = [];
 let heroAnimation = 0;
+let heroVisible = true;
+let heroSize = { width: 0, height: 0 };
+let heroLastFrame = 0;
+const heroFrameInterval = 1000 / 30;
+const heroNodeCount = lowPowerViewport ? 20 : 34;
 
 function resizeHeroCanvas() {
   if (!heroCanvas || !heroContext) return;
   const rect = heroCanvas.getBoundingClientRect();
-  const pixelRatio = Math.min(window.devicePixelRatio || 1, 2);
+  const pixelRatio = Math.min(window.devicePixelRatio || 1, lowPowerViewport ? 1.15 : 1.5);
   heroCanvas.width = Math.max(1, Math.floor(rect.width * pixelRatio));
   heroCanvas.height = Math.max(1, Math.floor(rect.height * pixelRatio));
   heroContext.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
-  heroNodes = Array.from({ length: 46 }, (_, index) => ({
-    angle: (Math.PI * 2 * index) / 46,
+  heroSize = { width: rect.width, height: rect.height };
+  heroNodes = Array.from({ length: heroNodeCount }, (_, index) => ({
+    angle: (Math.PI * 2 * index) / heroNodeCount,
     layer: index % 4,
     speed: 0.002 + (index % 7) * 0.00028,
     pulse: Math.random() * Math.PI * 2
   }));
 }
 
-function drawHeroCanvas() {
+function drawHeroCanvas(frameTime = performance.now()) {
   if (!heroCanvas || !heroContext) return;
-  const rect = heroCanvas.getBoundingClientRect();
-  const width = rect.width;
-  const height = rect.height;
+  if (!heroVisible || document.hidden || prefersReducedMotion) {
+    heroAnimation = 0;
+    return;
+  }
+
+  if (frameTime - heroLastFrame < heroFrameInterval) {
+    heroAnimation = requestAnimationFrame(drawHeroCanvas);
+    return;
+  }
+
+  heroLastFrame = frameTime;
+  const width = heroSize.width || heroCanvas.clientWidth;
+  const height = heroSize.height || heroCanvas.clientHeight;
   const cx = width * 0.5;
   const cy = height * 0.5;
   heroContext.clearRect(0, 0, width, height);
   heroContext.save();
   heroContext.translate(cx, cy);
 
-  const time = performance.now();
+  const time = frameTime;
   const rings = [0.25, 0.39, 0.53, 0.67].map((scale) => Math.min(width, height) * scale);
   rings.forEach((radius, index) => {
     heroContext.beginPath();
@@ -192,7 +219,7 @@ function drawHeroCanvas() {
   });
 
   projected.forEach((point, index) => {
-    for (let other = index + 1; other < projected.length; other += 1) {
+    for (let other = index + 1; other < projected.length; other += 2) {
       const target = projected[other];
       const distance = Math.hypot(point.x - target.x, point.y - target.y);
       if (distance > 116) continue;
@@ -226,11 +253,37 @@ function drawHeroCanvas() {
 
 if (heroCanvas && heroContext) {
   resizeHeroCanvas();
-  drawHeroCanvas();
-  window.addEventListener("resize", resizeHeroCanvas, { passive: true });
+  if (!prefersReducedMotion) drawHeroCanvas();
+  let resizeTicking = false;
+  window.addEventListener("resize", () => {
+    if (resizeTicking) return;
+    resizeTicking = true;
+    requestAnimationFrame(() => {
+      resizeHeroCanvas();
+      resizeTicking = false;
+    });
+  }, { passive: true });
+  const heroObserver = "IntersectionObserver" in window
+    ? new IntersectionObserver(
+        ([entry]) => {
+          heroVisible = Boolean(entry?.isIntersecting);
+          if (heroVisible && !heroAnimation && !prefersReducedMotion) drawHeroCanvas();
+          if (!heroVisible && heroAnimation) {
+            cancelAnimationFrame(heroAnimation);
+            heroAnimation = 0;
+          }
+        },
+        { threshold: 0.08 }
+      )
+    : null;
+  heroObserver?.observe(heroCanvas);
   document.addEventListener("visibilitychange", () => {
-    if (document.hidden) cancelAnimationFrame(heroAnimation);
-    else drawHeroCanvas();
+    if (document.hidden) {
+      cancelAnimationFrame(heroAnimation);
+      heroAnimation = 0;
+    } else if (heroVisible && !heroAnimation && !prefersReducedMotion) {
+      drawHeroCanvas();
+    }
   });
 }
 
