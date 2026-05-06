@@ -3397,11 +3397,11 @@ body.app-correspondencia .metrics article:hover {
 }
 
 .touch-pos-shell {
-  grid-template-columns: minmax(0, 1.42fr) minmax(390px, 0.78fr);
+  grid-template-columns: minmax(520px, 1.38fr) minmax(360px, 0.82fr);
   gap: 16px;
-  height: calc(100vh - 118px);
-  min-height: 520px;
-  overflow: hidden;
+  align-items: start;
+  min-height: min(720px, calc(100dvh - 118px));
+  overflow: visible;
 }
 
 .pos-mobile-switch {
@@ -3412,7 +3412,7 @@ body.app-correspondencia .metrics article:hover {
 .touch-cart-panel {
   min-width: 0;
   width: 100%;
-  max-height: 100%;
+  max-height: none;
   border: 0;
   border-radius: 8px;
   background:
@@ -3425,12 +3425,13 @@ body.app-correspondencia .metrics article:hover {
 .touch-panel {
   display: grid;
   grid-template-rows: auto auto auto minmax(0, 1fr);
-  overflow: hidden;
+  overflow: visible;
 }
 
 .touch-cart-panel {
-  display: grid;
-  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  overflow: visible;
 }
 
 .touch-pos-head,
@@ -3603,6 +3604,7 @@ body.app-correspondencia .metrics article:hover {
   display: grid;
   grid-template-columns: minmax(150px, 0.35fr) minmax(0, 1fr);
   gap: 10px;
+  align-items: end;
 }
 
 .settings-check {
@@ -3871,7 +3873,7 @@ body.app-correspondencia .metrics article:hover {
 
 .touch-sale-actions {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(116px, 1fr));
   margin: 12px 0;
 }
 
@@ -3889,13 +3891,20 @@ body.app-correspondencia .metrics article:hover {
 
 .touch-cart-panel form {
   min-height: 0;
-  display: grid;
-  grid-template-rows: auto minmax(0, 1fr) auto auto auto;
-  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  overflow: visible;
+}
+
+.touch-cart-panel .pos-cart-list {
+  max-height: clamp(180px, 28dvh, 390px);
+  min-height: 120px;
 }
 
 .payment-modal-body {
-  width: min(720px, calc(100vw - 24px));
+  width: min(760px, calc(100vw - 24px));
+  max-height: min(88dvh, 760px);
+  overflow: auto;
 }
 
 .sale-detail-modal {
@@ -4047,11 +4056,12 @@ body.app-correspondencia .metrics article:hover {
 }
 
 .touch-payment-total strong {
-  font-size: clamp(2rem, 8vw, 4rem);
+  font-size: clamp(2rem, 6vw, 3.35rem);
+  overflow-wrap: anywhere;
 }
 
 .touch-payment-methods {
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(104px, 1fr));
 }
 
 .touch-payment-methods button,
@@ -4174,6 +4184,8 @@ body.app-correspondencia .metrics article:hover {
 .touch-payment-fields input {
   min-height: 58px;
   font-size: 1.08rem;
+  min-width: 0;
+  width: 100%;
 }
 
 .touch-payment-actions {
@@ -9162,6 +9174,7 @@ body.system-zow-site .site-footer {
   }
 
   .touch-pos-shell {
+    grid-template-columns: 1fr;
     height: auto;
     min-height: 0;
     overflow: visible;

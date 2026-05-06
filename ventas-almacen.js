@@ -1507,9 +1507,9 @@ function renderPaymentModal() {
       ${isCredit ? `<div class="cloud-safe-note"><strong>Venta al credito</strong><span>Quedara saldo pendiente de ${money(balanceDue)} en cuentas por cobrar.</span></div>` : isMixed ? renderMixedPaymentFields(totals.total) : `<div class="quick-cash-grid">${quickAmounts.map((amount) => `<button type="button" data-quick-cash="${amount}">${money(amount)}</button>`).join("")}</div>`}
       ${isMixed ? "" : `<div class="form-grid touch-payment-fields">
         <label>${isCredit ? "Anticipo recibido" : "Monto recibido"}<input id="paymentReceived" type="number" min="0" step="0.01" value="${Number(paymentDraft.received || 0).toFixed(2)}" /></label>
-        <label>${isCredit ? "Saldo pendiente" : "Vuelto"}<input type="text" value="${money(isCredit ? balanceDue : change)}" readonly /></label>
+        <label>${isCredit ? "Saldo pendiente" : "Vuelto"}<input id="paymentResultValue" type="text" value="${money(isCredit ? balanceDue : change)}" readonly /></label>
       </div>`}
-      ${insufficient ? `<p class="form-error">Pago insuficiente. Falta ${money(totals.total - paidTotal)}.</p>` : ""}
+      <p class="form-error" id="paymentErrorText" ${insufficient ? "" : "hidden"}>${insufficient ? `Pago insuficiente. Falta ${money(totals.total - paidTotal)}.` : ""}</p>
       <div class="modal-actions touch-payment-actions"><button class="ghost-button" type="button" id="printDraftBtn">Precomprobante</button><button class="primary-button" type="submit" id="confirmPaymentBtn" ${insufficient ? "disabled" : ""}>Confirmar pago</button></div>
     </div>
   `;
@@ -1524,18 +1524,20 @@ function renderPaymentModal() {
   });
   paymentModalContent.querySelector("#paymentReceived")?.addEventListener("input", (event) => {
     paymentDraft.received = Number(event.target.value || 0);
-    renderPaymentModal();
+    updatePaymentLiveSummary(totals.total);
   });
   paymentModalContent.querySelectorAll("[data-quick-cash]").forEach((button) => {
     button.addEventListener("click", () => {
       paymentDraft.received = Number(button.dataset.quickCash || totals.total);
-      renderPaymentModal();
+      const receivedInput = paymentModalContent.querySelector("#paymentReceived");
+      if (receivedInput) receivedInput.value = Number(paymentDraft.received || 0).toFixed(2);
+      updatePaymentLiveSummary(totals.total);
     });
   });
   paymentModalContent.querySelectorAll("[data-payment-split]").forEach((input) => {
     input.addEventListener("input", () => {
       paymentDraft.split = { ...(paymentDraft.split || {}), [input.dataset.paymentSplit]: Number(input.value || 0) };
-      renderPaymentModal();
+      updatePaymentLiveSummary(totals.total);
     });
   });
   paymentModalContent.querySelector("#printDraftBtn")?.addEventListener("click", printDraftTicket);
@@ -1568,7 +1570,7 @@ function renderMixedPaymentFields(total) {
   const change = Math.max(Number(split.efectivo || 0) - Math.max(Number(total || 0) - Number(split.tarjeta || 0) - Number(split.transferencia || 0) - Number(split.qr || 0), 0), 0);
   return `
     <div class="mixed-payment-card">
-      <div><span>Pago dividido</span><strong>${money(paid)} / ${money(total)}</strong><small>${paid >= total ? `Vuelto ${money(change)}` : `Falta ${money(total - paid)}`}</small></div>
+      <div><span>Pago dividido</span><strong id="mixedPaymentTotal">${money(paid)} / ${money(total)}</strong><small id="mixedPaymentStatus">${paid >= total ? `Vuelto ${money(change)}` : `Falta ${money(total - paid)}`}</small></div>
       <div class="form-grid touch-payment-fields">
         <label>Efectivo<input data-payment-split="efectivo" type="number" min="0" step="0.01" value="${Number(split.efectivo || 0).toFixed(2)}" /></label>
         <label>Tarjeta<input data-payment-split="tarjeta" type="number" min="0" step="0.01" value="${Number(split.tarjeta || 0).toFixed(2)}" /></label>
@@ -1577,6 +1579,34 @@ function renderMixedPaymentFields(total) {
       </div>
     </div>
   `;
+}
+
+function updatePaymentLiveSummary(total) {
+  const isCredit = paymentDraft.method === "credito";
+  const isMixed = paymentDraft.method === "mixto";
+  const paid = paymentDraftTotal();
+  const insufficient = !isCredit && paid < total;
+  const resultInput = paymentModalContent.querySelector("#paymentResultValue");
+  if (resultInput) {
+    const balance = isCredit ? Math.max(total - Number(paymentDraft.received || 0), 0) : 0;
+    const change = Math.max(Number(paymentDraft.received || 0) - total, 0);
+    resultInput.value = money(isCredit ? balance : change);
+  }
+  if (isMixed) {
+    const split = paymentDraft.split || {};
+    const change = Math.max(Number(split.efectivo || 0) - Math.max(Number(total || 0) - Number(split.tarjeta || 0) - Number(split.transferencia || 0) - Number(split.qr || 0), 0), 0);
+    const totalLabel = paymentModalContent.querySelector("#mixedPaymentTotal");
+    const statusLabel = paymentModalContent.querySelector("#mixedPaymentStatus");
+    if (totalLabel) totalLabel.textContent = `${money(paid)} / ${money(total)}`;
+    if (statusLabel) statusLabel.textContent = paid >= total ? `Vuelto ${money(change)}` : `Falta ${money(total - paid)}`;
+  }
+  const errorText = paymentModalContent.querySelector("#paymentErrorText");
+  if (errorText) {
+    errorText.hidden = !insufficient;
+    errorText.textContent = insufficient ? `Pago insuficiente. Falta ${money(total - paid)}.` : "";
+  }
+  const confirmButton = paymentModalContent.querySelector("#confirmPaymentBtn");
+  if (confirmButton) confirmButton.disabled = insufficient;
 }
 
 async function submitSale(event) {
