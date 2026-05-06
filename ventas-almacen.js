@@ -47,6 +47,7 @@ let historyFilter = { status: "", method: "", date: "" };
 let storeSettings = { companyName: "", storeName: "", currency: "BOB", taxId: "", phone: "", address: "", ticketNote: "", cashRegisterCount: 1 };
 let stockMovementDraft = { productId: "", type: "entrada" };
 let receivablePaymentDraft = { saleId: "" };
+let reportFilter = { from: "", to: "" };
 
 const starterProducts = [
   { code: "AB-001", name: "Agua mineral 600 ml", category: "Bebidas", unit: "Botella", costPrice: 2.1, salePrice: 4, minStock: 24, stock: 96 },
@@ -379,8 +380,26 @@ function renderSummary() {
 
 function renderAlerts() {
   const alerts = products.filter((product) => isProductActive(product) && Number(product.stock || 0) <= Number(product.min_stock || 0));
+  const outOfStock = alerts.filter((product) => Number(product.stock || 0) <= 0);
+  const reorderValue = alerts.reduce((sum, product) => sum + suggestedReorderQuantity(product) * Number(product.cost_price || 0), 0);
   setCount(`${alerts.length} alerta${alerts.length === 1 ? "" : "s"}`);
-  mainList().innerHTML = alerts.map(renderProductRow).join("") || empty("No hay alertas de stock");
+  mainList().innerHTML = `
+    <section class="inventory-health-grid">
+      <article><span>Productos criticos</span><strong class="${alerts.length ? "warn-text" : "ok-text"}">${num(alerts.length)}</strong></article>
+      <article><span>Sin stock</span><strong class="${outOfStock.length ? "danger-text" : "ok-text"}">${num(outOfStock.length)}</strong></article>
+      <article><span>Compra sugerida</span><strong>${money(reorderValue)}</strong></article>
+      <article><span>Accion</span><strong>${alerts.length ? "Reponer" : "Estable"}</strong></article>
+    </section>
+    <section class="admin-panel">
+      <div class="admin-panel-head"><div><p class="eyebrow">Reposicion</p><h3>Lista sugerida de compra</h3></div><button class="ghost-button" type="button" id="exportReorderCsv">Exportar reposicion</button></div>
+      <div class="admin-list">${alerts.map(renderReorderRow).join("") || empty("No hay alertas de stock")}</div>
+    </section>
+    ${selectedKardex ? renderKardexPanel() : ""}
+  `;
+  document.querySelector("#exportReorderCsv")?.addEventListener("click", exportReorderCsv);
+  document.querySelectorAll("[data-stock-history]").forEach((button) => {
+    button.addEventListener("click", () => viewStockHistory(button.dataset.stockHistory));
+  });
 }
 
 function renderSell() {
@@ -683,25 +702,52 @@ function renderPromotions() {
 }
 
 function renderReports() {
-  const grossMargin = products.reduce((sum, product) => sum + Math.max(Number(product.sale_price || 0) - Number(product.cost_price || 0), 0) * Number(product.stock || 0), 0);
-  const pendingTotal = Number(summary.pending_total || cash.total || 0);
-  const averageSale = Number(summary.sales || 0) ? Number(summary.income || 0) / Number(summary.sales || 1) : 0;
+  const filteredSales = sales.filter(isSaleInsideReportFilter);
+  const confirmedSales = filteredSales.filter((sale) => sale.status !== "anulada");
+  const totalIncome = confirmedSales.reduce((sum, sale) => sum + Number(sale.amount_paid || sale.cash_received || sale.total || 0), 0);
+  const totalSold = confirmedSales.reduce((sum, sale) => sum + Number(sale.total || 0), 0);
+  const pendingTotal = receivables.reduce((sum, sale) => sum + Number(sale.balance_due || 0), 0);
+  const averageSale = confirmedSales.length ? totalSold / confirmedSales.length : 0;
+  const voidedSales = filteredSales.filter((sale) => sale.status === "anulada").length;
+  const paymentBreakdown = buildSalesPaymentBreakdown(confirmedSales);
   setCount("Auditoria");
   mainList().innerHTML = `
+    <section class="admin-panel report-filter-panel">
+      <div class="admin-panel-head"><div><p class="eyebrow">Periodo</p><h3>Filtro de analisis</h3></div></div>
+      <div class="history-filters">
+        <label>Desde<input id="reportDateFrom" type="date" value="${escapeHtml(reportFilter.from)}" /></label>
+        <label>Hasta<input id="reportDateTo" type="date" value="${escapeHtml(reportFilter.to)}" /></label>
+        <button class="ghost-button" type="button" id="clearReportFilter">Limpiar filtro</button>
+      </div>
+    </section>
     <section class="report-grid">
-      <article><span>Ticket promedio</span><strong>${money(averageSale)}</strong><small>${summary.sales || 0} ventas confirmadas</small></article>
-      <article><span>Pendiente de caja</span><strong>${money(pendingTotal)}</strong><small>${summary.pending_sales || cash.pendingSales?.length || 0} ventas por liquidar</small></article>
-      <article><span>Margen potencial</span><strong>${money(grossMargin)}</strong><small>Segun costo, precio y stock actual</small></article>
+      <article><span>Ventas del periodo</span><strong>${num(confirmedSales.length)}</strong><small>${voidedSales} anulada${voidedSales === 1 ? "" : "s"}</small></article>
+      <article><span>Ingreso cobrado</span><strong>${money(totalIncome)}</strong><small>Total vendido ${money(totalSold)}</small></article>
+      <article><span>Ticket promedio</span><strong>${money(averageSale)}</strong><small>Ventas confirmadas</small></article>
+      <article><span>Cuentas por cobrar</span><strong>${money(pendingTotal)}</strong><small>${receivables.length} saldo${receivables.length === 1 ? "" : "s"} activo${receivables.length === 1 ? "" : "s"}</small></article>
       <article><span>Stock critico</span><strong>${summary.low_stock || 0}</strong><small>Productos bajo minimo</small></article>
+      <article><span>Valor inventario</span><strong>${money(summary.inventory_value || 0)}</strong><small>Capital en almacen</small></article>
+    </section>
+    <section class="admin-panel">
+      <div class="admin-panel-head"><div><p class="eyebrow">Cobros</p><h3>Ventas por metodo de pago</h3></div></div>
+      <div class="payment-breakdown-grid">${paymentBreakdown.map((item) => `<article><span>${escapeHtml(item.label)}</span><strong>${money(item.total)}</strong><small>${num(item.count)} venta${item.count === 1 ? "" : "s"}</small></article>`).join("")}</div>
     </section>
     <section class="report-actions" aria-label="Exportaciones">
       <article class="report-export-card">
-        <div><strong>Ventas del sistema</strong><span>Descarga operaciones con cliente, metodo de pago, estado y saldos para auditoria.</span></div>
+        <div><strong>Ventas del periodo</strong><span>Descarga operaciones con cliente, metodo de pago, estado y saldos para auditoria.</span></div>
         <button class="primary-button" type="button" id="exportSalesCsv">Exportar ventas CSV</button>
       </article>
       <article class="report-export-card">
         <div><strong>Inventario valorizado</strong><span>Descarga stock, costo, precio, margen y productos inactivos para control comercial.</span></div>
         <button class="ghost-button" type="button" id="exportInventoryCsv">Exportar inventario CSV</button>
+      </article>
+      <article class="report-export-card">
+        <div><strong>Clientes y saldos</strong><span>Exporta clientes, cuentas por cobrar y saldos pendientes para seguimiento comercial.</span></div>
+        <button class="ghost-button" type="button" id="exportCustomersCsv">Exportar clientes CSV</button>
+      </article>
+      <article class="report-export-card">
+        <div><strong>Respaldo operativo</strong><span>Descarga un archivo JSON con ventas, productos, clientes, compras y configuracion visible.</span></div>
+        <button class="ghost-button" type="button" id="exportBackupJson">Exportar respaldo JSON</button>
       </article>
     </section>
     <section class="admin-panel">
@@ -709,8 +755,13 @@ function renderReports() {
       <div class="admin-list">${products.filter((product) => isProductActive(product) && Number(product.stock || 0) <= Number(product.min_stock || 0)).map(renderProductRow).join("") || empty("Sin riesgos de inventario")}</div>
     </section>
   `;
+  document.querySelector("#reportDateFrom")?.addEventListener("change", (event) => { reportFilter.from = event.target.value; renderMain(); });
+  document.querySelector("#reportDateTo")?.addEventListener("change", (event) => { reportFilter.to = event.target.value; renderMain(); });
+  document.querySelector("#clearReportFilter")?.addEventListener("click", () => { reportFilter = { from: "", to: "" }; renderMain(); });
   document.querySelector("#exportSalesCsv")?.addEventListener("click", exportSalesCsv);
   document.querySelector("#exportInventoryCsv")?.addEventListener("click", exportInventoryCsv);
+  document.querySelector("#exportCustomersCsv")?.addEventListener("click", exportCustomersCsv);
+  document.querySelector("#exportBackupJson")?.addEventListener("click", exportBackupJson);
 }
 
 function renderCatalog() {
@@ -905,6 +956,22 @@ function renderSettings() {
 
 function renderProductRow(product) {
   return `<article class="admin-row"><div><strong>${escapeHtml(product.name)}</strong><span>${escapeHtml(product.code)} / ${escapeHtml(product.category || "Sin categoria")} / ${escapeHtml(product.unit)}</span><span>Stock ${num(product.stock)} / Minimo ${num(product.min_stock)}</span></div><div class="admin-row-meta"><span>Costo ${money(product.cost_price)}</span><span>Venta ${money(product.sale_price)}</span><span class="${Number(product.stock || 0) <= Number(product.min_stock || 0) ? "danger-text" : "ok-text"}">${Number(product.stock || 0) <= Number(product.min_stock || 0) ? "Bajo minimo" : "Stock OK"}</span></div></article>`;
+}
+
+function renderReorderRow(product) {
+  const suggested = suggestedReorderQuantity(product);
+  return `<article class="admin-row">
+    <div>
+      <strong>${escapeHtml(product.name)}</strong>
+      <span>${escapeHtml(product.code)} / ${escapeHtml(product.category || "Sin categoria")}</span>
+      <span>Stock actual ${num(product.stock)} / Minimo ${num(product.min_stock)}</span>
+    </div>
+    <div class="admin-row-meta">
+      <span>Sugerido ${num(suggested)}</span>
+      <span>Costo estimado ${money(suggested * Number(product.cost_price || 0))}</span>
+      <button class="ghost-button" type="button" data-stock-history="${product.id}">Kardex</button>
+    </div>
+  </article>`;
 }
 
 function renderInventoryProductRow(product) {
@@ -1472,6 +1539,18 @@ function cashPaymentBreakdown() {
   }).filter((item) => item.count || ["efectivo", "tarjeta", "qr"].includes(item.id));
 }
 
+function buildSalesPaymentBreakdown(sourceSales) {
+  return paymentMethods().map((method) => {
+    const methodSales = sourceSales.filter((sale) => (sale.payment_method || "efectivo") === method.id);
+    return {
+      id: method.id,
+      label: method.label,
+      total: methodSales.reduce((sum, sale) => sum + Number(sale.amount_paid || sale.cash_received || sale.total || 0), 0),
+      count: methodSales.length
+    };
+  }).filter((item) => item.count || ["efectivo", "tarjeta", "qr"].includes(item.id));
+}
+
 function openProductModal(productId = "") {
   const product = productId ? products.find((item) => item.id === productId) : null;
   editingProductId = product?.id || "";
@@ -1959,7 +2038,7 @@ function preferredCashRegisterNumber() {
   return cashRegisterOptions().includes(preferred) ? preferred : 1;
 }
 function exportSalesCsv() {
-  const rows = sales.map((sale) => ({
+  const rows = sales.filter(isSaleInsideReportFilter).map((sale) => ({
     codigo: sale.code,
     fecha: formatDateTime(sale.created_at),
     cliente: sale.customer_name || "Cliente sin registrar",
@@ -1974,6 +2053,76 @@ function exportSalesCsv() {
     estado: saleStatus(sale)
   }));
   downloadCsv(`ventas-${csvDateStamp()}.csv`, rows);
+}
+
+function exportCustomersCsv() {
+  const debtByCustomer = new Map();
+  receivables.forEach((sale) => {
+    const name = sale.customer_name || "Cliente sin registrar";
+    debtByCustomer.set(name, (debtByCustomer.get(name) || 0) + Number(sale.balance_due || 0));
+  });
+  const rows = customers.map((customer) => ({
+    cliente: customer.name,
+    ci_nit: customer.ci || "",
+    celular: customer.phone || "",
+    email: customer.email || "",
+    direccion: customer.address || "",
+    saldo_pendiente: Number(debtByCustomer.get(customer.name) || 0).toFixed(2)
+  }));
+  receivables.filter((sale) => !customers.some((customer) => customer.name === sale.customer_name)).forEach((sale) => {
+    rows.push({
+      cliente: sale.customer_name || "Cliente sin registrar",
+      ci_nit: "",
+      celular: "",
+      email: "",
+      direccion: "",
+      saldo_pendiente: Number(sale.balance_due || 0).toFixed(2)
+    });
+  });
+  downloadCsv(`clientes-${csvDateStamp()}.csv`, rows);
+}
+
+function exportReorderCsv() {
+  const rows = products
+    .filter((product) => isProductActive(product) && Number(product.stock || 0) <= Number(product.min_stock || 0))
+    .map((product) => {
+      const suggested = suggestedReorderQuantity(product);
+      return {
+        codigo: product.code,
+        producto: product.name,
+        categoria: product.category || "",
+        stock_actual: Number(product.stock || 0).toFixed(2),
+        stock_minimo: Number(product.min_stock || 0).toFixed(2),
+        cantidad_sugerida: suggested.toFixed(2),
+        costo_unitario: Number(product.cost_price || 0).toFixed(2),
+        costo_estimado: (suggested * Number(product.cost_price || 0)).toFixed(2)
+      };
+    });
+  downloadCsv(`reposicion-${csvDateStamp()}.csv`, rows);
+}
+
+function exportBackupJson() {
+  const backup = {
+    generatedAt: new Date().toISOString(),
+    company: storeSettings.companyName || currentUser.companyName || "",
+    storeSettings,
+    products,
+    customers,
+    sales,
+    receivables,
+    purchases,
+    suppliers,
+    cashClosures
+  };
+  const blob = new Blob([JSON.stringify(backup, null, 2)], { type: "application/json;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `respaldo-zow-ventas-${csvDateStamp()}.json`;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
 }
 function exportInventoryCsv() {
   const rows = products.map((product) => {
@@ -2024,6 +2173,18 @@ function csvDateStamp() {
   const now = new Date();
   const pad = (value) => String(value).padStart(2, "0");
   return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+}
+function isSaleInsideReportFilter(sale) {
+  const saleDate = String(sale.created_at || "").slice(0, 10);
+  if (reportFilter.from && saleDate < reportFilter.from) return false;
+  if (reportFilter.to && saleDate > reportFilter.to) return false;
+  return true;
+}
+function suggestedReorderQuantity(product) {
+  const stock = Number(product.stock || 0);
+  const min = Number(product.min_stock || 0);
+  if (stock > min) return 0;
+  return Math.max(min * 2 - stock, min || 1);
 }
 function loadJson(key, fallback) {
   try { return JSON.parse(localStorage.getItem(key)) ?? fallback; } catch { return fallback; }
