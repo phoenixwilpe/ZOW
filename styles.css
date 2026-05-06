@@ -3101,6 +3101,90 @@ body.app-correspondencia .metrics article:hover {
   color: var(--accent-dark);
 }
 
+.cash-health-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.cash-health-grid article,
+.cash-difference-card {
+  border: 1px solid color-mix(in srgb, var(--accent) 16%, var(--line));
+  border-radius: 8px;
+  padding: 12px;
+  background: linear-gradient(135deg, #ffffff, color-mix(in srgb, var(--accent-tint) 34%, white));
+}
+
+.cash-health-grid article.is-ok,
+.cash-difference-card.is-ok {
+  border-color: rgb(22 163 74 / 22%);
+  background: linear-gradient(135deg, #f0fdf4, #ffffff);
+}
+
+.cash-health-grid article.is-warning,
+.cash-difference-card.is-warning {
+  border-color: rgb(245 158 11 / 28%);
+  background: linear-gradient(135deg, #fffbeb, #ffffff);
+}
+
+.cash-health-grid article.is-danger,
+.cash-difference-card.is-danger {
+  border-color: rgb(220 38 38 / 24%);
+  background: linear-gradient(135deg, #fef2f2, #ffffff);
+}
+
+.cash-health-grid span,
+.cash-health-grid small,
+.cash-difference-card span,
+.cash-difference-card small {
+  display: block;
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 850;
+}
+
+.cash-health-grid strong,
+.cash-difference-card strong {
+  display: block;
+  margin: 6px 0;
+  color: var(--accent-dark);
+  font-size: 1.08rem;
+}
+
+.cash-denomination-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(92px, 1fr));
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.cash-denomination-grid label {
+  display: grid;
+  gap: 5px;
+  border: 1px solid color-mix(in srgb, var(--accent) 14%, var(--line));
+  border-radius: 8px;
+  padding: 9px;
+  background: rgb(255 255 255 / 72%);
+}
+
+.cash-denomination-grid span {
+  color: var(--muted);
+  font-size: 0.74rem;
+  font-weight: 900;
+}
+
+.cash-denomination-grid input {
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  padding: 8px;
+}
+
+.cash-difference-card {
+  margin-top: 12px;
+}
+
 .payment-method-grid button {
   border: 1px solid var(--line);
   border-radius: 8px;
@@ -9496,6 +9580,7 @@ body.system-zow-site .site-footer {
 
   .payment-method-grid,
   .product-suggestion-grid,
+  .cash-health-grid,
   .payment-breakdown-grid {
     grid-template-columns: 1fr;
   }
@@ -9517,6 +9602,7 @@ body.system-zow-site .site-footer {
 
   .pos-quick-status,
   .inventory-health-grid,
+  .cash-health-grid,
   .owner-dashboard-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }

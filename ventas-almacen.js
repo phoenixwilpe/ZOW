@@ -617,6 +617,7 @@ function renderFinance() {
   const lastClosure = cashClosures[0];
   const totalClosureDifference = cashClosures.reduce((sum, closure) => sum + Number(closure.differenceAmount || 0), 0);
   const paymentBreakdown = cashPaymentBreakdown();
+  const cashHealth = buildCashHealth(expectedCash, movementsTotal, totalClosureDifference);
   mainList().innerHTML = `
     <section class="setup-overview">
       <article><span>${cashLabel}</span><strong>${cash.pendingSales?.length || 0}</strong></article>
@@ -625,6 +626,9 @@ function renderFinance() {
       <article><span>Cajas configuradas</span><strong>${num(storeSettings.cashRegisterCount || 1)}</strong></article>
       <article><span>Ultimo cierre</span><strong>${lastClosure ? escapeHtml(lastClosure.code) : "Sin cierres"}</strong></article>
       <article><span>Diferencia acumulada</span><strong class="${Math.abs(totalClosureDifference) > 0 ? "warn-text" : "ok-text"}">${money(totalClosureDifference)}</strong></article>
+    </section>
+    <section class="cash-health-grid">
+      ${cashHealth.map((item) => `<article class="${item.className}"><span>${escapeHtml(item.label)}</span><strong>${escapeHtml(item.value)}</strong><small>${escapeHtml(item.detail)}</small></article>`).join("")}
     </section>
     <section class="cashier-grid">
       <section class="admin-panel">
@@ -660,6 +664,14 @@ function renderFinance() {
             <label>Efectivo contado<input id="cashCountedAmount" type="number" min="0" step="0.01" value="${expectedCash.toFixed(2)}" /></label>
             <label class="span-2">Observacion si hay diferencia<input id="cashClosureNote" type="text" placeholder="Ej: faltante por vuelto, sobrante, revision pendiente" /></label>
           </div>
+          <div class="cash-denomination-grid">
+            ${cashDenominations().map((amount) => `<label><span>${money(amount)}</span><input data-cash-denomination="${amount}" type="number" min="0" step="1" placeholder="0" /></label>`).join("")}
+          </div>
+          <div class="cash-difference-card" id="cashDifferenceCard">
+            <span>Diferencia calculada</span>
+            <strong>${money(0)}</strong>
+            <small>Usa el conteo por billetes o escribe el total contado.</small>
+          </div>
           <button class="primary-button" type="submit" ${cashSession?.status === "abierta" ? "" : "disabled"}>Cerrar caja</button>
         </form>
       </section>
@@ -685,6 +697,7 @@ function renderFinance() {
   document.querySelector("#cashOpenForm")?.addEventListener("submit", openCashSession);
   document.querySelector("#cashMovementForm")?.addEventListener("submit", addCashMovement);
   document.querySelector("#cashCloseForm")?.addEventListener("submit", closeCashSession);
+  bindCashCounting(expectedCash);
   document.querySelectorAll("[data-print-closure]").forEach((button) => {
     button.addEventListener("click", () => printCashClosure(button.dataset.printClosure));
   });
@@ -717,6 +730,67 @@ function renderHistory() {
   document.querySelectorAll("[data-detail-sale]").forEach((button) => button.addEventListener("click", () => showSaleDetail(button.dataset.detailSale)));
   document.querySelectorAll("[data-reprint-sale]").forEach((button) => button.addEventListener("click", () => reprintSale(button.dataset.reprintSale)));
   document.querySelectorAll("[data-void-sale]").forEach((button) => button.addEventListener("click", () => voidSale(button.dataset.voidSale)));
+}
+
+function buildCashHealth(expectedCash, movementsTotal, totalClosureDifference) {
+  const pendingCount = cash.pendingSales?.length || 0;
+  return [
+    {
+      label: cashSession?.status === "abierta" ? "Turno activo" : "Turno cerrado",
+      value: cashSession?.status === "abierta" ? `Caja ${num(cashSession.registerNumber)}` : "Sin caja abierta",
+      detail: cashSession?.status === "abierta" ? `Esperado ${money(expectedCash)}` : "Abre caja para iniciar ventas",
+      className: cashSession?.status === "abierta" ? "is-ok" : "is-warning"
+    },
+    {
+      label: "Ventas sin cerrar",
+      value: num(pendingCount),
+      detail: pendingCount ? "Se incluiran al cerrar caja" : "Sin ventas pendientes",
+      className: pendingCount ? "is-ok" : "is-muted"
+    },
+    {
+      label: "Movimientos manuales",
+      value: money(movementsTotal),
+      detail: "Ingresos menos egresos del turno",
+      className: Math.abs(movementsTotal) ? "is-warning" : "is-muted"
+    },
+    {
+      label: "Historial de diferencias",
+      value: money(totalClosureDifference),
+      detail: Math.abs(totalClosureDifference) ? "Revisar cierres anteriores" : "Cierres equilibrados",
+      className: Math.abs(totalClosureDifference) ? "is-danger" : "is-ok"
+    }
+  ];
+}
+
+function cashDenominations() {
+  return [200, 100, 50, 20, 10, 5, 2, 1, 0.5];
+}
+
+function bindCashCounting(expectedCash) {
+  const countedInput = document.querySelector("#cashCountedAmount");
+  const denominationInputs = [...document.querySelectorAll("[data-cash-denomination]")];
+  if (!countedInput) return;
+  const updateDifference = () => {
+    const counted = Number(countedInput.value || 0);
+    const difference = counted - expectedCash;
+    const card = document.querySelector("#cashDifferenceCard");
+    if (!card) return;
+    card.classList.toggle("is-ok", Math.abs(difference) < 0.01);
+    card.classList.toggle("is-warning", Math.abs(difference) >= 0.01 && Math.abs(difference) <= 5);
+    card.classList.toggle("is-danger", Math.abs(difference) > 5);
+    card.querySelector("strong").textContent = money(difference);
+    card.querySelector("small").textContent = Math.abs(difference) < 0.01
+      ? "Caja cuadrada. Puedes cerrar con seguridad."
+      : "Agrega una observacion antes de cerrar.";
+  };
+  const updateCountedFromDenominations = () => {
+    const total = denominationInputs.reduce((sum, input) => sum + Number(input.dataset.cashDenomination || 0) * Number(input.value || 0), 0);
+    if (total > 0) countedInput.value = total.toFixed(2);
+    updateDifference();
+  };
+  countedInput.addEventListener("input", updateDifference);
+  denominationInputs.forEach((input) => input.addEventListener("input", updateCountedFromDenominations));
+  updateDifference();
 }
 
 function renderRoutes() {
