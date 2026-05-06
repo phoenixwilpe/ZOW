@@ -426,13 +426,17 @@ function renderAlerts() {
   const alerts = products.filter((product) => isProductActive(product) && Number(product.stock || 0) <= Number(product.min_stock || 0));
   const outOfStock = alerts.filter((product) => Number(product.stock || 0) <= 0);
   const reorderValue = alerts.reduce((sum, product) => sum + suggestedReorderQuantity(product) * Number(product.cost_price || 0), 0);
+  const highPriority = alerts.filter((product) => reorderPriority(product).level === "alta");
   setCount(`${alerts.length} alerta${alerts.length === 1 ? "" : "s"}`);
   mainList().innerHTML = `
     <section class="inventory-health-grid">
       <article><span>Productos criticos</span><strong class="${alerts.length ? "warn-text" : "ok-text"}">${num(alerts.length)}</strong></article>
       <article><span>Sin stock</span><strong class="${outOfStock.length ? "danger-text" : "ok-text"}">${num(outOfStock.length)}</strong></article>
       <article><span>Compra sugerida</span><strong>${money(reorderValue)}</strong></article>
-      <article><span>Accion</span><strong>${alerts.length ? "Reponer" : "Estable"}</strong></article>
+      <article><span>Prioridad alta</span><strong class="${highPriority.length ? "danger-text" : "ok-text"}">${num(highPriority.length)}</strong></article>
+    </section>
+    <section class="inventory-insight-grid">
+      ${buildInventoryInsights(alerts).map(renderInventoryInsightCard).join("")}
     </section>
     <section class="admin-panel">
       <div class="admin-panel-head"><div><p class="eyebrow">Reposicion</p><h3>Lista sugerida de compra</h3></div><button class="ghost-button" type="button" id="exportReorderCsv">Exportar reposicion</button></div>
@@ -1125,6 +1129,9 @@ function renderInventory() {
   const activeCount = products.filter(isProductActive).length;
   const outOfStock = products.filter((product) => isProductActive(product) && Number(product.stock || 0) <= 0).length;
   const lowStock = products.filter((product) => isProductActive(product) && Number(product.stock || 0) > 0 && Number(product.stock || 0) <= Number(product.min_stock || 0)).length;
+  const inventoryValue = products.filter(isProductActive).reduce((sum, product) => sum + Number(product.stock || 0) * Number(product.cost_price || 0), 0);
+  const potentialProfit = products.filter(isProductActive).reduce((sum, product) => sum + Number(product.stock || 0) * Math.max(Number(product.sale_price || 0) - Number(product.cost_price || 0), 0), 0);
+  const highValueProducts = inventoryProducts.filter((product) => inventoryClass(product) === "A").length;
   setCount(`${products.length} producto${products.length === 1 ? "" : "s"}`);
   mainList().innerHTML = `
     <section class="inventory-health-grid">
@@ -1132,6 +1139,12 @@ function renderInventory() {
       <article><span>Sin stock</span><strong class="${outOfStock ? "danger-text" : "ok-text"}">${num(outOfStock)}</strong></article>
       <article><span>Bajo minimo</span><strong class="${lowStock ? "warn-text" : "ok-text"}">${num(lowStock)}</strong></article>
       <article><span>Favoritos POS</span><strong>${num(favoriteProducts.length)}</strong></article>
+    </section>
+    <section class="inventory-insight-grid">
+      <article><span>Valor inventario</span><strong>${money(inventoryValue)}</strong><small>Costo total en almacen</small></article>
+      <article><span>Margen potencial</span><strong>${money(potentialProfit)}</strong><small>Ganancia bruta estimada</small></article>
+      <article><span>Productos clase A</span><strong>${num(highValueProducts)}</strong><small>Mayor valor inmovilizado</small></article>
+      <article><span>Salud inventario</span><strong class="${outOfStock || lowStock ? "warn-text" : "ok-text"}">${outOfStock ? "Critico" : lowStock ? "Revisar" : "Estable"}</strong><small>Basado en stock minimo</small></article>
     </section>
     <section class="admin-panel">
       <div class="admin-panel-head">
@@ -1211,11 +1224,13 @@ function renderSettings() {
 }
 
 function renderProductRow(product) {
-  return `<article class="admin-row"><div><strong>${escapeHtml(product.name)}</strong><span>${escapeHtml(product.code)} / ${escapeHtml(product.category || "Sin categoria")} / ${escapeHtml(product.unit)}</span><span>Stock ${num(product.stock)} / Minimo ${num(product.min_stock)}</span></div><div class="admin-row-meta"><span>Costo ${money(product.cost_price)}</span><span>Venta ${money(product.sale_price)}</span><span class="${Number(product.stock || 0) <= Number(product.min_stock || 0) ? "danger-text" : "ok-text"}">${Number(product.stock || 0) <= Number(product.min_stock || 0) ? "Bajo minimo" : "Stock OK"}</span></div></article>`;
+  const insight = productInventoryInsight(product);
+  return `<article class="admin-row"><div><strong>${escapeHtml(product.name)}</strong><span>${escapeHtml(product.code)} / ${escapeHtml(product.category || "Sin categoria")} / ${escapeHtml(product.unit)}</span><span>Stock ${num(product.stock)} / Minimo ${num(product.min_stock)} / Valor ${money(insight.stockValue)}</span></div><div class="admin-row-meta"><span>Costo ${money(product.cost_price)}</span><span>Venta ${money(product.sale_price)}</span><span>Margen ${num(insight.marginPercent)}%</span><span class="${Number(product.stock || 0) <= Number(product.min_stock || 0) ? "danger-text" : "ok-text"}">${Number(product.stock || 0) <= Number(product.min_stock || 0) ? "Bajo minimo" : "Stock OK"}</span></div></article>`;
 }
 
 function renderReorderRow(product) {
   const suggested = suggestedReorderQuantity(product);
+  const priority = reorderPriority(product);
   return `<article class="admin-row">
     <div>
       <strong>${escapeHtml(product.name)}</strong>
@@ -1225,6 +1240,7 @@ function renderReorderRow(product) {
     <div class="admin-row-meta">
       <span>Sugerido ${num(suggested)}</span>
       <span>Costo estimado ${money(suggested * Number(product.cost_price || 0))}</span>
+      <span class="${priority.className}">Prioridad ${priority.level}</span>
       <button class="ghost-button" type="button" data-stock-history="${product.id}">Kardex</button>
     </div>
   </article>`;
@@ -1233,15 +1249,18 @@ function renderReorderRow(product) {
 function renderInventoryProductRow(product) {
   const canMoveStock = ["admin", "ventas_admin", "almacen"].includes(currentUser?.role);
   const active = isProductActive(product);
+  const insight = productInventoryInsight(product);
   return `<article class="admin-row inventory-row">
     <div>
       <strong>${escapeHtml(product.name)}</strong>
       <span>${escapeHtml(product.code)} / ${escapeHtml(product.category || "Sin categoria")} / ${escapeHtml(product.unit)}</span>
-      <span>Stock ${num(product.stock)} / Minimo ${num(product.min_stock)}</span>
+      <span>Stock ${num(product.stock)} / Minimo ${num(product.min_stock)} / Clase ${escapeHtml(insight.className)}</span>
     </div>
     <div class="admin-row-meta">
       <span>Costo ${money(product.cost_price)}</span>
       <span>Venta ${money(product.sale_price)}</span>
+      <span>Valor ${money(insight.stockValue)}</span>
+      <span>Margen ${num(insight.marginPercent)}%</span>
       <span class="${active ? "ok-text" : "danger-text"}">${active ? "Activo" : "Inactivo"}</span>
       <span class="${Number(product.stock || 0) <= Number(product.min_stock || 0) ? "danger-text" : "ok-text"}">${Number(product.stock || 0) <= Number(product.min_stock || 0) ? "Bajo minimo" : "Stock OK"}</span>
       <div class="mini-action-row">
@@ -1271,6 +1290,58 @@ function renderStockMovementRow(movement) {
   const quantity = Number(movement.quantity || 0);
   const sign = quantity < 0 || movement.type === "salida" ? "-" : "+";
   return `<article class="admin-row"><div><strong>${escapeHtml(movement.type)} ${sign}${num(Math.abs(quantity))}</strong><span>${escapeHtml(movement.reference || "Sin referencia")} / ${escapeHtml(movement.note || "Sin nota")}</span><span>${formatDateTime(movement.created_at || movement.createdAt)} / ${escapeHtml(movement.created_by_name || movement.user || "Usuario")}</span></div></article>`;
+}
+
+function renderInventoryInsightCard(item) {
+  return `<article class="${item.className || ""}"><span>${escapeHtml(item.label)}</span><strong>${escapeHtml(item.value)}</strong><small>${escapeHtml(item.detail)}</small></article>`;
+}
+
+function buildInventoryInsights(alerts = []) {
+  const activeProducts = products.filter(isProductActive);
+  const inventoryValue = activeProducts.reduce((sum, product) => sum + Number(product.stock || 0) * Number(product.cost_price || 0), 0);
+  const reorderValue = alerts.reduce((sum, product) => sum + suggestedReorderQuantity(product) * Number(product.cost_price || 0), 0);
+  const negativeMargin = activeProducts.filter((product) => Number(product.sale_price || 0) <= Number(product.cost_price || 0));
+  const inactiveValue = products.filter((product) => !isProductActive(product)).reduce((sum, product) => sum + Number(product.stock || 0) * Number(product.cost_price || 0), 0);
+  return [
+    { label: "Valor activo", value: money(inventoryValue), detail: "Costo de productos disponibles", className: inventoryValue ? "is-ok" : "is-muted" },
+    { label: "Reposicion estimada", value: money(reorderValue), detail: "Compra sugerida para volver a nivel", className: reorderValue ? "is-warning" : "is-ok" },
+    { label: "Margen a revisar", value: num(negativeMargin.length), detail: "Productos con precio menor o igual al costo", className: negativeMargin.length ? "is-danger" : "is-ok" },
+    { label: "Valor inactivo", value: money(inactiveValue), detail: "Capital detenido en productos desactivados", className: inactiveValue ? "is-warning" : "is-muted" }
+  ];
+}
+
+function productInventoryInsight(product) {
+  const cost = Number(product.cost_price || 0);
+  const price = Number(product.sale_price || 0);
+  const stock = Number(product.stock || 0);
+  const marginPercent = price > 0 ? ((price - cost) / price) * 100 : 0;
+  return {
+    stockValue: stock * cost,
+    potentialRevenue: stock * price,
+    marginPercent: Math.round(marginPercent),
+    className: inventoryClass(product)
+  };
+}
+
+function inventoryClass(product) {
+  const activeProducts = products.filter(isProductActive);
+  const values = activeProducts.map((item) => Number(item.stock || 0) * Number(item.cost_price || 0)).sort((a, b) => b - a);
+  const value = Number(product.stock || 0) * Number(product.cost_price || 0);
+  if (!value) return "C";
+  const rank = values.findIndex((item) => item <= value) + 1;
+  const ratio = rank / Math.max(values.length, 1);
+  if (ratio <= 0.2) return "A";
+  if (ratio <= 0.5) return "B";
+  return "C";
+}
+
+function reorderPriority(product) {
+  const stock = Number(product.stock || 0);
+  const min = Number(product.min_stock || 0);
+  const value = Number(product.cost_price || 0) * suggestedReorderQuantity(product);
+  if (stock <= 0 || value >= 500 || inventoryClass(product) === "A") return { level: "alta", className: "danger-text" };
+  if (stock <= min || value >= 150) return { level: "media", className: "warn-text" };
+  return { level: "baja", className: "ok-text" };
 }
 
 function renderSellProduct(product) {
@@ -2635,6 +2706,8 @@ function exportInventoryCsv() {
     const cost = Number(product.cost_price || product.costPrice || 0);
     const price = Number(product.sale_price || product.salePrice || 0);
     const stock = Number(product.stock || 0);
+    const insight = productInventoryInsight(product);
+    const priority = reorderPriority(product);
     return {
       codigo: product.code,
       producto: product.name,
@@ -2645,6 +2718,9 @@ function exportInventoryCsv() {
       costo: cost.toFixed(2),
       precio: price.toFixed(2),
       margen_unitario: (price - cost).toFixed(2),
+      margen_porcentaje: insight.marginPercent,
+      clasificacion_valor: insight.className,
+      prioridad_reposicion: priority.level,
       valor_stock: (stock * cost).toFixed(2),
       activo: isProductActive(product) ? "si" : "no"
     };
