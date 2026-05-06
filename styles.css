@@ -2544,6 +2544,50 @@ body.app-correspondencia .metrics article:hover {
   background: #fff1f1;
 }
 
+.debt-aging-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.debt-aging-grid article {
+  border: 1px solid color-mix(in srgb, var(--accent) 16%, var(--line));
+  border-radius: 8px;
+  padding: 12px;
+  background: linear-gradient(135deg, #ffffff, color-mix(in srgb, var(--accent-tint) 30%, white));
+}
+
+.debt-aging-grid article.is-ok {
+  border-color: rgb(22 163 74 / 22%);
+  background: linear-gradient(135deg, #f0fdf4, #ffffff);
+}
+
+.debt-aging-grid article.is-warning {
+  border-color: rgb(245 158 11 / 28%);
+  background: linear-gradient(135deg, #fffbeb, #ffffff);
+}
+
+.debt-aging-grid article.is-danger {
+  border-color: rgb(220 38 38 / 24%);
+  background: linear-gradient(135deg, #fef2f2, #ffffff);
+}
+
+.debt-aging-grid span,
+.debt-aging-grid small {
+  display: block;
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 850;
+}
+
+.debt-aging-grid strong {
+  display: block;
+  margin: 6px 0;
+  color: var(--accent-dark);
+  font-size: 1.1rem;
+}
+
 .setup-overview span,
 .admin-panel-head span {
   color: var(--muted);
@@ -9581,6 +9625,7 @@ body.system-zow-site .site-footer {
   .payment-method-grid,
   .product-suggestion-grid,
   .cash-health-grid,
+  .debt-aging-grid,
   .payment-breakdown-grid {
     grid-template-columns: 1fr;
   }
@@ -9603,6 +9648,7 @@ body.system-zow-site .site-footer {
   .pos-quick-status,
   .inventory-health-grid,
   .cash-health-grid,
+  .debt-aging-grid,
   .owner-dashboard-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
