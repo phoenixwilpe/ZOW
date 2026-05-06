@@ -3599,6 +3599,32 @@ body.app-correspondencia .metrics article:hover {
   min-height: 58px;
 }
 
+.pos-sale-options {
+  display: grid;
+  grid-template-columns: minmax(150px, 0.35fr) minmax(0, 1fr);
+  gap: 10px;
+}
+
+.settings-check {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 10px;
+  min-height: 50px;
+  padding: 12px;
+  border: 1px solid rgb(15 23 42 / 10%);
+  border-radius: 10px;
+  background: rgb(255 255 255 / 72%);
+  color: #1f2a44;
+  font-weight: 800;
+}
+
+.settings-check input {
+  width: 18px;
+  height: 18px;
+  accent-color: #0f766e;
+}
+
 .touch-search {
   margin: 0;
   font-size: 0.9rem;
@@ -9392,6 +9418,7 @@ body.system-zow-site .site-footer {
 
   .pos-search-row,
   .pos-customer-row,
+  .pos-sale-options,
   .pos-cash-warning,
   .cart-line,
   .touch-payment-actions {

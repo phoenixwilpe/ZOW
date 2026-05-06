@@ -1072,15 +1072,20 @@ app.patch("/api/ventas/settings", requireAuth, async (req, res) => {
     phone: String(req.body.phone || "").trim(),
     address: String(req.body.address || "").trim(),
     ticketNote: String(req.body.ticketNote || "").trim(),
-    cashRegisterCount: clampNumber(req.body.cashRegisterCount ?? current.cashRegisterCount, 1, 20, 1)
+    cashRegisterCount: clampNumber(req.body.cashRegisterCount ?? current.cashRegisterCount, 1, 20, 1),
+    taxRate: clampNumber(req.body.taxRate ?? current.taxRate, 0, 100, 0),
+    allowCredit: req.body.allowCredit !== false,
+    allowDiscounts: req.body.allowDiscounts !== false,
+    requireCustomerForSale: Boolean(req.body.requireCustomerForSale)
   };
   if (!settings.companyName) return res.status(400).json({ error: "Nombre de empresa obligatorio" });
   if (!settings.currency) return res.status(400).json({ error: "Moneda obligatoria" });
   await pg.run(
     `INSERT INTO organization_settings (
-       id, company_id, company_name, store_name, currency, tax_id, phone, address, ticket_note, cash_register_count, updated_at
+       id, company_id, company_name, store_name, currency, tax_id, phone, address, ticket_note, cash_register_count,
+       tax_rate, allow_credit, allow_discounts, require_customer_sale, updated_at
      )
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, now())
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, now())
      ON CONFLICT(id) DO UPDATE SET
        company_name = excluded.company_name,
        store_name = excluded.store_name,
@@ -1090,8 +1095,27 @@ app.patch("/api/ventas/settings", requireAuth, async (req, res) => {
        address = excluded.address,
        ticket_note = excluded.ticket_note,
        cash_register_count = excluded.cash_register_count,
+       tax_rate = excluded.tax_rate,
+       allow_credit = excluded.allow_credit,
+       allow_discounts = excluded.allow_discounts,
+       require_customer_sale = excluded.require_customer_sale,
        updated_at = now()`,
-    [req.user.company_id, req.user.company_id, settings.companyName, settings.storeName, settings.currency, settings.taxId, settings.phone, settings.address, settings.ticketNote, settings.cashRegisterCount]
+    [
+      req.user.company_id,
+      req.user.company_id,
+      settings.companyName,
+      settings.storeName,
+      settings.currency,
+      settings.taxId,
+      settings.phone,
+      settings.address,
+      settings.ticketNote,
+      settings.cashRegisterCount,
+      settings.taxRate,
+      settings.allowCredit,
+      settings.allowDiscounts,
+      settings.requireCustomerForSale
+    ]
   );
   res.json({ settings: await mapSettings(await loadSettings(req.user.company_id)) });
 });
@@ -1477,11 +1501,14 @@ app.post("/api/ventas/sales", requireAuth, async (req, res) => {
   if (!items.length) return res.status(400).json({ error: "Agrega al menos un producto a la venta" });
   const saleId = randomUUID();
   const customerId = String(req.body.customerId || "").trim();
+  const settings = await mapSettings(await loadSettings(req.user.company_id));
+  const note = String(req.body.note || "").trim().slice(0, 500);
   try {
     const result = await pg.tx(async (client) => {
       const saleCode = await buildNextSaleCode(req.user.company_id, new Date().toISOString(), client);
       const customer = customerId ? await client.get("SELECT * FROM sales_customers WHERE id = ? AND company_id = ?", [customerId, req.user.company_id]) : null;
       const customerName = customer?.name || String(req.body.customerName || "Cliente sin registrar").trim();
+      if (settings.requireCustomerForSale && !customer) throw new Error("Selecciona un cliente registrado para confirmar la venta");
       if (customer?.status === "bloqueado") throw new Error("Cliente bloqueado para ventas");
       const preparedItems = [];
       for (const item of items) {
@@ -1493,9 +1520,14 @@ app.post("/api/ventas/sales", requireAuth, async (req, res) => {
         preparedItems.push({ product, quantity, unitPrice, total: quantity * unitPrice });
       }
       const subtotal = preparedItems.reduce((total, item) => total + item.total, 0);
-      const discount = Number(req.body.discount || 0);
-      const total = Math.max(subtotal - discount, 0);
+      const requestedDiscount = Math.max(Number(req.body.discount || 0), 0);
+      const discount = Math.min(requestedDiscount, subtotal);
+      if (!settings.allowDiscounts && discount > 0) throw new Error("Los descuentos estan desactivados para esta tienda");
+      const taxableBase = Math.max(subtotal - discount, 0);
+      const tax = Number((taxableBase * Number(settings.taxRate || 0) / 100).toFixed(2));
+      const total = Math.max(taxableBase + tax, 0);
       const paymentMethod = String(req.body.paymentMethod || "efectivo").trim();
+      if (!settings.allowCredit && paymentMethod === "credito") throw new Error("Las ventas al credito estan desactivadas para esta tienda");
       const cashReceived = paymentMethod === "credito" ? Number(req.body.cashReceived || 0) : Number(req.body.cashReceived || total);
       const amountPaid = Math.min(Math.max(cashReceived, 0), total);
       const balanceDue = Math.max(total - amountPaid, 0);
@@ -1511,11 +1543,11 @@ app.post("/api/ventas/sales", requireAuth, async (req, res) => {
       }
       await client.run(
         `INSERT INTO sales_orders (
-          id, company_id, code, customer_id, customer_name, subtotal, discount, total,
+          id, company_id, code, customer_id, customer_name, subtotal, discount, tax, total, note,
           cash_received, change_amount, payment_method, amount_paid, balance_due, payment_status,
           status, cash_closed, created_by, created_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'confirmada', false, ?, now())`,
-        [saleId, req.user.company_id, saleCode, customer?.id || null, customerName, subtotal, discount, total, cashReceived, changeAmount, paymentMethod, amountPaid, balanceDue, balanceDue > 0 ? "pendiente" : "pagada", req.user.id]
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'confirmada', false, ?, now())`,
+        [saleId, req.user.company_id, saleCode, customer?.id || null, customerName, subtotal, discount, tax, total, note, cashReceived, changeAmount, paymentMethod, amountPaid, balanceDue, balanceDue > 0 ? "pendiente" : "pagada", req.user.id]
       );
       for (const item of preparedItems) {
         await client.run(
@@ -1854,6 +1886,10 @@ async function mapSettings(settings = {}) {
     address: settings?.address || "",
     ticketNote: settings?.ticket_note || "",
     cashRegisterCount: clampNumber(settings?.cash_register_count, 1, 20, 1),
+    taxRate: clampNumber(settings?.tax_rate, 0, 100, 0),
+    allowCredit: settings?.allow_credit !== false,
+    allowDiscounts: settings?.allow_discounts !== false,
+    requireCustomerForSale: settings?.require_customer_sale === true,
     logoName: settings?.logo_name || "",
     logoUrl
   };
@@ -1876,7 +1912,11 @@ async function ensureSettingsSchema() {
       pg.run("ALTER TABLE organization_settings ADD COLUMN IF NOT EXISTS logo_name text not null default ''"),
       pg.run("ALTER TABLE organization_settings ADD COLUMN IF NOT EXISTS logo_mime text not null default ''"),
       pg.run("ALTER TABLE organization_settings ADD COLUMN IF NOT EXISTS logo_updated_at timestamptz"),
-      pg.run("ALTER TABLE organization_settings ADD COLUMN IF NOT EXISTS cash_register_count integer not null default 1")
+      pg.run("ALTER TABLE organization_settings ADD COLUMN IF NOT EXISTS cash_register_count integer not null default 1"),
+      pg.run("ALTER TABLE organization_settings ADD COLUMN IF NOT EXISTS tax_rate numeric not null default 0"),
+      pg.run("ALTER TABLE organization_settings ADD COLUMN IF NOT EXISTS allow_credit boolean not null default true"),
+      pg.run("ALTER TABLE organization_settings ADD COLUMN IF NOT EXISTS allow_discounts boolean not null default true"),
+      pg.run("ALTER TABLE organization_settings ADD COLUMN IF NOT EXISTS require_customer_sale boolean not null default false")
     ]);
   }
   await settingsSchemaReady;
@@ -2271,7 +2311,9 @@ async function ensureVentasSchema() {
           customer_name text not null default '',
           subtotal numeric not null default 0,
           discount numeric not null default 0,
+          tax numeric not null default 0,
           total numeric not null default 0,
+          note text not null default '',
           cash_received numeric not null default 0,
           change_amount numeric not null default 0,
           payment_method text not null default 'efectivo',
@@ -2369,6 +2411,8 @@ async function ensureVentasSchema() {
       await pg.run("ALTER TABLE sales_orders ADD COLUMN IF NOT EXISTS amount_paid numeric not null default 0");
       await pg.run("ALTER TABLE sales_orders ADD COLUMN IF NOT EXISTS balance_due numeric not null default 0");
       await pg.run("ALTER TABLE sales_orders ADD COLUMN IF NOT EXISTS payment_status text not null default 'pagada'");
+      await pg.run("ALTER TABLE sales_orders ADD COLUMN IF NOT EXISTS tax numeric not null default 0");
+      await pg.run("ALTER TABLE sales_orders ADD COLUMN IF NOT EXISTS note text not null default ''");
       await pg.run("ALTER TABLE sales_customers ADD COLUMN IF NOT EXISTS status text not null default 'activo'");
       await pg.run("ALTER TABLE sales_customers ADD COLUMN IF NOT EXISTS credit_limit numeric not null default 0");
       await pg.run("ALTER TABLE cash_sessions ADD COLUMN IF NOT EXISTS register_number integer not null default 1");

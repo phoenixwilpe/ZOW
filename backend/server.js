@@ -1243,16 +1243,21 @@ app.patch("/api/ventas/settings", requireAuth, requireSystemAccess("ventas_almac
     phone: String(req.body.phone || "").trim(),
     address: String(req.body.address || "").trim(),
     ticketNote: String(req.body.ticketNote || "").trim(),
-    cashRegisterCount: clampNumber(req.body.cashRegisterCount ?? current.cashRegisterCount, 1, 20, 1)
+    cashRegisterCount: clampNumber(req.body.cashRegisterCount ?? current.cashRegisterCount, 1, 20, 1),
+    taxRate: clampNumber(req.body.taxRate ?? current.taxRate, 0, 100, 0),
+    allowCredit: req.body.allowCredit !== false,
+    allowDiscounts: req.body.allowDiscounts !== false,
+    requireCustomerForSale: Boolean(req.body.requireCustomerForSale)
   };
   if (!settings.companyName) return res.status(400).json({ error: "Nombre de empresa obligatorio" });
   if (!settings.currency) return res.status(400).json({ error: "Moneda obligatoria" });
 
   db.prepare(
     `INSERT INTO organization_settings (
-       id, company_id, company_name, store_name, currency, tax_id, phone, address, ticket_note, cash_register_count, updated_at
+       id, company_id, company_name, store_name, currency, tax_id, phone, address, ticket_note, cash_register_count,
+       tax_rate, allow_credit, allow_discounts, require_customer_sale, updated_at
      )
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
      ON CONFLICT(id) DO UPDATE SET
        company_name = excluded.company_name,
        store_name = excluded.store_name,
@@ -1262,6 +1267,10 @@ app.patch("/api/ventas/settings", requireAuth, requireSystemAccess("ventas_almac
        address = excluded.address,
        ticket_note = excluded.ticket_note,
        cash_register_count = excluded.cash_register_count,
+       tax_rate = excluded.tax_rate,
+       allow_credit = excluded.allow_credit,
+       allow_discounts = excluded.allow_discounts,
+       require_customer_sale = excluded.require_customer_sale,
        updated_at = excluded.updated_at`
   ).run(
     req.user.company_id,
@@ -1274,6 +1283,10 @@ app.patch("/api/ventas/settings", requireAuth, requireSystemAccess("ventas_almac
     settings.address,
     settings.ticketNote,
     settings.cashRegisterCount,
+    settings.taxRate,
+    settings.allowCredit ? 1 : 0,
+    settings.allowDiscounts ? 1 : 0,
+    settings.requireCustomerForSale ? 1 : 0,
     new Date().toISOString()
   );
 
@@ -1640,6 +1653,9 @@ app.post("/api/ventas/sales", requireAuth, requireSystemAccess("ventas_almacen")
   const customerId = String(req.body.customerId || "").trim();
   const customer = customerId ? db.prepare("SELECT * FROM sales_customers WHERE id = ? AND company_id = ?").get(customerId, req.user.company_id) : null;
   const customerName = customer?.name || String(req.body.customerName || "Cliente sin registrar").trim();
+  const settings = mapSettings(loadSettings(req.user.company_id));
+  const note = String(req.body.note || "").trim().slice(0, 500);
+  if (settings.requireCustomerForSale && !customer) return res.status(400).json({ error: "Selecciona un cliente registrado para confirmar la venta" });
   if (customer?.status === "bloqueado") return res.status(400).json({ error: "Cliente bloqueado para ventas" });
 
   let preparedItems;
@@ -1661,9 +1677,14 @@ app.post("/api/ventas/sales", requireAuth, requireSystemAccess("ventas_almacen")
   }
 
   const subtotal = preparedItems.reduce((total, item) => total + item.total, 0);
-  const discount = Number(req.body.discount || 0);
-  const total = Math.max(subtotal - discount, 0);
+  const requestedDiscount = Math.max(Number(req.body.discount || 0), 0);
+  const discount = Math.min(requestedDiscount, subtotal);
+  if (!settings.allowDiscounts && discount > 0) return res.status(400).json({ error: "Los descuentos estan desactivados para esta tienda" });
+  const taxableBase = Math.max(subtotal - discount, 0);
+  const tax = Number((taxableBase * Number(settings.taxRate || 0) / 100).toFixed(2));
+  const total = Math.max(taxableBase + tax, 0);
   const paymentMethod = String(req.body.paymentMethod || "efectivo").trim();
+  if (!settings.allowCredit && paymentMethod === "credito") return res.status(400).json({ error: "Las ventas al credito estan desactivadas para esta tienda" });
   const cashReceived = paymentMethod === "credito" ? Number(req.body.cashReceived || 0) : Number(req.body.cashReceived || total);
   const amountPaid = Math.min(Math.max(cashReceived, 0), total);
   const balanceDue = Math.max(total - amountPaid, 0);
@@ -1683,11 +1704,11 @@ app.post("/api/ventas/sales", requireAuth, requireSystemAccess("ventas_almacen")
   try {
     db.prepare(
       `INSERT INTO sales_orders (
-        id, company_id, code, customer_id, customer_name, subtotal, discount, total,
+        id, company_id, code, customer_id, customer_name, subtotal, discount, tax, total, note,
         cash_received, change_amount, payment_method, amount_paid, balance_due, payment_status,
         status, cash_closed, created_by, created_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'confirmada', 0, ?, ?)`
-    ).run(saleId, req.user.company_id, saleCode, customer?.id || null, customerName, subtotal, discount, total, cashReceived, changeAmount, paymentMethod, amountPaid, balanceDue, balanceDue > 0 ? "pendiente" : "pagada", req.user.id, now);
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'confirmada', 0, ?, ?)`
+    ).run(saleId, req.user.company_id, saleCode, customer?.id || null, customerName, subtotal, discount, tax, total, note, cashReceived, changeAmount, paymentMethod, amountPaid, balanceDue, balanceDue > 0 ? "pendiente" : "pagada", req.user.id, now);
 
     const insertItem = db.prepare(
       `INSERT INTO sales_order_items (id, company_id, sale_id, product_id, product_name, quantity, unit_price, total)
@@ -2095,6 +2116,10 @@ function mapSettings(settings = {}) {
     address: settings.address || "",
     ticketNote: settings.ticket_note || "",
     cashRegisterCount: clampNumber(settings.cash_register_count, 1, 20, 1),
+    taxRate: clampNumber(settings.tax_rate, 0, 100, 0),
+    allowCredit: Number(settings.allow_credit ?? 1) === 1,
+    allowDiscounts: Number(settings.allow_discounts ?? 1) === 1,
+    requireCustomerForSale: Number(settings.require_customer_sale || 0) === 1,
     logoName: settings.logo_name || "",
     logoUrl: settings.logo_path ? `/${settings.logo_path}` : ""
   };

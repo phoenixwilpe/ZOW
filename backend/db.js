@@ -183,6 +183,10 @@ function initDb() {
       address TEXT NOT NULL DEFAULT '',
       ticket_note TEXT NOT NULL DEFAULT '',
       cash_register_count INTEGER NOT NULL DEFAULT 1,
+      tax_rate REAL NOT NULL DEFAULT 0,
+      allow_credit INTEGER NOT NULL DEFAULT 1,
+      allow_discounts INTEGER NOT NULL DEFAULT 1,
+      require_customer_sale INTEGER NOT NULL DEFAULT 0,
       logo_bucket TEXT NOT NULL DEFAULT '',
       logo_path TEXT NOT NULL DEFAULT '',
       logo_name TEXT NOT NULL DEFAULT '',
@@ -320,7 +324,9 @@ function initDb() {
       customer_name TEXT NOT NULL DEFAULT '',
       subtotal REAL NOT NULL DEFAULT 0,
       discount REAL NOT NULL DEFAULT 0,
+      tax REAL NOT NULL DEFAULT 0,
       total REAL NOT NULL DEFAULT 0,
+      note TEXT NOT NULL DEFAULT '',
       cash_received REAL NOT NULL DEFAULT 0,
       change_amount REAL NOT NULL DEFAULT 0,
       payment_method TEXT NOT NULL DEFAULT 'efectivo',
@@ -432,6 +438,10 @@ function migrateSchema() {
   ensureColumn("organization_settings", "address", "TEXT NOT NULL DEFAULT ''");
   ensureColumn("organization_settings", "ticket_note", "TEXT NOT NULL DEFAULT ''");
   ensureColumn("organization_settings", "cash_register_count", "INTEGER NOT NULL DEFAULT 1");
+  ensureColumn("organization_settings", "tax_rate", "REAL NOT NULL DEFAULT 0");
+  ensureColumn("organization_settings", "allow_credit", "INTEGER NOT NULL DEFAULT 1");
+  ensureColumn("organization_settings", "allow_discounts", "INTEGER NOT NULL DEFAULT 1");
+  ensureColumn("organization_settings", "require_customer_sale", "INTEGER NOT NULL DEFAULT 0");
   ensureColumn("organization_settings", "logo_bucket", "TEXT NOT NULL DEFAULT ''");
   ensureColumn("organization_settings", "logo_path", "TEXT NOT NULL DEFAULT ''");
   ensureColumn("organization_settings", "logo_name", "TEXT NOT NULL DEFAULT ''");
@@ -471,6 +481,8 @@ function migrateSchema() {
   ensureColumn("sales_orders", "amount_paid", "REAL NOT NULL DEFAULT 0");
   ensureColumn("sales_orders", "balance_due", "REAL NOT NULL DEFAULT 0");
   ensureColumn("sales_orders", "payment_status", "TEXT NOT NULL DEFAULT 'pagada'");
+  ensureColumn("sales_orders", "tax", "REAL NOT NULL DEFAULT 0");
+  ensureColumn("sales_orders", "note", "TEXT NOT NULL DEFAULT ''");
   ensureColumn("sales_customers", "status", "TEXT NOT NULL DEFAULT 'activo'");
   ensureColumn("sales_customers", "credit_limit", "REAL NOT NULL DEFAULT 0");
   ensureColumn("cash_sessions", "register_number", "INTEGER NOT NULL DEFAULT 1");

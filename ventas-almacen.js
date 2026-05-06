@@ -37,6 +37,9 @@ let editingCustomerId = "";
 let productSearch = "";
 let ventasMessage = "";
 let paymentDraft = { method: "efectivo", received: 0 };
+let saleCustomerId = "";
+let saleGlobalDiscount = 0;
+let saleNote = "";
 let suspendedSales = loadJson(SUSPENDED_SALES_KEY, []);
 let cashSession = null;
 let cashMovements = [];
@@ -45,7 +48,20 @@ let selectedKardex = null;
 let localSaleMeta = loadJson(LOCAL_SALE_META_KEY, {});
 let favoriteProducts = loadJson(FAVORITE_PRODUCTS_KEY, []);
 let historyFilter = { status: "", method: "", date: "" };
-let storeSettings = { companyName: "", storeName: "", currency: "BOB", taxId: "", phone: "", address: "", ticketNote: "", cashRegisterCount: 1 };
+let storeSettings = {
+  companyName: "",
+  storeName: "",
+  currency: "BOB",
+  taxId: "",
+  phone: "",
+  address: "",
+  ticketNote: "",
+  cashRegisterCount: 1,
+  taxRate: 0,
+  allowCredit: true,
+  allowDiscounts: true,
+  requireCustomerForSale: false
+};
 let stockMovementDraft = { productId: "", type: "entrada" };
 let receivablePaymentDraft = { saleId: "" };
 let reportFilter = { from: "", to: "" };
@@ -501,9 +517,15 @@ function renderSell() {
         </div>
         <form class="admin-form" id="saleForm">
           <div class="pos-customer-row">
-            <label class="touch-customer-select">Cliente<select id="saleCustomer"><option value="">Cliente sin registrar</option>${customers.map((c) => `<option value="${c.id}">${escapeHtml(c.name)}</option>`).join("")}</select></label>
+            <label class="touch-customer-select">Cliente<select id="saleCustomer"><option value="">Cliente sin registrar</option>${customers.map((c) => `<option value="${c.id}" ${c.id === saleCustomerId ? "selected" : ""}>${escapeHtml(c.name)}</option>`).join("")}</select></label>
             <button class="ghost-button" type="button" id="quickCustomerBtn">Nuevo cliente</button>
           </div>
+          <div class="pos-sale-options">
+            <label>Descuento general<input id="saleGlobalDiscount" type="number" min="0" step="0.01" value="${Number(saleGlobalDiscount || 0)}" ${storeSettings.allowDiscounts ? "" : "disabled"} /></label>
+            <label>Observacion<input id="saleNote" type="text" value="${escapeHtml(saleNote)}" placeholder="Nota interna o detalle para el comprobante" /></label>
+          </div>
+          ${storeSettings.requireCustomerForSale ? `<div class="cloud-safe-note"><strong>Cliente requerido</strong><span>La configuracion de la tienda exige seleccionar un cliente antes de cobrar.</span></div>` : ""}
+          ${!storeSettings.allowDiscounts ? `<div class="cloud-safe-note"><strong>Descuentos desactivados</strong><span>Solo el encargado puede volver a habilitarlos desde configuracion.</span></div>` : ""}
           ${lowStockInCart.length ? `<div class="pos-stock-note"><strong>Atencion stock bajo:</strong> ${lowStockInCart.map((product) => escapeHtml(product.name)).join(", ")}</div>` : ""}
           <div class="pos-cart-list touch-cart-list">${saleCart.map(renderCartItem).join("") || empty("Toca un producto para agregarlo")}</div>
           <div class="pos-section-block pos-total-block">
@@ -536,6 +558,17 @@ function renderSell() {
     renderMain();
   });
   document.querySelector("#quickCustomerBtn")?.addEventListener("click", openCustomerModal);
+  document.querySelector("#saleCustomer")?.addEventListener("change", () => {
+    saleCustomerId = value("#saleCustomer");
+    ventasMessage = "";
+  });
+  document.querySelector("#saleGlobalDiscount")?.addEventListener("input", (event) => {
+    saleGlobalDiscount = Number(event.target.value || 0);
+    renderMain();
+  });
+  document.querySelector("#saleNote")?.addEventListener("input", (event) => {
+    saleNote = event.target.value;
+  });
   document.querySelector("#clearSearchBtn")?.addEventListener("click", () => {
     productSearch = "";
     renderMain();
@@ -996,10 +1029,14 @@ function renderSettings() {
           <label>Nombre comercial<input id="storeName" type="text" value="${escapeHtml(storeSettings.storeName || "")}" placeholder="Sucursal central" /></label>
           <label>Moneda<input id="storeCurrency" type="text" value="${escapeHtml(storeSettings.currency || "BOB")}" required /></label>
           <label>Cantidad de cajas<input id="storeCashRegisterCount" type="number" min="1" max="20" step="1" value="${Number(storeSettings.cashRegisterCount || 1)}" /></label>
+          <label>Impuesto %<input id="storeTaxRate" type="number" min="0" max="100" step="0.01" value="${Number(storeSettings.taxRate || 0)}" /></label>
           <label>NIT / Identificacion<input id="storeTaxId" type="text" value="${escapeHtml(storeSettings.taxId || "")}" /></label>
           <label>Telefono<input id="storePhone" type="tel" value="${escapeHtml(storeSettings.phone || "")}" /></label>
           <label>Direccion<input id="storeAddress" type="text" value="${escapeHtml(storeSettings.address || "")}" /></label>
           <label class="span-2">Nota en comprobante<input id="storeTicketNote" type="text" value="${escapeHtml(storeSettings.ticketNote || "")}" placeholder="Gracias por su compra" /></label>
+          <label class="settings-check"><input id="storeAllowCredit" type="checkbox" ${storeSettings.allowCredit ? "checked" : ""} /> Permitir ventas a credito</label>
+          <label class="settings-check"><input id="storeAllowDiscounts" type="checkbox" ${storeSettings.allowDiscounts ? "checked" : ""} /> Permitir descuentos en caja</label>
+          <label class="settings-check span-2"><input id="storeRequireCustomerForSale" type="checkbox" ${storeSettings.requireCustomerForSale ? "checked" : ""} /> Exigir cliente registrado para confirmar ventas</label>
         </div>
         <div class="modal-actions"><button class="primary-button" type="submit">Guardar configuracion</button></div>
       </form>
@@ -1104,11 +1141,12 @@ function renderLastSaleReceipt() {
 
 function renderCartItem(item) {
   const lineSubtotal = item.quantity * item.salePrice;
+  const lineDiscount = storeSettings.allowDiscounts ? Number(item.discount || 0) : 0;
   return `<article class="cart-line touch-cart-line">
     <div class="cart-item-name"><strong>${escapeHtml(item.name)}</strong><span>${money(item.salePrice)} c/u</span></div>
     <div class="cart-qty touch-qty"><button class="ghost-button" type="button" data-cart-dec="${item.productId}">-</button><strong>${item.quantity}</strong><button class="ghost-button" type="button" data-cart-inc="${item.productId}">+</button></div>
-    <label>Descuento<input type="number" min="0" step="0.01" value="${Number(item.discount || 0)}" data-cart-discount="${item.productId}" /></label>
-    <strong>${money(Math.max(lineSubtotal - Number(item.discount || 0), 0))}</strong>
+    <label>Descuento<input type="number" min="0" step="0.01" value="${Number(lineDiscount || 0)}" data-cart-discount="${item.productId}" ${storeSettings.allowDiscounts ? "" : "disabled"} /></label>
+    <strong>${money(Math.max(lineSubtotal - lineDiscount, 0))}</strong>
     <button class="ghost-button danger-action" type="button" data-remove-cart="${item.productId}">Quitar</button>
   </article>`;
 }
@@ -1358,15 +1396,22 @@ function updateCartQuantity(productId, delta) {
 }
 
 function updateCartDiscount(productId, discount) {
+  if (!storeSettings.allowDiscounts) {
+    ventasMessage = "Los descuentos estan desactivados para esta tienda.";
+    return renderMain();
+  }
   saleCart = saleCart.map((item) => item.productId === productId ? { ...item, discount: Math.max(discount, 0) } : item);
   renderMain();
 }
 
 function cartTotals() {
   const subtotal = saleCart.reduce((sum, item) => sum + item.quantity * item.salePrice, 0);
-  const discount = saleCart.reduce((sum, item) => sum + Number(item.discount || 0), 0);
-  const tax = 0;
-  return { subtotal, discount, tax, total: Math.max(subtotal - discount + tax, 0) };
+  const lineDiscount = storeSettings.allowDiscounts ? saleCart.reduce((sum, item) => sum + Number(item.discount || 0), 0) : 0;
+  const globalDiscount = storeSettings.allowDiscounts ? Number(saleGlobalDiscount || 0) : 0;
+  const discount = Math.min(lineDiscount + globalDiscount, subtotal);
+  const taxableBase = Math.max(subtotal - discount, 0);
+  const tax = taxableBase * Number(storeSettings.taxRate || 0) / 100;
+  return { subtotal, discount, tax, total: Math.max(taxableBase + tax, 0) };
 }
 
 function isMobilePos() {
@@ -1383,12 +1428,18 @@ function newSale() {
   saleCart = [];
   productSearch = "";
   lastSaleReceipt = null;
+  saleCustomerId = "";
+  saleGlobalDiscount = 0;
+  saleNote = "";
   posMobilePanel = "products";
   renderMain();
 }
 
 function cancelCurrentSale() {
   saleCart = [];
+  saleCustomerId = "";
+  saleGlobalDiscount = 0;
+  saleNote = "";
   ventasMessage = "Venta cancelada.";
   posMobilePanel = "products";
   renderMain();
@@ -1396,9 +1447,12 @@ function cancelCurrentSale() {
 
 function suspendCurrentSale() {
   if (!saleCart.length) return;
-  suspendedSales = [{ id: crypto.randomUUID(), items: saleCart, createdAt: new Date().toISOString() }, ...suspendedSales].slice(0, 10);
+  suspendedSales = [{ id: crypto.randomUUID(), items: saleCart, customerId: saleCustomerId, globalDiscount: saleGlobalDiscount, note: saleNote, createdAt: new Date().toISOString() }, ...suspendedSales].slice(0, 10);
   persistJson(SUSPENDED_SALES_KEY, suspendedSales);
   saleCart = [];
+  saleCustomerId = "";
+  saleGlobalDiscount = 0;
+  saleNote = "";
   ventasMessage = "Venta suspendida.";
   renderMain();
 }
@@ -1407,6 +1461,9 @@ function recoverSuspendedSale() {
   if (!suspendedSales.length) return;
   const recovered = suspendedSales.shift();
   saleCart = recovered.items || [];
+  saleCustomerId = recovered.customerId || "";
+  saleGlobalDiscount = Number(recovered.globalDiscount || 0);
+  saleNote = recovered.note || "";
   posMobilePanel = "cart";
   persistJson(SUSPENDED_SALES_KEY, suspendedSales);
   ventasMessage = "Venta recuperada.";
@@ -1415,6 +1472,11 @@ function recoverSuspendedSale() {
 
 function openPaymentModal() {
   if (!saleCart.length) return;
+  if (storeSettings.requireCustomerForSale && !saleCustomerId) {
+    ventasMessage = "Selecciona o registra un cliente antes de cobrar.";
+    return renderMain();
+  }
+  if (!storeSettings.allowCredit && paymentDraft.method === "credito") paymentDraft.method = "efectivo";
   const total = cartTotals().total;
   paymentDraft.received = paymentDraft.method === "efectivo" ? total : total;
   renderPaymentModal();
@@ -1438,7 +1500,7 @@ function renderPaymentModal() {
   paymentModalContent.innerHTML = `
     <div class="touch-payment-layout">
       <div class="payment-total touch-payment-total"><span>Total a pagar</span><strong>${money(totals.total)}</strong><small>${saleCart.length} item${saleCart.length === 1 ? "" : "s"} en carrito</small></div>
-      <div class="payment-method-grid touch-payment-methods">${paymentMethods().map((method) => `<button class="${paymentDraft.method === method.id ? "is-active" : ""}" type="button" data-payment-method="${method.id}"><span>${method.icon}</span><strong>${method.label}</strong></button>`).join("")}</div>
+      <div class="payment-method-grid touch-payment-methods">${availablePaymentMethods().map((method) => `<button class="${paymentDraft.method === method.id ? "is-active" : ""}" type="button" data-payment-method="${method.id}"><span>${method.icon}</span><strong>${method.label}</strong></button>`).join("")}</div>
       ${isCredit ? `<div class="cloud-safe-note"><strong>Venta al credito</strong><span>Quedara saldo pendiente de ${money(balanceDue)} en cuentas por cobrar.</span></div>` : `<div class="quick-cash-grid">${quickAmounts.map((amount) => `<button type="button" data-quick-cash="${amount}">${money(amount)}</button>`).join("")}</div>`}
       <div class="form-grid touch-payment-fields">
         <label>${isCredit ? "Anticipo recibido" : "Monto recibido"}<input id="paymentReceived" type="number" min="0" step="0.01" value="${Number(paymentDraft.received || 0).toFixed(2)}" /></label>
@@ -1492,8 +1554,10 @@ async function submitSale(event) {
   const response = await apiRequest("/ventas/sales", {
     method: "POST",
     body: {
-      customerId: value("#saleCustomer"),
+      customerId: saleCustomerId,
       discount: totals.discount,
+      tax: totals.tax,
+      note: saleNote.trim(),
       paymentMethod: paymentDraft.method,
       cashReceived: paymentDraft.method === "credito" ? Number(paymentDraft.received || 0) : Number(paymentDraft.received || totals.total),
       items: saleCart.map((item) => ({ productId: item.productId, quantity: item.quantity, unitPrice: item.salePrice }))
@@ -1504,6 +1568,9 @@ async function submitSale(event) {
   lastSaleReceipt = { sale: response.sale, items: response.items };
   saleCart = [];
   productSearch = "";
+  saleCustomerId = "";
+  saleGlobalDiscount = 0;
+  saleNote = "";
   posMobilePanel = "products";
   ventasMessage = `Venta ${response.sale.code} registrada correctamente.`;
   paymentModal.close();
@@ -1675,7 +1742,8 @@ function printTicket(sale, items) {
   <p class="center muted">${escapeHtml(storeSettings.taxId ? `NIT ${storeSettings.taxId}` : "")}<br>${escapeHtml(storeSettings.address || "")}<br>${escapeHtml(storeSettings.phone || "")}</p>
   <div class="ticket-box"><div class="row"><span>Comprobante</span><strong>${escapeHtml(sale.code)}</strong></div><div class="row"><span>Fecha</span><strong>${formatDateTime(sale.created_at)}</strong></div><div class="row"><span>Cajero</span><strong>${escapeHtml(currentUser.name || sale.seller_name || "")}</strong></div><div class="row"><span>Cliente</span><strong>${escapeHtml(sale.customer_name || "S/R")}</strong></div></div>
   <table>${items.map((item) => `<tr><td>${escapeHtml(item.product_name)}<br><span class="muted">${num(item.quantity)} x ${money(item.unit_price)}</span></td><td>${money(item.total)}</td></tr>`).join("")}</table>
-  <div class="ticket-box"><div class="row"><span>Subtotal</span><strong>${money(sale.subtotal)}</strong></div><div class="row"><span>Descuento</span><strong>${money(sale.discount)}</strong></div><div class="row total"><span>Total</span><strong>${money(sale.total)}</strong></div><div class="row"><span>Metodo</span><strong>${escapeHtml(paymentLabel(sale.payment_method || paymentDraft.method || "efectivo"))}</strong></div><div class="row"><span>Pagado</span><strong>${money(sale.amount_paid || sale.cash_received || 0)}</strong></div><div class="row"><span>Cambio</span><strong>${money(sale.change_amount)}</strong></div>${Number(sale.balance_due || 0) > 0 ? `<div class="row"><span>Saldo</span><strong>${money(sale.balance_due)}</strong></div>` : ""}</div>
+  <div class="ticket-box"><div class="row"><span>Subtotal</span><strong>${money(sale.subtotal)}</strong></div><div class="row"><span>Descuento</span><strong>${money(sale.discount)}</strong></div><div class="row"><span>Impuesto</span><strong>${money(sale.tax || 0)}</strong></div><div class="row total"><span>Total</span><strong>${money(sale.total)}</strong></div><div class="row"><span>Metodo</span><strong>${escapeHtml(paymentLabel(sale.payment_method || paymentDraft.method || "efectivo"))}</strong></div><div class="row"><span>Pagado</span><strong>${money(sale.amount_paid || sale.cash_received || 0)}</strong></div><div class="row"><span>Cambio</span><strong>${money(sale.change_amount)}</strong></div>${Number(sale.balance_due || 0) > 0 ? `<div class="row"><span>Saldo</span><strong>${money(sale.balance_due)}</strong></div>` : ""}</div>
+  ${sale.note ? `<p class="muted"><strong>Obs.:</strong> ${escapeHtml(sale.note)}</p>` : ""}
   <div class="barcode"></div><p class="foot">${escapeHtml(storeSettings.ticketNote || "Gracias por su compra")}</p><p class="foot">Sistema ZOW SAAS / Wilmar Peinado B.</p></body></html>`);
   printable.document.close();
   printable.focus();
@@ -1687,13 +1755,15 @@ function printDraftTicket() {
     code: "PREVENTA",
     subtotal: totals.subtotal,
     discount: totals.discount,
+    tax: totals.tax,
     total: totals.total,
     cash_received: Number(paymentDraft.received || totals.total),
     change_amount: Math.max(Number(paymentDraft.received || 0) - totals.total, 0),
     payment_method: paymentDraft.method,
     amount_paid: paymentDraft.method === "credito" ? Number(paymentDraft.received || 0) : Number(paymentDraft.received || totals.total),
     balance_due: paymentDraft.method === "credito" ? Math.max(totals.total - Number(paymentDraft.received || 0), 0) : 0,
-    created_at: new Date().toISOString()
+    created_at: new Date().toISOString(),
+    note: saleNote.trim()
   };
   const items = saleCart.map((item) => ({ product_name: item.name, quantity: item.quantity, total: item.quantity * item.salePrice - Number(item.discount || 0) }));
   printTicket(sale, items);
@@ -1743,6 +1813,11 @@ function renderSaleDetail(sale, items) {
         <span>Pago</span>
         <strong>Pagado ${money(sale.amount_paid || sale.cash_received || 0)} / Cambio ${money(sale.change_amount || 0)}</strong>
       </div>
+      <div>
+        <span>Impuesto</span>
+        <strong>${money(sale.tax || 0)}</strong>
+      </div>
+      ${sale.note ? `<div><span>Observacion</span><strong>${escapeHtml(sale.note)}</strong></div>` : ""}
       ${Number(sale.balance_due || 0) > 0 ? `<div><span>Saldo pendiente</span><strong class="warn-text">${money(sale.balance_due)}</strong></div>` : ""}
     </section>
     <div class="sale-detail-items">
@@ -1805,7 +1880,11 @@ async function saveStoreSettings(event) {
       phone: value("#storePhone"),
       address: value("#storeAddress"),
       ticketNote: value("#storeTicketNote"),
-      cashRegisterCount: Number(value("#storeCashRegisterCount") || 1)
+      cashRegisterCount: Number(value("#storeCashRegisterCount") || 1),
+      taxRate: Number(value("#storeTaxRate") || 0),
+      allowCredit: Boolean(document.querySelector("#storeAllowCredit")?.checked),
+      allowDiscounts: Boolean(document.querySelector("#storeAllowDiscounts")?.checked),
+      requireCustomerForSale: Boolean(document.querySelector("#storeRequireCustomerForSale")?.checked)
     }
   });
   storeSettings = response.settings;
@@ -2124,6 +2203,9 @@ function paymentMethods() {
     { id: "mixto", label: "Pago mixto", icon: "MIX" },
     { id: "credito", label: "Credito", icon: "CR" }
   ];
+}
+function availablePaymentMethods() {
+  return paymentMethods().filter((method) => storeSettings.allowCredit || method.id !== "credito");
 }
 function paymentLabel(id) { return paymentMethods().find((method) => method.id === id)?.label || "Efectivo"; }
 function cashRegisterOptions() {
