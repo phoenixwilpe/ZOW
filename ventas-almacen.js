@@ -454,6 +454,7 @@ function renderSell() {
     .filter((product) => product && isProductActive(product) && Number(product.stock || 0) > 0)
     .slice(0, 8);
   const totals = cartTotals();
+  const profit = cartEstimatedProfit();
   const categories = productCategories();
   const isCashOpen = cashSession?.status === "abierta";
   const cashState = isCashOpen ? `Caja ${num(cashSession.registerNumber)} abierta / ${money(cashExpectedTotal())}` : "Caja sin abrir";
@@ -492,6 +493,7 @@ function renderSell() {
           <button class="primary-button touch-action" type="button" id="scanAddBtn">Agregar</button>
           ${productSearch ? `<button class="ghost-button touch-action" type="button" id="clearSearchBtn">Limpiar</button>` : ""}
         </div>
+        <div class="pos-input-hint">Acepta cantidad rapida: <strong>3x codigo</strong>, <strong>codigo*3</strong> o lector de barras.</div>
         <div class="pos-section-block">
           <div class="pos-section-title"><strong>Categorias</strong><span>Filtra rapido por familia</span></div>
           <div class="pos-category-rail">
@@ -534,6 +536,7 @@ function renderSell() {
               <div><span>Subtotal</span><strong>${money(totals.subtotal)}</strong></div>
               <div><span>Descuentos</span><strong>${money(totals.discount)}</strong></div>
               <div><span>Impuestos</span><strong>${money(totals.tax)}</strong></div>
+              ${canSeeProfit() ? `<div><span>Margen estimado</span><strong>${money(profit)}</strong></div>` : ""}
               <div class="is-total"><span>Total</span><strong>${money(totals.total)}</strong></div>
             </div>
           </div>
@@ -1142,8 +1145,12 @@ function renderLastSaleReceipt() {
 function renderCartItem(item) {
   const lineSubtotal = item.quantity * item.salePrice;
   const lineDiscount = storeSettings.allowDiscounts ? Number(item.discount || 0) : 0;
+  const product = products.find((entry) => entry.id === item.productId);
+  const stockAfterSale = Number(product?.stock || 0) - Number(item.quantity || 0);
+  const minStock = Number(product?.min_stock || 0);
+  const stockClass = stockAfterSale < 0 ? "danger-text" : stockAfterSale <= minStock ? "warn-text" : "ok-text";
   return `<article class="cart-line touch-cart-line">
-    <div class="cart-item-name"><strong>${escapeHtml(item.name)}</strong><span>${money(item.salePrice)} c/u</span></div>
+    <div class="cart-item-name"><strong>${escapeHtml(item.name)}</strong><span>${money(item.salePrice)} c/u</span><small class="${stockClass}">Stock despues: ${num(stockAfterSale)}</small></div>
     <div class="cart-qty touch-qty"><button class="ghost-button" type="button" data-cart-dec="${item.productId}">-</button><strong>${item.quantity}</strong><button class="ghost-button" type="button" data-cart-inc="${item.productId}">+</button></div>
     <label>Descuento<input type="number" min="0" step="0.01" value="${Number(lineDiscount || 0)}" data-cart-discount="${item.productId}" ${storeSettings.allowDiscounts ? "" : "disabled"} /></label>
     <strong>${money(Math.max(lineSubtotal - lineDiscount, 0))}</strong>
@@ -1244,7 +1251,7 @@ function renderPriceRow(product) {
 }
 
 function filteredProducts(options = {}) {
-  const term = productSearch.trim().toLowerCase();
+  const term = String(options.term ?? productSearch).trim().toLowerCase();
   const source = options.includeInactive ? products : products.filter(isProductActive);
   if (!term) return source;
   return source.filter((product) => [product.code, product.name, product.category]
@@ -1261,6 +1268,16 @@ function bindProductSearch() {
   input.addEventListener("input", () => {
     productSearch = input.value;
     renderMain();
+  });
+  input.addEventListener("keydown", (event) => {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      scanAddProduct();
+    }
+    if (event.key === "Escape") {
+      productSearch = "";
+      renderMain();
+    }
   });
 }
 
@@ -1355,20 +1372,22 @@ function renderVentasUserRow(user) {
   </article>`;
 }
 
-function addToCart(productId) {
+function addToCart(productId, quantity = 1) {
   const product = products.find((item) => item.id === productId);
   if (!product) return;
   const existing = saleCart.find((item) => item.productId === productId);
   const stock = Number(product.stock || 0);
   const currentQuantity = Number(existing?.quantity || 0);
-  if (currentQuantity + 1 > stock) {
+  const requestedQuantity = Math.max(Math.floor(Number(quantity || 1)), 1);
+  if (currentQuantity + requestedQuantity > stock) {
     ventasMessage = `Stock insuficiente para ${product.name}. Disponible: ${num(stock)}.`;
     return renderMain();
   }
-  ventasMessage = "";
-  if (existing) existing.quantity += 1;
-  else saleCart.push({ productId, name: product.name, quantity: 1, salePrice: Number(product.sale_price || 0), discount: 0 });
+  ventasMessage = `${requestedQuantity} x ${product.name} agregado al carrito.`;
+  if (existing) existing.quantity += requestedQuantity;
+  else saleCart.push({ productId, name: product.name, quantity: requestedQuantity, salePrice: Number(product.sale_price || 0), discount: 0 });
   if (isMobilePos()) posMobilePanel = "cart";
+  productSearch = "";
   renderMain();
 }
 
@@ -1414,14 +1433,43 @@ function cartTotals() {
   return { subtotal, discount, tax, total: Math.max(taxableBase + tax, 0) };
 }
 
+function cartEstimatedProfit() {
+  const grossProfit = saleCart.reduce((sum, item) => {
+    const product = products.find((entry) => entry.id === item.productId);
+    const unitCost = Number(product?.cost_price || 0);
+    return sum + Math.max(Number(item.salePrice || 0) - unitCost, 0) * Number(item.quantity || 0) - Number(item.discount || 0);
+  }, 0);
+  return Math.max(grossProfit - Number(saleGlobalDiscount || 0), 0);
+}
+
 function isMobilePos() {
   return window.matchMedia("(max-width: 720px)").matches;
 }
 
 function scanAddProduct() {
-  const term = productSearch.trim().toLowerCase();
-  const product = products.find((item) => [item.code, item.name].some((value) => String(value || "").toLowerCase() === term)) || filteredProducts()[0];
-  if (product) addToCart(product.id);
+  const parsed = parseProductSearch(productSearch);
+  const term = parsed.term.toLowerCase();
+  const product = products.find((item) => [item.code, item.name].some((value) => String(value || "").toLowerCase() === term)) || filteredProducts({ term: parsed.term })[0];
+  if (product) addToCart(product.id, parsed.quantity);
+  else {
+    ventasMessage = "No encontre un producto con ese codigo o nombre.";
+    renderMain();
+  }
+}
+
+function parseProductSearch(rawValue) {
+  let term = String(rawValue || "").trim();
+  let quantity = 1;
+  const prefixMatch = term.match(/^(\d+(?:[.,]\d+)?)\s*x\s+(.+)$/i);
+  const suffixMatch = term.match(/^(.+?)\s*(?:x|\*)\s*(\d+(?:[.,]\d+)?)$/i);
+  if (prefixMatch) {
+    quantity = Number(prefixMatch[1].replace(",", "."));
+    term = prefixMatch[2].trim();
+  } else if (suffixMatch) {
+    term = suffixMatch[1].trim();
+    quantity = Number(suffixMatch[2].replace(",", "."));
+  }
+  return { term, quantity: Math.max(Math.floor(quantity || 1), 1) };
 }
 
 function newSale() {
@@ -2541,6 +2589,7 @@ function normalizeCashClosure(closure) {
 }
 function canAccessView(view) { return accessibleViewsForRole(currentUser?.role).includes(view); }
 function defaultViewForRole() { return accessibleViewsForRole(currentUser?.role)[0] || "summary"; }
+function canSeeProfit() { return ["admin", "ventas_admin", "supervisor"].includes(currentUser?.role); }
 function accessibleViewsForRole(role) {
   const views = {
     admin: ["sell", "summary", "alerts", "finance", "history", "routes", "promotions", "reports", "catalog", "customers", "inventory", "purchases", "users", "settings"],

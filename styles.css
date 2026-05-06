@@ -3479,6 +3479,21 @@ body.app-correspondencia .metrics article:hover {
   font-weight: 900;
 }
 
+.pos-input-hint {
+  margin: -2px 0 10px;
+  border: 1px solid rgb(15 159 110 / 13%);
+  border-radius: 8px;
+  padding: 8px 10px;
+  background: rgb(236 253 245 / 54%);
+  color: #55706b;
+  font-size: 0.78rem;
+  font-weight: 820;
+}
+
+.pos-input-hint strong {
+  color: var(--accent-dark);
+}
+
 .pos-quick-status,
 .inventory-health-grid,
 .owner-dashboard-grid {
@@ -3841,9 +3856,16 @@ body.app-correspondencia .metrics article:hover {
 }
 
 .cart-item-name {
-  display: flex;
-  justify-content: space-between;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
   gap: 12px;
+  align-items: start;
+}
+
+.cart-item-name small {
+  grid-column: 1 / -1;
+  font-size: 0.76rem;
+  font-weight: 880;
 }
 
 .touch-qty {
