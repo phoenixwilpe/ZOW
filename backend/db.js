@@ -330,6 +330,7 @@ function initDb() {
       cash_received REAL NOT NULL DEFAULT 0,
       change_amount REAL NOT NULL DEFAULT 0,
       payment_method TEXT NOT NULL DEFAULT 'efectivo',
+      payment_detail TEXT NOT NULL DEFAULT '',
       amount_paid REAL NOT NULL DEFAULT 0,
       balance_due REAL NOT NULL DEFAULT 0,
       payment_status TEXT NOT NULL DEFAULT 'pagada',
@@ -478,6 +479,7 @@ function migrateSchema() {
   ensureColumn("cash_closures", "counted_amount", "REAL NOT NULL DEFAULT 0");
   ensureColumn("cash_closures", "difference_amount", "REAL NOT NULL DEFAULT 0");
   ensureColumn("sales_orders", "payment_method", "TEXT NOT NULL DEFAULT 'efectivo'");
+  ensureColumn("sales_orders", "payment_detail", "TEXT NOT NULL DEFAULT ''");
   ensureColumn("sales_orders", "amount_paid", "REAL NOT NULL DEFAULT 0");
   ensureColumn("sales_orders", "balance_due", "REAL NOT NULL DEFAULT 0");
   ensureColumn("sales_orders", "payment_status", "TEXT NOT NULL DEFAULT 'pagada'");

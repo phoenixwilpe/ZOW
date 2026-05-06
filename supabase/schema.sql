@@ -301,6 +301,7 @@ create table if not exists sales_orders (
   cash_received numeric not null default 0,
   change_amount numeric not null default 0,
   payment_method text not null default 'efectivo',
+  payment_detail text not null default '',
   amount_paid numeric not null default 0,
   balance_due numeric not null default 0,
   payment_status text not null default 'pagada',

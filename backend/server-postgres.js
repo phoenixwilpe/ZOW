@@ -1073,7 +1073,7 @@ app.patch("/api/ventas/settings", requireAuth, async (req, res) => {
     address: String(req.body.address || "").trim(),
     ticketNote: String(req.body.ticketNote || "").trim(),
     cashRegisterCount: clampNumber(req.body.cashRegisterCount ?? current.cashRegisterCount, 1, 20, 1),
-    taxRate: clampNumber(req.body.taxRate ?? current.taxRate, 0, 100, 0),
+    taxRate: clampDecimal(req.body.taxRate ?? current.taxRate, 0, 100, 0),
     allowCredit: req.body.allowCredit !== false,
     allowDiscounts: req.body.allowDiscounts !== false,
     requireCustomerForSale: Boolean(req.body.requireCustomerForSale)
@@ -1528,10 +1528,11 @@ app.post("/api/ventas/sales", requireAuth, async (req, res) => {
       const total = Math.max(taxableBase + tax, 0);
       const paymentMethod = String(req.body.paymentMethod || "efectivo").trim();
       if (!settings.allowCredit && paymentMethod === "credito") throw new Error("Las ventas al credito estan desactivadas para esta tienda");
-      const cashReceived = paymentMethod === "credito" ? Number(req.body.cashReceived || 0) : Number(req.body.cashReceived || total);
+      const paymentDetail = normalizePaymentDetail(req.body.paymentDetail, total, paymentMethod);
+      const cashReceived = paymentMethod === "credito" ? Number(req.body.cashReceived || 0) : paymentMethod === "mixto" ? paymentDetail.totalPaid : Number(req.body.cashReceived || total);
       const amountPaid = Math.min(Math.max(cashReceived, 0), total);
       const balanceDue = Math.max(total - amountPaid, 0);
-      const changeAmount = Math.max(cashReceived - total, 0);
+      const changeAmount = paymentMethod === "mixto" ? Math.max(paymentDetail.cash - Math.max(total - paymentDetail.nonCash, 0), 0) : Math.max(cashReceived - total, 0);
       if (paymentMethod === "credito") {
         if (!customer) throw new Error("Selecciona un cliente registrado para ventas al credito");
         const currentDebt = await client.get(
@@ -1544,10 +1545,10 @@ app.post("/api/ventas/sales", requireAuth, async (req, res) => {
       await client.run(
         `INSERT INTO sales_orders (
           id, company_id, code, customer_id, customer_name, subtotal, discount, tax, total, note,
-          cash_received, change_amount, payment_method, amount_paid, balance_due, payment_status,
+          cash_received, change_amount, payment_method, payment_detail, amount_paid, balance_due, payment_status,
           status, cash_closed, created_by, created_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'confirmada', false, ?, now())`,
-        [saleId, req.user.company_id, saleCode, customer?.id || null, customerName, subtotal, discount, tax, total, note, cashReceived, changeAmount, paymentMethod, amountPaid, balanceDue, balanceDue > 0 ? "pendiente" : "pagada", req.user.id]
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'confirmada', false, ?, now())`,
+        [saleId, req.user.company_id, saleCode, customer?.id || null, customerName, subtotal, discount, tax, total, note, cashReceived, changeAmount, paymentMethod, paymentDetail.serialized, amountPaid, balanceDue, balanceDue > 0 ? "pendiente" : "pagada", req.user.id]
       );
       for (const item of preparedItems) {
         await client.run(
@@ -1886,7 +1887,7 @@ async function mapSettings(settings = {}) {
     address: settings?.address || "",
     ticketNote: settings?.ticket_note || "",
     cashRegisterCount: clampNumber(settings?.cash_register_count, 1, 20, 1),
-    taxRate: clampNumber(settings?.tax_rate, 0, 100, 0),
+    taxRate: clampDecimal(settings?.tax_rate, 0, 100, 0),
     allowCredit: settings?.allow_credit !== false,
     allowDiscounts: settings?.allow_discounts !== false,
     requireCustomerForSale: settings?.require_customer_sale === true,
@@ -2209,11 +2210,45 @@ function ventasOwnOnly(role) {
 }
 
 function payableToCash(sale) {
-  return sale.payment_method === "credito" ? Number(sale.amount_paid || 0) : Number(sale.total || 0);
+  const detail = parsePaymentDetail(sale.payment_detail);
+  if (Object.keys(detail).length) return Math.max(Number(detail.efectivo || 0) - Number(sale.change_amount || 0), 0);
+  if (sale.payment_method === "efectivo") return Number(sale.total || 0);
+  if (sale.payment_method === "credito") return Number(sale.amount_paid || 0);
+  return 0;
+}
+
+function parsePaymentDetail(value) {
+  if (!value) return {};
+  if (typeof value === "object") return value;
+  try {
+    const parsed = JSON.parse(value);
+    return parsed && typeof parsed === "object" ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+function normalizePaymentDetail(input, total, paymentMethod) {
+  if (paymentMethod !== "mixto") return { detail: {}, serialized: "", totalPaid: Number(total || 0), cash: 0, nonCash: 0 };
+  const raw = input && typeof input === "object" ? input : {};
+  const detail = {};
+  ["efectivo", "tarjeta", "transferencia", "qr"].forEach((method) => {
+    detail[method] = Number(Math.max(Number(raw[method] || 0), 0).toFixed(2));
+  });
+  const totalPaid = Object.values(detail).reduce((sum, amount) => sum + Number(amount || 0), 0);
+  if (totalPaid + 0.0001 < Number(total || 0)) throw new Error("El pago mixto no cubre el total de la venta");
+  const nonCash = Number(detail.tarjeta || 0) + Number(detail.transferencia || 0) + Number(detail.qr || 0);
+  return { detail, serialized: JSON.stringify(detail), totalPaid, cash: Number(detail.efectivo || 0), nonCash };
 }
 
 function clampNumber(value, min, max, fallback) {
   const number = Math.floor(Number(value));
+  if (!Number.isFinite(number)) return fallback;
+  return Math.min(Math.max(number, min), max);
+}
+
+function clampDecimal(value, min, max, fallback) {
+  const number = Number(value);
   if (!Number.isFinite(number)) return fallback;
   return Math.min(Math.max(number, min), max);
 }
@@ -2317,6 +2352,7 @@ async function ensureVentasSchema() {
           cash_received numeric not null default 0,
           change_amount numeric not null default 0,
           payment_method text not null default 'efectivo',
+          payment_detail text not null default '',
           amount_paid numeric not null default 0,
           balance_due numeric not null default 0,
           payment_status text not null default 'pagada',
@@ -2408,6 +2444,7 @@ async function ensureVentasSchema() {
       await pg.run("ALTER TABLE cash_closures ADD COLUMN IF NOT EXISTS counted_amount numeric not null default 0");
       await pg.run("ALTER TABLE cash_closures ADD COLUMN IF NOT EXISTS difference_amount numeric not null default 0");
       await pg.run("ALTER TABLE sales_orders ADD COLUMN IF NOT EXISTS payment_method text not null default 'efectivo'");
+      await pg.run("ALTER TABLE sales_orders ADD COLUMN IF NOT EXISTS payment_detail text not null default ''");
       await pg.run("ALTER TABLE sales_orders ADD COLUMN IF NOT EXISTS amount_paid numeric not null default 0");
       await pg.run("ALTER TABLE sales_orders ADD COLUMN IF NOT EXISTS balance_due numeric not null default 0");
       await pg.run("ALTER TABLE sales_orders ADD COLUMN IF NOT EXISTS payment_status text not null default 'pagada'");

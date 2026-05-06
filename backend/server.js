@@ -1244,7 +1244,7 @@ app.patch("/api/ventas/settings", requireAuth, requireSystemAccess("ventas_almac
     address: String(req.body.address || "").trim(),
     ticketNote: String(req.body.ticketNote || "").trim(),
     cashRegisterCount: clampNumber(req.body.cashRegisterCount ?? current.cashRegisterCount, 1, 20, 1),
-    taxRate: clampNumber(req.body.taxRate ?? current.taxRate, 0, 100, 0),
+    taxRate: clampDecimal(req.body.taxRate ?? current.taxRate, 0, 100, 0),
     allowCredit: req.body.allowCredit !== false,
     allowDiscounts: req.body.allowDiscounts !== false,
     requireCustomerForSale: Boolean(req.body.requireCustomerForSale)
@@ -1685,10 +1685,16 @@ app.post("/api/ventas/sales", requireAuth, requireSystemAccess("ventas_almacen")
   const total = Math.max(taxableBase + tax, 0);
   const paymentMethod = String(req.body.paymentMethod || "efectivo").trim();
   if (!settings.allowCredit && paymentMethod === "credito") return res.status(400).json({ error: "Las ventas al credito estan desactivadas para esta tienda" });
-  const cashReceived = paymentMethod === "credito" ? Number(req.body.cashReceived || 0) : Number(req.body.cashReceived || total);
+  let paymentDetail;
+  try {
+    paymentDetail = normalizePaymentDetail(req.body.paymentDetail, total, paymentMethod);
+  } catch (error) {
+    return res.status(400).json({ error: error.message || "Pago mixto invalido" });
+  }
+  const cashReceived = paymentMethod === "credito" ? Number(req.body.cashReceived || 0) : paymentMethod === "mixto" ? paymentDetail.totalPaid : Number(req.body.cashReceived || total);
   const amountPaid = Math.min(Math.max(cashReceived, 0), total);
   const balanceDue = Math.max(total - amountPaid, 0);
-  const changeAmount = Math.max(cashReceived - total, 0);
+  const changeAmount = paymentMethod === "mixto" ? Math.max(paymentDetail.cash - Math.max(total - paymentDetail.nonCash, 0), 0) : Math.max(cashReceived - total, 0);
   if (paymentMethod === "credito") {
     if (!customer) return res.status(400).json({ error: "Selecciona un cliente registrado para ventas al credito" });
     const currentDebt = db
@@ -1705,10 +1711,10 @@ app.post("/api/ventas/sales", requireAuth, requireSystemAccess("ventas_almacen")
     db.prepare(
       `INSERT INTO sales_orders (
         id, company_id, code, customer_id, customer_name, subtotal, discount, tax, total, note,
-        cash_received, change_amount, payment_method, amount_paid, balance_due, payment_status,
+        cash_received, change_amount, payment_method, payment_detail, amount_paid, balance_due, payment_status,
         status, cash_closed, created_by, created_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'confirmada', 0, ?, ?)`
-    ).run(saleId, req.user.company_id, saleCode, customer?.id || null, customerName, subtotal, discount, tax, total, note, cashReceived, changeAmount, paymentMethod, amountPaid, balanceDue, balanceDue > 0 ? "pendiente" : "pagada", req.user.id, now);
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'confirmada', 0, ?, ?)`
+    ).run(saleId, req.user.company_id, saleCode, customer?.id || null, customerName, subtotal, discount, tax, total, note, cashReceived, changeAmount, paymentMethod, paymentDetail.serialized, amountPaid, balanceDue, balanceDue > 0 ? "pendiente" : "pagada", req.user.id, now);
 
     const insertItem = db.prepare(
       `INSERT INTO sales_order_items (id, company_id, sale_id, product_id, product_name, quantity, unit_price, total)
@@ -2076,7 +2082,35 @@ function ventasOwnOnly(role) {
 }
 
 function payableToCash(sale) {
-  return sale.payment_method === "credito" ? Number(sale.amount_paid || 0) : Number(sale.total || 0);
+  const detail = parsePaymentDetail(sale.payment_detail);
+  if (Object.keys(detail).length) return Math.max(Number(detail.efectivo || 0) - Number(sale.change_amount || 0), 0);
+  if (sale.payment_method === "efectivo") return Number(sale.total || 0);
+  if (sale.payment_method === "credito") return Number(sale.amount_paid || 0);
+  return 0;
+}
+
+function parsePaymentDetail(value) {
+  if (!value) return {};
+  if (typeof value === "object") return value;
+  try {
+    const parsed = JSON.parse(value);
+    return parsed && typeof parsed === "object" ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+function normalizePaymentDetail(input, total, paymentMethod) {
+  if (paymentMethod !== "mixto") return { detail: {}, serialized: "", totalPaid: Number(total || 0), cash: 0, nonCash: 0 };
+  const raw = input && typeof input === "object" ? input : {};
+  const detail = {};
+  ["efectivo", "tarjeta", "transferencia", "qr"].forEach((method) => {
+    detail[method] = Number(Math.max(Number(raw[method] || 0), 0).toFixed(2));
+  });
+  const totalPaid = Object.values(detail).reduce((sum, amount) => sum + Number(amount || 0), 0);
+  if (totalPaid + 0.0001 < Number(total || 0)) throw new Error("El pago mixto no cubre el total de la venta");
+  const nonCash = Number(detail.tarjeta || 0) + Number(detail.transferencia || 0) + Number(detail.qr || 0);
+  return { detail, serialized: JSON.stringify(detail), totalPaid, cash: Number(detail.efectivo || 0), nonCash };
 }
 
 function ensureSaasSystems() {
@@ -2116,7 +2150,7 @@ function mapSettings(settings = {}) {
     address: settings.address || "",
     ticketNote: settings.ticket_note || "",
     cashRegisterCount: clampNumber(settings.cash_register_count, 1, 20, 1),
-    taxRate: clampNumber(settings.tax_rate, 0, 100, 0),
+    taxRate: clampDecimal(settings.tax_rate, 0, 100, 0),
     allowCredit: Number(settings.allow_credit ?? 1) === 1,
     allowDiscounts: Number(settings.allow_discounts ?? 1) === 1,
     requireCustomerForSale: Number(settings.require_customer_sale || 0) === 1,
@@ -2127,6 +2161,12 @@ function mapSettings(settings = {}) {
 
 function clampNumber(value, min, max, fallback) {
   const number = Math.floor(Number(value));
+  if (!Number.isFinite(number)) return fallback;
+  return Math.min(Math.max(number, min), max);
+}
+
+function clampDecimal(value, min, max, fallback) {
+  const number = Number(value);
   if (!Number.isFinite(number)) return fallback;
   return Math.min(Math.max(number, min), max);
 }

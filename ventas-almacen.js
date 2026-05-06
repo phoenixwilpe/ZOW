@@ -12,7 +12,7 @@ const FAVORITE_PRODUCTS_KEY = "zowVentasAlmacen.favoriteProducts";
  * @typedef {{ productId:string, name:string, quantity:number, salePrice:number, discount:number }} CartItem
  * @typedef {{ id:string, openedAt:string, openedBy:string, openingAmount:number, status:"abierta"|"cerrada" }} CashSession
  * @typedef {{ id:string, type:"ingreso"|"egreso", amount:number, reason:string, createdAt:string, user:string }} CashMovement
- * @typedef {{ method:"efectivo"|"tarjeta"|"transferencia"|"qr"|"mixto", received:number }} PaymentDraft
+ * @typedef {{ method:"efectivo"|"tarjeta"|"transferencia"|"qr"|"mixto", received:number, split?:Record<string, number> }} PaymentDraft
  */
 
 let currentUser = loadSession();
@@ -36,7 +36,7 @@ let editingProductId = "";
 let editingCustomerId = "";
 let productSearch = "";
 let ventasMessage = "";
-let paymentDraft = { method: "efectivo", received: 0 };
+let paymentDraft = { method: "efectivo", received: 0, split: { efectivo: 0, tarjeta: 0, transferencia: 0, qr: 0 } };
 let saleCustomerId = "";
 let saleGlobalDiscount = 0;
 let saleNote = "";
@@ -1478,7 +1478,8 @@ function openPaymentModal() {
   }
   if (!storeSettings.allowCredit && paymentDraft.method === "credito") paymentDraft.method = "efectivo";
   const total = cartTotals().total;
-  paymentDraft.received = paymentDraft.method === "efectivo" ? total : total;
+  paymentDraft.received = paymentDraft.method === "credito" ? 0 : total;
+  if (paymentDraft.method === "mixto") initializeMixedPayment(total);
   renderPaymentModal();
   paymentModal.showModal();
 }
@@ -1493,20 +1494,22 @@ function quickCheckoutCash() {
 function renderPaymentModal() {
   const totals = cartTotals();
   const isCredit = paymentDraft.method === "credito";
-  const change = Math.max(Number(paymentDraft.received || 0) - totals.total, 0);
-  const insufficient = !isCredit && Number(paymentDraft.received || 0) < totals.total;
+  const isMixed = paymentDraft.method === "mixto";
+  const paidTotal = paymentDraftTotal();
+  const change = Math.max((isMixed ? Number(paymentDraft.split?.efectivo || 0) : Number(paymentDraft.received || 0)) - totals.total, 0);
+  const insufficient = !isCredit && paidTotal < totals.total;
   const balanceDue = isCredit ? Math.max(totals.total - Number(paymentDraft.received || 0), 0) : 0;
   const quickAmounts = buildQuickCashAmounts(totals.total);
   paymentModalContent.innerHTML = `
     <div class="touch-payment-layout">
       <div class="payment-total touch-payment-total"><span>Total a pagar</span><strong>${money(totals.total)}</strong><small>${saleCart.length} item${saleCart.length === 1 ? "" : "s"} en carrito</small></div>
       <div class="payment-method-grid touch-payment-methods">${availablePaymentMethods().map((method) => `<button class="${paymentDraft.method === method.id ? "is-active" : ""}" type="button" data-payment-method="${method.id}"><span>${method.icon}</span><strong>${method.label}</strong></button>`).join("")}</div>
-      ${isCredit ? `<div class="cloud-safe-note"><strong>Venta al credito</strong><span>Quedara saldo pendiente de ${money(balanceDue)} en cuentas por cobrar.</span></div>` : `<div class="quick-cash-grid">${quickAmounts.map((amount) => `<button type="button" data-quick-cash="${amount}">${money(amount)}</button>`).join("")}</div>`}
-      <div class="form-grid touch-payment-fields">
+      ${isCredit ? `<div class="cloud-safe-note"><strong>Venta al credito</strong><span>Quedara saldo pendiente de ${money(balanceDue)} en cuentas por cobrar.</span></div>` : isMixed ? renderMixedPaymentFields(totals.total) : `<div class="quick-cash-grid">${quickAmounts.map((amount) => `<button type="button" data-quick-cash="${amount}">${money(amount)}</button>`).join("")}</div>`}
+      ${isMixed ? "" : `<div class="form-grid touch-payment-fields">
         <label>${isCredit ? "Anticipo recibido" : "Monto recibido"}<input id="paymentReceived" type="number" min="0" step="0.01" value="${Number(paymentDraft.received || 0).toFixed(2)}" /></label>
         <label>${isCredit ? "Saldo pendiente" : "Vuelto"}<input type="text" value="${money(isCredit ? balanceDue : change)}" readonly /></label>
-      </div>
-      ${insufficient ? `<p class="form-error">Pago insuficiente. Falta ${money(totals.total - Number(paymentDraft.received || 0))}.</p>` : ""}
+      </div>`}
+      ${insufficient ? `<p class="form-error">Pago insuficiente. Falta ${money(totals.total - paidTotal)}.</p>` : ""}
       <div class="modal-actions touch-payment-actions"><button class="ghost-button" type="button" id="printDraftBtn">Precomprobante</button><button class="primary-button" type="submit" id="confirmPaymentBtn" ${insufficient ? "disabled" : ""}>Confirmar pago</button></div>
     </div>
   `;
@@ -1514,6 +1517,8 @@ function renderPaymentModal() {
     button.addEventListener("click", () => {
       paymentDraft.method = button.dataset.paymentMethod;
       if (paymentDraft.method === "credito") paymentDraft.received = 0;
+      if (paymentDraft.method === "mixto") initializeMixedPayment(totals.total);
+      if (!["credito", "mixto"].includes(paymentDraft.method)) paymentDraft.received = totals.total;
       renderPaymentModal();
     });
   });
@@ -1524,6 +1529,12 @@ function renderPaymentModal() {
   paymentModalContent.querySelectorAll("[data-quick-cash]").forEach((button) => {
     button.addEventListener("click", () => {
       paymentDraft.received = Number(button.dataset.quickCash || totals.total);
+      renderPaymentModal();
+    });
+  });
+  paymentModalContent.querySelectorAll("[data-payment-split]").forEach((input) => {
+    input.addEventListener("input", () => {
+      paymentDraft.split = { ...(paymentDraft.split || {}), [input.dataset.paymentSplit]: Number(input.value || 0) };
       renderPaymentModal();
     });
   });
@@ -1539,6 +1550,35 @@ function buildQuickCashAmounts(total) {
   return [...new Set([total, rounded5, rounded10, rounded20].filter((amount) => amount >= total))].slice(0, 4);
 }
 
+function initializeMixedPayment(total) {
+  const current = paymentDraft.split || {};
+  const hasValues = Object.values(current).some((amount) => Number(amount || 0) > 0);
+  paymentDraft.split = hasValues ? current : { efectivo: Number(total || 0), tarjeta: 0, transferencia: 0, qr: 0 };
+}
+
+function paymentDraftTotal() {
+  if (paymentDraft.method === "credito") return Number(paymentDraft.received || 0);
+  if (paymentDraft.method !== "mixto") return Number(paymentDraft.received || 0);
+  return Object.values(paymentDraft.split || {}).reduce((sum, amount) => sum + Number(amount || 0), 0);
+}
+
+function renderMixedPaymentFields(total) {
+  const split = paymentDraft.split || {};
+  const paid = paymentDraftTotal();
+  const change = Math.max(Number(split.efectivo || 0) - Math.max(Number(total || 0) - Number(split.tarjeta || 0) - Number(split.transferencia || 0) - Number(split.qr || 0), 0), 0);
+  return `
+    <div class="mixed-payment-card">
+      <div><span>Pago dividido</span><strong>${money(paid)} / ${money(total)}</strong><small>${paid >= total ? `Vuelto ${money(change)}` : `Falta ${money(total - paid)}`}</small></div>
+      <div class="form-grid touch-payment-fields">
+        <label>Efectivo<input data-payment-split="efectivo" type="number" min="0" step="0.01" value="${Number(split.efectivo || 0).toFixed(2)}" /></label>
+        <label>Tarjeta<input data-payment-split="tarjeta" type="number" min="0" step="0.01" value="${Number(split.tarjeta || 0).toFixed(2)}" /></label>
+        <label>Transferencia<input data-payment-split="transferencia" type="number" min="0" step="0.01" value="${Number(split.transferencia || 0).toFixed(2)}" /></label>
+        <label>QR<input data-payment-split="qr" type="number" min="0" step="0.01" value="${Number(split.qr || 0).toFixed(2)}" /></label>
+      </div>
+    </div>
+  `;
+}
+
 async function submitSale(event) {
   event.preventDefault();
   if (!cashSession || cashSession.status !== "abierta") {
@@ -1549,7 +1589,8 @@ async function submitSale(event) {
     return;
   }
   const totals = cartTotals();
-  if (paymentDraft.method !== "credito" && Number(paymentDraft.received || 0) < totals.total) return;
+  const paidTotal = paymentDraftTotal();
+  if (paymentDraft.method !== "credito" && paidTotal < totals.total) return;
   if (paymentDraft.method === "credito" && Number(paymentDraft.received || 0) > totals.total) return;
   const response = await apiRequest("/ventas/sales", {
     method: "POST",
@@ -1559,11 +1600,12 @@ async function submitSale(event) {
       tax: totals.tax,
       note: saleNote.trim(),
       paymentMethod: paymentDraft.method,
-      cashReceived: paymentDraft.method === "credito" ? Number(paymentDraft.received || 0) : Number(paymentDraft.received || totals.total),
+      paymentDetail: paymentDraft.method === "mixto" ? paymentDraft.split : {},
+      cashReceived: paymentDraft.method === "credito" ? Number(paymentDraft.received || 0) : paymentDraft.method === "mixto" ? paidTotal : Number(paymentDraft.received || totals.total),
       items: saleCart.map((item) => ({ productId: item.productId, quantity: item.quantity, unitPrice: item.salePrice }))
     }
   });
-  localSaleMeta[response.sale.id] = { method: paymentDraft.method, status: response.sale.payment_status || "pagada", received: Number(paymentDraft.received || totals.total), createdAt: new Date().toISOString() };
+  localSaleMeta[response.sale.id] = { method: paymentDraft.method, status: response.sale.payment_status || "pagada", received: paidTotal, split: paymentDraft.split, createdAt: new Date().toISOString() };
   persistJson(LOCAL_SALE_META_KEY, localSaleMeta);
   lastSaleReceipt = { sale: response.sale, items: response.items };
   saleCart = [];
@@ -1658,24 +1700,26 @@ function cashExpectedTotal() {
 function cashPaymentBreakdown() {
   const pendingSales = cash.pendingSales || [];
   return paymentMethods().map((method) => {
-    const methodSales = pendingSales.filter((sale) => (sale.payment_method || "efectivo") === method.id);
+    const total = pendingSales.reduce((sum, sale) => sum + salePaymentAmountForMethod(sale, method.id), 0);
+    const count = pendingSales.filter((sale) => salePaymentHasMethod(sale, method.id)).length;
     return {
       id: method.id,
       label: method.label,
-      total: methodSales.reduce((sum, sale) => sum + Number(sale.amount_paid || sale.cash_received || sale.total || 0), 0),
-      count: methodSales.length
+      total,
+      count
     };
   }).filter((item) => item.count || ["efectivo", "tarjeta", "qr"].includes(item.id));
 }
 
 function buildSalesPaymentBreakdown(sourceSales) {
   return paymentMethods().map((method) => {
-    const methodSales = sourceSales.filter((sale) => (sale.payment_method || "efectivo") === method.id);
+    const total = sourceSales.reduce((sum, sale) => sum + salePaymentAmountForMethod(sale, method.id), 0);
+    const count = sourceSales.filter((sale) => salePaymentHasMethod(sale, method.id)).length;
     return {
       id: method.id,
       label: method.label,
-      total: methodSales.reduce((sum, sale) => sum + Number(sale.amount_paid || sale.cash_received || sale.total || 0), 0),
-      count: methodSales.length
+      total,
+      count
     };
   }).filter((item) => item.count || ["efectivo", "tarjeta", "qr"].includes(item.id));
 }
@@ -1743,6 +1787,7 @@ function printTicket(sale, items) {
   <div class="ticket-box"><div class="row"><span>Comprobante</span><strong>${escapeHtml(sale.code)}</strong></div><div class="row"><span>Fecha</span><strong>${formatDateTime(sale.created_at)}</strong></div><div class="row"><span>Cajero</span><strong>${escapeHtml(currentUser.name || sale.seller_name || "")}</strong></div><div class="row"><span>Cliente</span><strong>${escapeHtml(sale.customer_name || "S/R")}</strong></div></div>
   <table>${items.map((item) => `<tr><td>${escapeHtml(item.product_name)}<br><span class="muted">${num(item.quantity)} x ${money(item.unit_price)}</span></td><td>${money(item.total)}</td></tr>`).join("")}</table>
   <div class="ticket-box"><div class="row"><span>Subtotal</span><strong>${money(sale.subtotal)}</strong></div><div class="row"><span>Descuento</span><strong>${money(sale.discount)}</strong></div><div class="row"><span>Impuesto</span><strong>${money(sale.tax || 0)}</strong></div><div class="row total"><span>Total</span><strong>${money(sale.total)}</strong></div><div class="row"><span>Metodo</span><strong>${escapeHtml(paymentLabel(sale.payment_method || paymentDraft.method || "efectivo"))}</strong></div><div class="row"><span>Pagado</span><strong>${money(sale.amount_paid || sale.cash_received || 0)}</strong></div><div class="row"><span>Cambio</span><strong>${money(sale.change_amount)}</strong></div>${Number(sale.balance_due || 0) > 0 ? `<div class="row"><span>Saldo</span><strong>${money(sale.balance_due)}</strong></div>` : ""}</div>
+  ${renderTicketPaymentDetail(sale)}
   ${sale.note ? `<p class="muted"><strong>Obs.:</strong> ${escapeHtml(sale.note)}</p>` : ""}
   <div class="barcode"></div><p class="foot">${escapeHtml(storeSettings.ticketNote || "Gracias por su compra")}</p><p class="foot">Sistema ZOW SAAS / Wilmar Peinado B.</p></body></html>`);
   printable.document.close();
@@ -1751,16 +1796,18 @@ function printTicket(sale, items) {
 
 function printDraftTicket() {
   const totals = cartTotals();
+  const paidTotal = paymentDraftTotal();
   const sale = {
     code: "PREVENTA",
     subtotal: totals.subtotal,
     discount: totals.discount,
     tax: totals.tax,
     total: totals.total,
-    cash_received: Number(paymentDraft.received || totals.total),
-    change_amount: Math.max(Number(paymentDraft.received || 0) - totals.total, 0),
+    cash_received: paymentDraft.method === "mixto" ? paidTotal : Number(paymentDraft.received || totals.total),
+    change_amount: paymentDraft.method === "mixto" ? Math.max(Number(paymentDraft.split?.efectivo || 0) - totals.total, 0) : Math.max(Number(paymentDraft.received || 0) - totals.total, 0),
     payment_method: paymentDraft.method,
-    amount_paid: paymentDraft.method === "credito" ? Number(paymentDraft.received || 0) : Number(paymentDraft.received || totals.total),
+    payment_detail: paymentDraft.method === "mixto" ? JSON.stringify(paymentDraft.split || {}) : "",
+    amount_paid: paymentDraft.method === "credito" ? Number(paymentDraft.received || 0) : paymentDraft.method === "mixto" ? paidTotal : Number(paymentDraft.received || totals.total),
     balance_due: paymentDraft.method === "credito" ? Math.max(totals.total - Number(paymentDraft.received || 0), 0) : 0,
     created_at: new Date().toISOString(),
     note: saleNote.trim()
@@ -1838,6 +1885,38 @@ function renderSaleDetail(sale, items) {
     saleDetailModal.close();
     await voidSale(sale.id);
   });
+}
+
+function renderTicketPaymentDetail(sale) {
+  const detail = parsePaymentDetail(sale.payment_detail || sale.paymentDetail);
+  const rows = Object.entries(detail).filter(([, amount]) => Number(amount || 0) > 0);
+  if (!rows.length) return "";
+  return `<div class="ticket-box">${rows.map(([method, amount]) => `<div class="row"><span>${escapeHtml(paymentLabel(method))}</span><strong>${money(amount)}</strong></div>`).join("")}</div>`;
+}
+
+function parsePaymentDetail(value) {
+  if (!value) return {};
+  if (typeof value === "object") return value;
+  try {
+    const parsed = JSON.parse(value);
+    return parsed && typeof parsed === "object" ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+function salePaymentAmountForMethod(sale, method) {
+  const detail = parsePaymentDetail(sale.payment_detail || sale.paymentDetail);
+  if (Object.keys(detail).length) return Number(detail[method] || 0);
+  const saleMethod = sale.payment_method || "efectivo";
+  if (saleMethod === method) return Number(sale.amount_paid || sale.cash_received || sale.total || 0);
+  return 0;
+}
+
+function salePaymentHasMethod(sale, method) {
+  const detail = parsePaymentDetail(sale.payment_detail || sale.paymentDetail);
+  if (Object.keys(detail).length) return Number(detail[method] || 0) > 0;
+  return (sale.payment_method || "efectivo") === method;
 }
 
 async function voidSale(saleId) {
