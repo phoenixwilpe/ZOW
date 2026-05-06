@@ -471,6 +471,8 @@ function migrateSchema() {
   ensureColumn("sales_orders", "amount_paid", "REAL NOT NULL DEFAULT 0");
   ensureColumn("sales_orders", "balance_due", "REAL NOT NULL DEFAULT 0");
   ensureColumn("sales_orders", "payment_status", "TEXT NOT NULL DEFAULT 'pagada'");
+  ensureColumn("sales_customers", "status", "TEXT NOT NULL DEFAULT 'activo'");
+  ensureColumn("sales_customers", "credit_limit", "REAL NOT NULL DEFAULT 0");
   ensureColumn("cash_sessions", "register_number", "INTEGER NOT NULL DEFAULT 1");
   db.prepare("UPDATE sales_orders SET amount_paid = total WHERE amount_paid = 0 AND payment_method <> 'credito' AND status <> 'anulada'").run();
   db.prepare("CREATE INDEX IF NOT EXISTS idx_leads_priority ON leads(priority, created_at)").run();

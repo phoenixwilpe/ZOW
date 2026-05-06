@@ -1398,14 +1398,36 @@ app.post("/api/ventas/customers", requireAuth, requireSystemAccess("ventas_almac
     phone: String(req.body.phone || "").trim(),
     ci: String(req.body.ci || "").trim(),
     email: String(req.body.email || "").trim(),
-    address: String(req.body.address || "").trim()
+    address: String(req.body.address || "").trim(),
+    status: ["activo", "observado", "bloqueado"].includes(String(req.body.status || "")) ? String(req.body.status) : "activo",
+    creditLimit: Number(req.body.creditLimit || 0)
   };
   if (!customer.name) return res.status(400).json({ error: "Nombre de cliente obligatorio" });
   db.prepare(
-    `INSERT INTO sales_customers (id, company_id, name, phone, ci, email, address, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
-  ).run(customer.id, req.user.company_id, customer.name, customer.phone, customer.ci, customer.email, customer.address, now, now);
+    `INSERT INTO sales_customers (id, company_id, name, phone, ci, email, address, status, credit_limit, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+  ).run(customer.id, req.user.company_id, customer.name, customer.phone, customer.ci, customer.email, customer.address, customer.status, customer.creditLimit, now, now);
   res.status(201).json({ customer });
+});
+
+app.patch("/api/ventas/customers/:id", requireAuth, requireSystemAccess("ventas_almacen"), requireVentasRole("admin", "ventas_admin", "cajero", "vendedor"), (req, res) => {
+  const existing = db.prepare("SELECT * FROM sales_customers WHERE id = ? AND company_id = ?").get(req.params.id, req.user.company_id);
+  if (!existing) return res.status(404).json({ error: "Cliente no encontrado" });
+  const customer = {
+    name: String(req.body.name || "").trim(),
+    phone: String(req.body.phone || "").trim(),
+    ci: String(req.body.ci || "").trim(),
+    email: String(req.body.email || "").trim(),
+    address: String(req.body.address || "").trim(),
+    status: ["activo", "observado", "bloqueado"].includes(String(req.body.status || "")) ? String(req.body.status) : "activo",
+    creditLimit: Number(req.body.creditLimit || 0)
+  };
+  if (!customer.name) return res.status(400).json({ error: "Nombre de cliente obligatorio" });
+  db.prepare(
+    `UPDATE sales_customers SET name = ?, phone = ?, ci = ?, email = ?, address = ?, status = ?, credit_limit = ?, updated_at = ?
+     WHERE id = ? AND company_id = ?`
+  ).run(customer.name, customer.phone, customer.ci, customer.email, customer.address, customer.status, customer.creditLimit, new Date().toISOString(), existing.id, req.user.company_id);
+  res.json({ customer: db.prepare("SELECT * FROM sales_customers WHERE id = ? AND company_id = ?").get(existing.id, req.user.company_id) });
 });
 
 app.get("/api/ventas/receivables", requireAuth, requireSystemAccess("ventas_almacen"), requireVentasRole("admin", "ventas_admin", "cajero", "vendedor", "supervisor"), (req, res) => {
@@ -1547,6 +1569,8 @@ app.post("/api/ventas/sales/:id/void", requireAuth, requireSystemAccess("ventas_
   }
   if (sale.status === "anulada") return res.status(400).json({ error: "La venta ya fue anulada" });
   if (Number(sale.cash_closed || 0)) return res.status(400).json({ error: "No se puede anular una venta con caja cerrada" });
+  const reason = String(req.body.reason || "").trim();
+  if (!reason) return res.status(400).json({ error: "Motivo de anulacion obligatorio" });
 
   const items = db.prepare("SELECT * FROM sales_order_items WHERE sale_id = ? AND company_id = ?").all(sale.id, req.user.company_id);
   const now = new Date().toISOString();
@@ -1562,9 +1586,10 @@ app.post("/api/ventas/sales/:id/void", requireAuth, requireSystemAccess("ventas_
       const quantity = Number(item.quantity || 0);
       if (!item.product_id || quantity <= 0) return;
       restoreStock.run(quantity, now, item.product_id, req.user.company_id);
-      insertMovement.run(randomUUID(), req.user.company_id, item.product_id, quantity, sale.code, "Anulacion de venta: stock devuelto", req.user.id, now);
+      insertMovement.run(randomUUID(), req.user.company_id, item.product_id, quantity, sale.code, `Anulacion de venta: ${reason}`, req.user.id, now);
     });
     db.exec("COMMIT");
+    recordAuditEvent({ req, action: "sale_void", entityType: "sale", entityId: sale.id, description: `Anulo venta ${sale.code}: ${reason}` });
   } catch (error) {
     db.exec("ROLLBACK");
     return res.status(400).json({ error: error.message || "No se pudo anular la venta" });
@@ -1615,6 +1640,7 @@ app.post("/api/ventas/sales", requireAuth, requireSystemAccess("ventas_almacen")
   const customerId = String(req.body.customerId || "").trim();
   const customer = customerId ? db.prepare("SELECT * FROM sales_customers WHERE id = ? AND company_id = ?").get(customerId, req.user.company_id) : null;
   const customerName = customer?.name || String(req.body.customerName || "Cliente sin registrar").trim();
+  if (customer?.status === "bloqueado") return res.status(400).json({ error: "Cliente bloqueado para ventas" });
 
   let preparedItems;
   try {
@@ -1642,6 +1668,16 @@ app.post("/api/ventas/sales", requireAuth, requireSystemAccess("ventas_almacen")
   const amountPaid = Math.min(Math.max(cashReceived, 0), total);
   const balanceDue = Math.max(total - amountPaid, 0);
   const changeAmount = Math.max(cashReceived - total, 0);
+  if (paymentMethod === "credito") {
+    if (!customer) return res.status(400).json({ error: "Selecciona un cliente registrado para ventas al credito" });
+    const currentDebt = db
+      .prepare("SELECT COALESCE(SUM(balance_due), 0) AS debt FROM sales_orders WHERE company_id = ? AND customer_id = ? AND status = 'confirmada' AND balance_due > 0")
+      .get(req.user.company_id, customer.id);
+    const creditLimit = Number(customer.credit_limit || 0);
+    if (creditLimit > 0 && Number(currentDebt.debt || 0) + balanceDue > creditLimit) {
+      return res.status(400).json({ error: "La venta supera el limite de credito del cliente" });
+    }
+  }
 
   db.exec("BEGIN");
   try {

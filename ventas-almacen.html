@@ -212,7 +212,7 @@
         <div class="modal-header">
           <div>
             <p class="eyebrow">Clientes</p>
-            <h2>Nuevo cliente</h2>
+            <h2 id="customerModalTitle">Nuevo cliente</h2>
           </div>
           <button class="icon-button" type="button" id="closeCustomerModal" aria-label="Cerrar">x</button>
         </div>
@@ -221,11 +221,13 @@
           <label>Celular<input id="customerPhone" type="tel" /></label>
           <label>CI/NIT<input id="customerCi" type="text" /></label>
           <label>Email<input id="customerEmail" type="email" /></label>
+          <label>Limite de credito<input id="customerCreditLimit" type="number" min="0" step="0.01" value="0" /></label>
+          <label>Estado<select id="customerStatus"><option value="activo">Activo</option><option value="observado">Observado</option><option value="bloqueado">Bloqueado</option></select></label>
           <label class="span-2">Direccion<input id="customerAddress" type="text" /></label>
         </div>
         <div class="modal-actions">
           <button class="ghost-button" type="button" id="cancelCustomerModal">Cancelar</button>
-          <button class="primary-button" type="submit">Guardar cliente</button>
+          <button class="primary-button" type="submit" id="customerSubmitBtn">Guardar cliente</button>
         </div>
       </form>
     </dialog>
@@ -310,6 +312,24 @@
         <div class="modal-actions">
           <button class="ghost-button" type="button" id="cancelReceivablePaymentModal">Cancelar</button>
           <button class="primary-button" type="submit">Aplicar pago</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="voidSaleModal">
+      <form id="voidSaleForm" method="dialog" class="modal-body">
+        <div class="modal-header">
+          <div>
+            <p class="eyebrow">Control de venta</p>
+            <h2 id="voidSaleTitle">Anular venta</h2>
+          </div>
+          <button class="icon-button" type="button" id="closeVoidSaleModal" aria-label="Cerrar">x</button>
+        </div>
+        <div class="cloud-safe-note"><strong>Accion sensible</strong><span>Al anular se devuelve el stock y queda registrado el motivo para auditoria.</span></div>
+        <label>Motivo de anulacion<textarea id="voidSaleReason" required placeholder="Ej: error de cobro, producto equivocado, cliente cancelo la compra"></textarea></label>
+        <div class="modal-actions">
+          <button class="ghost-button" type="button" id="cancelVoidSaleModal">Cancelar</button>
+          <button class="primary-button danger-action" type="submit">Confirmar anulacion</button>
         </div>
       </form>
     </dialog>

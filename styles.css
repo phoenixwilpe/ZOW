@@ -3479,7 +3479,8 @@ body.app-correspondencia .metrics article:hover {
 }
 
 .pos-quick-status,
-.inventory-health-grid {
+.inventory-health-grid,
+.owner-dashboard-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 10px;
@@ -3487,7 +3488,8 @@ body.app-correspondencia .metrics article:hover {
 }
 
 .pos-quick-status article,
-.inventory-health-grid article {
+.inventory-health-grid article,
+.owner-dashboard-grid article {
   border: 1px solid color-mix(in srgb, var(--accent) 16%, var(--line));
   border-radius: 8px;
   padding: 10px 12px;
@@ -3498,6 +3500,8 @@ body.app-correspondencia .metrics article:hover {
 
 .pos-quick-status span,
 .inventory-health-grid span,
+.owner-dashboard-grid span,
+.owner-dashboard-grid small,
 .stock-movement-product span {
   display: block;
   color: var(--muted);
@@ -3506,7 +3510,8 @@ body.app-correspondencia .metrics article:hover {
 }
 
 .pos-quick-status strong,
-.inventory-health-grid strong {
+.inventory-health-grid strong,
+.owner-dashboard-grid strong {
   display: block;
   margin-top: 4px;
   color: var(--accent-dark);
@@ -9420,7 +9425,8 @@ body.system-zow-site .site-footer {
   }
 
   .pos-quick-status,
-  .inventory-health-grid {
+  .inventory-health-grid,
+  .owner-dashboard-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 

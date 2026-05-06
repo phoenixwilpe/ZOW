@@ -1214,15 +1214,41 @@ app.post("/api/ventas/customers", requireAuth, async (req, res) => {
     phone: String(req.body.phone || "").trim(),
     ci: String(req.body.ci || "").trim(),
     email: String(req.body.email || "").trim(),
-    address: String(req.body.address || "").trim()
+    address: String(req.body.address || "").trim(),
+    status: ["activo", "observado", "bloqueado"].includes(String(req.body.status || "")) ? String(req.body.status) : "activo",
+    creditLimit: Number(req.body.creditLimit || 0)
   };
   if (!customer.name) return res.status(400).json({ error: "Nombre de cliente obligatorio" });
   await pg.run(
-    `INSERT INTO sales_customers (id, company_id, name, phone, ci, email, address, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, now(), now())`,
-    [customer.id, req.user.company_id, customer.name, customer.phone, customer.ci, customer.email, customer.address]
+    `INSERT INTO sales_customers (id, company_id, name, phone, ci, email, address, status, credit_limit, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, now(), now())`,
+    [customer.id, req.user.company_id, customer.name, customer.phone, customer.ci, customer.email, customer.address, customer.status, customer.creditLimit]
   );
   res.status(201).json({ customer });
+});
+
+app.patch("/api/ventas/customers/:id", requireAuth, async (req, res) => {
+  if (!(await requireSystemAccess("ventas_almacen", req, res))) return;
+  if (!requireVentasRole(req, res, "admin", "ventas_admin", "cajero", "vendedor")) return;
+  await ensureVentasSchema();
+  const existing = await pg.get("SELECT * FROM sales_customers WHERE id = ? AND company_id = ?", [req.params.id, req.user.company_id]);
+  if (!existing) return res.status(404).json({ error: "Cliente no encontrado" });
+  const customer = {
+    name: String(req.body.name || "").trim(),
+    phone: String(req.body.phone || "").trim(),
+    ci: String(req.body.ci || "").trim(),
+    email: String(req.body.email || "").trim(),
+    address: String(req.body.address || "").trim(),
+    status: ["activo", "observado", "bloqueado"].includes(String(req.body.status || "")) ? String(req.body.status) : "activo",
+    creditLimit: Number(req.body.creditLimit || 0)
+  };
+  if (!customer.name) return res.status(400).json({ error: "Nombre de cliente obligatorio" });
+  await pg.run(
+    `UPDATE sales_customers SET name = ?, phone = ?, ci = ?, email = ?, address = ?, status = ?, credit_limit = ?, updated_at = now()
+     WHERE id = ? AND company_id = ?`,
+    [customer.name, customer.phone, customer.ci, customer.email, customer.address, customer.status, customer.creditLimit, existing.id, req.user.company_id]
+  );
+  res.json({ customer: await pg.get("SELECT * FROM sales_customers WHERE id = ? AND company_id = ?", [existing.id, req.user.company_id]) });
 });
 
 app.get("/api/ventas/receivables", requireAuth, async (req, res) => {
@@ -1378,6 +1404,8 @@ app.post("/api/ventas/sales/:id/void", requireAuth, async (req, res) => {
   if (ventasOwnOnly(req.user.role) && sale.created_by !== req.user.id) return res.status(403).json({ error: "Permiso insuficiente" });
   if (sale.status === "anulada") return res.status(400).json({ error: "La venta ya fue anulada" });
   if (sale.cash_closed) return res.status(400).json({ error: "No se puede anular una venta con caja cerrada" });
+  const reason = String(req.body.reason || "").trim();
+  if (!reason) return res.status(400).json({ error: "Motivo de anulacion obligatorio" });
   const items = await pg.all("SELECT * FROM sales_order_items WHERE sale_id = ? AND company_id = ?", [sale.id, req.user.company_id]);
   try {
     await pg.tx(async (client) => {
@@ -1393,10 +1421,11 @@ app.post("/api/ventas/sales/:id/void", requireAuth, async (req, res) => {
         await client.run(
           `INSERT INTO inventory_movements (id, company_id, product_id, type, quantity, reference, note, created_by, created_at)
            VALUES (?, ?, ?, 'entrada', ?, ?, ?, ?, now())`,
-          [randomUUID(), req.user.company_id, item.product_id, quantity, sale.code, "Anulacion de venta: stock devuelto", req.user.id]
+          [randomUUID(), req.user.company_id, item.product_id, quantity, sale.code, `Anulacion de venta: ${reason}`, req.user.id]
         );
       }
     });
+    await recordAuditEvent({ req, action: "sale_void", entityType: "sale", entityId: sale.id, description: `Anulo venta ${sale.code}: ${reason}` });
     res.json({
       sale: await pg.get("SELECT * FROM sales_orders WHERE id = ? AND company_id = ?", [sale.id, req.user.company_id]),
       items
@@ -1453,6 +1482,7 @@ app.post("/api/ventas/sales", requireAuth, async (req, res) => {
       const saleCode = await buildNextSaleCode(req.user.company_id, new Date().toISOString(), client);
       const customer = customerId ? await client.get("SELECT * FROM sales_customers WHERE id = ? AND company_id = ?", [customerId, req.user.company_id]) : null;
       const customerName = customer?.name || String(req.body.customerName || "Cliente sin registrar").trim();
+      if (customer?.status === "bloqueado") throw new Error("Cliente bloqueado para ventas");
       const preparedItems = [];
       for (const item of items) {
         const product = await client.get("SELECT * FROM inventory_products WHERE id = ? AND company_id = ? AND is_active = true", [String(item.productId || ""), req.user.company_id]);
@@ -1470,6 +1500,15 @@ app.post("/api/ventas/sales", requireAuth, async (req, res) => {
       const amountPaid = Math.min(Math.max(cashReceived, 0), total);
       const balanceDue = Math.max(total - amountPaid, 0);
       const changeAmount = Math.max(cashReceived - total, 0);
+      if (paymentMethod === "credito") {
+        if (!customer) throw new Error("Selecciona un cliente registrado para ventas al credito");
+        const currentDebt = await client.get(
+          "SELECT COALESCE(SUM(balance_due), 0) AS debt FROM sales_orders WHERE company_id = ? AND customer_id = ? AND status = 'confirmada' AND balance_due > 0",
+          [req.user.company_id, customer.id]
+        );
+        const creditLimit = Number(customer.credit_limit || 0);
+        if (creditLimit > 0 && Number(currentDebt.debt || 0) + balanceDue > creditLimit) throw new Error("La venta supera el limite de credito del cliente");
+      }
       await client.run(
         `INSERT INTO sales_orders (
           id, company_id, code, customer_id, customer_name, subtotal, discount, total,
@@ -2330,6 +2369,8 @@ async function ensureVentasSchema() {
       await pg.run("ALTER TABLE sales_orders ADD COLUMN IF NOT EXISTS amount_paid numeric not null default 0");
       await pg.run("ALTER TABLE sales_orders ADD COLUMN IF NOT EXISTS balance_due numeric not null default 0");
       await pg.run("ALTER TABLE sales_orders ADD COLUMN IF NOT EXISTS payment_status text not null default 'pagada'");
+      await pg.run("ALTER TABLE sales_customers ADD COLUMN IF NOT EXISTS status text not null default 'activo'");
+      await pg.run("ALTER TABLE sales_customers ADD COLUMN IF NOT EXISTS credit_limit numeric not null default 0");
       await pg.run("ALTER TABLE cash_sessions ADD COLUMN IF NOT EXISTS register_number integer not null default 1");
       await pg.run("UPDATE sales_orders SET amount_paid = total WHERE amount_paid = 0 AND payment_method <> 'credito' AND status <> 'anulada'");
     })();

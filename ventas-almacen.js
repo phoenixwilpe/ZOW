@@ -33,6 +33,7 @@ let posMobilePanel = "products";
 let lastSaleReceipt = null;
 let editingUserId = "";
 let editingProductId = "";
+let editingCustomerId = "";
 let productSearch = "";
 let ventasMessage = "";
 let paymentDraft = { method: "efectivo", received: 0 };
@@ -48,6 +49,8 @@ let storeSettings = { companyName: "", storeName: "", currency: "BOB", taxId: ""
 let stockMovementDraft = { productId: "", type: "entrada" };
 let receivablePaymentDraft = { saleId: "" };
 let reportFilter = { from: "", to: "" };
+let voidSaleDraft = { saleId: "" };
+let purchaseCart = [];
 
 const starterProducts = [
   { code: "AB-001", name: "Agua mineral 600 ml", category: "Bebidas", unit: "Botella", costPrice: 2.1, salePrice: 4, minStock: 24, stock: 96 },
@@ -76,6 +79,8 @@ const stockMovementModal = document.querySelector("#stockMovementModal");
 const stockMovementForm = document.querySelector("#stockMovementForm");
 const receivablePaymentModal = document.querySelector("#receivablePaymentModal");
 const receivablePaymentForm = document.querySelector("#receivablePaymentForm");
+const voidSaleModal = document.querySelector("#voidSaleModal");
+const voidSaleForm = document.querySelector("#voidSaleForm");
 const paymentModal = document.querySelector("#paymentModal");
 const paymentForm = document.querySelector("#paymentForm");
 const paymentModalContent = document.querySelector("#paymentModalContent");
@@ -158,6 +163,8 @@ document.querySelector("#closeStockMovementModal").addEventListener("click", () 
 document.querySelector("#cancelStockMovementModal").addEventListener("click", () => stockMovementModal.close());
 document.querySelector("#closeReceivablePaymentModal").addEventListener("click", () => receivablePaymentModal.close());
 document.querySelector("#cancelReceivablePaymentModal").addEventListener("click", () => receivablePaymentModal.close());
+document.querySelector("#closeVoidSaleModal").addEventListener("click", () => voidSaleModal.close());
+document.querySelector("#cancelVoidSaleModal").addEventListener("click", () => voidSaleModal.close());
 document.querySelector("#closePaymentModal").addEventListener("click", () => paymentModal.close());
 document.querySelector("#closeSaleDetailModal").addEventListener("click", () => saleDetailModal.close());
 
@@ -203,18 +210,26 @@ productModal.addEventListener("close", () => {
 
 customerForm.addEventListener("submit", async (event) => {
   event.preventDefault();
-  await apiRequest("/ventas/customers", {
-    method: "POST",
-    body: {
-      name: value("#customerName"),
-      phone: value("#customerPhone"),
-      ci: value("#customerCi"),
-      email: value("#customerEmail"),
-      address: value("#customerAddress")
-    }
+  const payload = {
+    name: value("#customerName"),
+    phone: value("#customerPhone"),
+    ci: value("#customerCi"),
+    email: value("#customerEmail"),
+    address: value("#customerAddress"),
+    status: value("#customerStatus"),
+    creditLimit: Number(value("#customerCreditLimit") || 0)
+  };
+  await apiRequest(editingCustomerId ? `/ventas/customers/${editingCustomerId}` : "/ventas/customers", {
+    method: editingCustomerId ? "PATCH" : "POST",
+    body: payload
   });
+  editingCustomerId = "";
   customerModal.close();
   await render();
+});
+
+customerModal.addEventListener("close", () => {
+  editingCustomerId = "";
 });
 
 categoryForm.addEventListener("submit", async (event) => {
@@ -230,6 +245,7 @@ categoryForm.addEventListener("submit", async (event) => {
 stockMovementForm.addEventListener("submit", saveStockMovement);
 document.querySelector("#stockMovementType")?.addEventListener("change", () => updateStockMovementLabels());
 receivablePaymentForm.addEventListener("submit", saveReceivablePayment);
+voidSaleForm.addEventListener("submit", submitVoidSale);
 
 render();
 
@@ -363,11 +379,23 @@ function renderSummary() {
   setCount("Resumen");
   const scopeText = canSeeAllSales() ? "Ventas" : "Mis ventas";
   const incomeText = canSeeAllSales() ? "Ingresos" : "Mis ingresos";
+  const today = new Date().toISOString().slice(0, 10);
+  const todaySales = sales.filter((sale) => String(sale.created_at || "").startsWith(today) && sale.status !== "anulada");
+  const todayIncome = todaySales.reduce((sum, sale) => sum + Number(sale.amount_paid || sale.cash_received || sale.total || 0), 0);
+  const criticalProducts = products.filter((product) => isProductActive(product) && Number(product.stock || 0) <= Number(product.min_stock || 0));
+  const latestSale = sales.find((sale) => sale.status !== "anulada");
   mainList().innerHTML = `
     <section class="setup-overview">
       <article><span>Clientes</span><strong>${customers.length}</strong></article>
       <article><span>${scopeText}</span><strong>${summary.sales || 0}</strong></article>
       <article><span>${incomeText}</span><strong>${money(summary.income || 0)}</strong></article>
+    </section>
+    <section class="owner-dashboard-grid">
+      <article><span>Hoy</span><strong>${money(todayIncome)}</strong><small>${todaySales.length} venta${todaySales.length === 1 ? "" : "s"}</small></article>
+      <article><span>Caja</span><strong>${cashSession?.status === "abierta" ? `Caja ${num(cashSession.registerNumber)}` : "Sin abrir"}</strong><small>${cashSession?.status === "abierta" ? money(cashExpectedTotal()) : "Sin turno activo"}</small></article>
+      <article><span>Ultima venta</span><strong>${latestSale ? money(latestSale.total) : "Sin datos"}</strong><small>${latestSale ? `${escapeHtml(latestSale.code)} / ${formatDateTime(latestSale.created_at)}` : "Aun sin movimiento"}</small></article>
+      <article><span>Riesgo stock</span><strong class="${criticalProducts.length ? "warn-text" : "ok-text"}">${num(criticalProducts.length)}</strong><small>Productos para revisar</small></article>
+      <article><span>Cobrar</span><strong>${money(receivables.reduce((sum, sale) => sum + Number(sale.balance_due || 0), 0))}</strong><small>${receivables.length} cuenta${receivables.length === 1 ? "" : "s"}</small></article>
     </section>
     ${renderVentasCommandCenter()}
     ${renderServiceStrip()}
@@ -790,12 +818,27 @@ function renderCustomers() {
     <section class="admin-panel">
       <div class="admin-panel-head"><div><p class="eyebrow">Directorio</p><h3>Clientes registrados</h3></div></div>
       <div class="admin-list">${customers.map((customer) => `
-        <article class="admin-row"><div><strong>${escapeHtml(customer.name)}</strong><span>CI/NIT ${escapeHtml(customer.ci || "Sin dato")} / Cel. ${escapeHtml(customer.phone || "Sin celular")}</span><span>${escapeHtml(customer.address || "Sin direccion")}</span></div><div class="admin-row-meta"><span>${escapeHtml(customer.email || "Sin email")}</span></div></article>
+        <article class="admin-row">
+          <div>
+            <strong>${escapeHtml(customer.name)}</strong>
+            <span>CI/NIT ${escapeHtml(customer.ci || "Sin dato")} / Cel. ${escapeHtml(customer.phone || "Sin celular")}</span>
+            <span>${escapeHtml(customer.address || "Sin direccion")}</span>
+          </div>
+          <div class="admin-row-meta">
+            <span>${escapeHtml(customer.email || "Sin email")}</span>
+            <span class="${customer.status === "bloqueado" ? "danger-text" : customer.status === "observado" ? "warn-text" : "ok-text"}">${escapeHtml(customer.status || "activo")}</span>
+            <span>Credito ${money(customer.credit_limit || 0)}</span>
+            <button class="ghost-button" type="button" data-edit-customer="${customer.id}">Editar</button>
+          </div>
+        </article>
       `).join("") || empty("Sin clientes registrados")}</div>
     </section>
   `;
   document.querySelectorAll("[data-pay-receivable]").forEach((button) => {
     button.addEventListener("click", () => payReceivable(button.dataset.payReceivable));
+  });
+  document.querySelectorAll("[data-edit-customer]").forEach((button) => {
+    button.addEventListener("click", () => openCustomerModal(button.dataset.editCustomer));
   });
 }
 
@@ -841,9 +884,16 @@ function renderPurchases() {
             <label>Costo unitario<input id="purchaseCost" type="number" min="0" step="0.01" value="0" required /></label>
             <label class="span-2">Nota<input id="purchaseNote" type="text" placeholder="Compra, reposicion, factura, etc." /></label>
           </div>
-          <button class="primary-button" type="submit" ${activeProducts.length ? "" : "disabled"}>Registrar compra y sumar stock</button>
+          <div class="modal-actions">
+            <button class="ghost-button" type="button" id="addPurchaseLine" ${activeProducts.length ? "" : "disabled"}>Agregar linea</button>
+            <button class="primary-button" type="submit" ${activeProducts.length ? "" : "disabled"}>Registrar compra y sumar stock</button>
+          </div>
         </form>
       </section>
+    </section>
+    <section class="admin-panel">
+      <div class="admin-panel-head"><div><p class="eyebrow">Detalle</p><h3>Productos de la compra</h3></div><span>${money(purchaseCart.reduce((sum, item) => sum + item.quantity * item.unitCost, 0))}</span></div>
+      <div class="admin-list">${purchaseCart.map(renderPurchaseCartRow).join("") || empty("Agrega productos a la compra")}</div>
     </section>
     <section class="admin-panel">
       <div class="admin-panel-head"><div><p class="eyebrow">Historial</p><h3>Compras recientes</h3></div><span>${money(purchases.reduce((sum, purchase) => sum + Number(purchase.total || 0), 0))}</span></div>
@@ -856,8 +906,20 @@ function renderPurchases() {
   `;
   document.querySelector("#supplierForm")?.addEventListener("submit", saveSupplier);
   document.querySelector("#purchaseForm")?.addEventListener("submit", savePurchase);
+  document.querySelector("#addPurchaseLine")?.addEventListener("click", addPurchaseLine);
+  document.querySelectorAll("[data-remove-purchase-line]").forEach((button) => button.addEventListener("click", () => {
+    purchaseCart = purchaseCart.filter((item) => item.id !== button.dataset.removePurchaseLine);
+    renderMain();
+  }));
   document.querySelector("#purchaseProduct")?.addEventListener("change", updatePurchaseCostFromProduct);
   updatePurchaseCostFromProduct();
+}
+
+function renderPurchaseCartRow(item) {
+  return `<article class="admin-row">
+    <div><strong>${escapeHtml(item.name)}</strong><span>${num(item.quantity)} x ${money(item.unitCost)}</span></div>
+    <div class="admin-row-meta"><span>Total ${money(item.quantity * item.unitCost)}</span><button class="ghost-button danger-action" type="button" data-remove-purchase-line="${item.id}">Quitar</button></div>
+  </article>`;
 }
 
 function renderPurchaseRow(purchase) {
@@ -1572,8 +1634,21 @@ function openProductModal(productId = "") {
   productModal.showModal();
 }
 
-function openCustomerModal() {
+function openCustomerModal(customerId = "") {
+  const customer = customerId ? customers.find((item) => item.id === customerId) : null;
+  editingCustomerId = customer?.id || "";
   customerForm.reset();
+  document.querySelector("#customerModalTitle").textContent = customer ? "Editar cliente" : "Nuevo cliente";
+  document.querySelector("#customerSubmitBtn").textContent = customer ? "Guardar cambios" : "Guardar cliente";
+  document.querySelector("#customerStatus").value = customer?.status || "activo";
+  document.querySelector("#customerCreditLimit").value = Number(customer?.credit_limit || 0);
+  if (customer) {
+    document.querySelector("#customerName").value = customer.name || "";
+    document.querySelector("#customerPhone").value = customer.phone || "";
+    document.querySelector("#customerCi").value = customer.ci || "";
+    document.querySelector("#customerEmail").value = customer.email || "";
+    document.querySelector("#customerAddress").value = customer.address || "";
+  }
   customerModal.showModal();
 }
 
@@ -1692,9 +1767,22 @@ function renderSaleDetail(sale, items) {
 
 async function voidSale(saleId) {
   const sale = sales.find((item) => item.id === saleId);
-  if (!sale || !confirm(`Anular venta ${sale.code}?`)) return;
+  if (!sale) return;
+  voidSaleDraft = { saleId };
+  voidSaleForm.reset();
+  document.querySelector("#voidSaleTitle").textContent = `Anular ${sale.code}`;
+  voidSaleModal.showModal();
+}
+
+async function submitVoidSale(event) {
+  event.preventDefault();
+  const sale = sales.find((item) => item.id === voidSaleDraft.saleId);
+  if (!sale) return;
+  const reason = value("#voidSaleReason").trim();
+  if (!reason) return window.alert("El motivo de anulacion es obligatorio.");
   try {
-    const response = await apiRequest(`/ventas/sales/${saleId}/void`, { method: "POST", body: {} });
+    const response = await apiRequest(`/ventas/sales/${sale.id}/void`, { method: "POST", body: { reason } });
+    voidSaleModal.close();
     localSaleMeta[sale.id] = { ...(localSaleMeta[sale.id] || {}), status: "anulada", voidedAt: new Date().toISOString() };
     persistJson(LOCAL_SALE_META_KEY, localSaleMeta);
     ventasMessage = `Venta ${response.sale.code} anulada. El stock fue devuelto al inventario.`;
@@ -1747,8 +1835,8 @@ async function saveSupplier(event) {
 
 async function savePurchase(event) {
   event.preventDefault();
-  const product = products.find((item) => item.id === value("#purchaseProduct"));
-  if (!product) return;
+  if (!purchaseCart.length) addPurchaseLine();
+  if (!purchaseCart.length) return;
   try {
     await apiRequest("/ventas/purchases", {
       method: "POST",
@@ -1756,13 +1844,10 @@ async function savePurchase(event) {
         supplierId: value("#purchaseSupplier"),
         invoiceNumber: value("#purchaseInvoice"),
         note: value("#purchaseNote"),
-        items: [{
-          productId: product.id,
-          quantity: Number(value("#purchaseQuantity") || 0),
-          unitCost: Number(value("#purchaseCost") || product.cost_price || 0)
-        }]
+        items: purchaseCart.map((item) => ({ productId: item.productId, quantity: item.quantity, unitCost: item.unitCost }))
       }
     });
+    purchaseCart = [];
     ventasMessage = "Compra registrada. El stock fue actualizado y quedo en Kardex.";
     activeView = "purchases";
     await render();
@@ -1770,6 +1855,18 @@ async function savePurchase(event) {
     ventasMessage = error.message || "No se pudo registrar la compra.";
     renderMain();
   }
+}
+
+function addPurchaseLine() {
+  const product = products.find((item) => item.id === value("#purchaseProduct"));
+  if (!product) return;
+  const quantity = Number(value("#purchaseQuantity") || 0);
+  const unitCost = Number(value("#purchaseCost") || product.cost_price || 0);
+  if (!quantity || quantity <= 0) return window.alert("Ingresa una cantidad valida para la compra.");
+  const existing = purchaseCart.find((item) => item.productId === product.id && Number(item.unitCost) === unitCost);
+  if (existing) existing.quantity += quantity;
+  else purchaseCart.push({ id: crypto.randomUUID(), productId: product.id, name: product.name, quantity, unitCost });
+  renderMain();
 }
 
 function updatePurchaseCostFromProduct() {
