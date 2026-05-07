@@ -1013,6 +1013,7 @@ function renderPurchases() {
   const reorderAlerts = products.filter((product) => isProductActive(product) && Number(product.stock || 0) <= Number(product.min_stock || 0));
   const reorderValue = reorderAlerts.reduce((sum, product) => sum + suggestedReorderQuantity(product) * Number(product.cost_price || 0), 0);
   const highPriority = reorderAlerts.filter((product) => reorderPriority(product).level === "alta");
+  const purchaseTotal = purchaseCart.reduce((sum, item) => sum + item.quantity * item.unitCost, 0);
   setCount(`${purchases.length} compra${purchases.length === 1 ? "" : "s"}`);
   mainList().innerHTML = `
     ${ventasMessage ? `<div class="cloud-safe-note"><strong>${escapeHtml(ventasMessage)}</strong><span>La compra afecta solo el inventario de esta empresa.</span></div>` : ""}
@@ -1056,7 +1057,14 @@ function renderPurchases() {
       </section>
     </section>
     <section class="admin-panel">
-      <div class="admin-panel-head"><div><p class="eyebrow">Detalle</p><h3>Productos de la compra</h3></div><span>${money(purchaseCart.reduce((sum, item) => sum + item.quantity * item.unitCost, 0))}</span></div>
+      <div class="admin-panel-head">
+        <div><p class="eyebrow">Detalle</p><h3>Productos de la compra</h3></div>
+        <div class="admin-head-actions">
+          <span>${money(purchaseTotal)}</span>
+          <button class="ghost-button" type="button" id="printPurchaseOrder" ${purchaseCart.length ? "" : "disabled"}>Imprimir orden</button>
+          <button class="ghost-button danger-action" type="button" id="clearPurchaseCart" ${purchaseCart.length ? "" : "disabled"}>Limpiar</button>
+        </div>
+      </div>
       <div class="admin-list">${purchaseCart.map(renderPurchaseCartRow).join("") || empty("Agrega productos a la compra")}</div>
     </section>
     <section class="admin-panel">
@@ -1072,6 +1080,8 @@ function renderPurchases() {
   document.querySelector("#purchaseForm")?.addEventListener("submit", savePurchase);
   document.querySelector("#prepareSuggestedPurchaseFromPurchases")?.addEventListener("click", prepareSuggestedPurchase);
   document.querySelector("#addPurchaseLine")?.addEventListener("click", addPurchaseLine);
+  document.querySelector("#printPurchaseOrder")?.addEventListener("click", printPurchaseOrder);
+  document.querySelector("#clearPurchaseCart")?.addEventListener("click", clearPurchaseCart);
   document.querySelectorAll("[data-remove-purchase-line]").forEach((button) => button.addEventListener("click", () => {
     purchaseCart = purchaseCart.filter((item) => item.id !== button.dataset.removePurchaseLine);
     renderMain();
@@ -1129,9 +1139,12 @@ function buildCustomerRiskList() {
 }
 
 function renderPurchaseCartRow(item) {
+  const product = products.find((entry) => entry.id === item.productId);
+  const priority = product ? reorderPriority(product) : null;
+  const stockText = product ? `Stock ${num(product.stock)} / Min. ${num(product.min_stock)}` : "Producto cargado";
   return `<article class="admin-row">
-    <div><strong>${escapeHtml(item.name)}</strong><span>${num(item.quantity)} x ${money(item.unitCost)}</span></div>
-    <div class="admin-row-meta"><span>Total ${money(item.quantity * item.unitCost)}</span><button class="ghost-button danger-action" type="button" data-remove-purchase-line="${item.id}">Quitar</button></div>
+    <div><strong>${escapeHtml(item.name)}</strong><span>${num(item.quantity)} x ${money(item.unitCost)} / ${escapeHtml(stockText)}</span></div>
+    <div class="admin-row-meta"><span>Total ${money(item.quantity * item.unitCost)}</span>${priority ? `<span class="${priority.className}">Prioridad ${priority.label}</span>` : ""}<button class="ghost-button danger-action" type="button" data-remove-purchase-line="${item.id}">Quitar</button></div>
   </article>`;
 }
 
@@ -2376,6 +2389,61 @@ function prepareSuggestedPurchase() {
   ventasMessage = `Compra sugerida preparada con ${suggestions.length} producto${suggestions.length === 1 ? "" : "s"} en alerta. Revisa cantidades antes de registrar.`;
   activeView = "purchases";
   renderMain();
+}
+
+function clearPurchaseCart() {
+  if (!purchaseCart.length) return;
+  if (!confirm("Limpiar todos los productos cargados en esta compra?")) return;
+  purchaseCart = [];
+  ventasMessage = "Detalle de compra limpiado.";
+  activeView = "purchases";
+  renderMain();
+}
+
+function printPurchaseOrder() {
+  if (!purchaseCart.length) return;
+  const supplierId = value("#purchaseSupplier");
+  const supplier = suppliers.find((item) => item.id === supplierId);
+  const invoice = value("#purchaseInvoice") || "Sin factura/nota";
+  const note = value("#purchaseNote") || "Reposicion de inventario";
+  const code = `OC-${new Date().toISOString().slice(0, 10).replaceAll("-", "")}-${String(Date.now()).slice(-4)}`;
+  const title = storeSettings.storeName || storeSettings.companyName || currentUser.companyName || "Zow Ventas-Almacen";
+  const total = purchaseCart.reduce((sum, item) => sum + item.quantity * item.unitCost, 0);
+  const printable = window.open("", "_blank", "width=860,height=760");
+  if (!printable) return;
+  printable.document.write(`<!doctype html><html><head><meta charset="UTF-8"><title>Orden ${escapeHtml(code)}</title><style>
+    *{box-sizing:border-box}body{font-family:Arial,sans-serif;margin:0;padding:28px;color:#111;background:#fff}
+    .toolbar{margin-bottom:16px}.toolbar button{border:0;border-radius:8px;padding:10px 16px;background:#0f172a;color:#fff;font-weight:800}
+    .head{display:flex;justify-content:space-between;gap:24px;border-bottom:3px solid #0f172a;padding-bottom:16px;margin-bottom:16px}
+    h1{font-size:24px;margin:0;text-transform:uppercase}.muted{color:#555;font-size:12px;line-height:1.45}.badge{display:inline-block;border:1px solid #0f172a;border-radius:999px;padding:6px 10px;font-weight:800;font-size:12px}
+    .grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:14px 0}.box{border:1px solid #d1d5db;border-radius:10px;padding:12px}
+    .box strong,.box span{display:block}.box span{margin-top:4px;color:#555;font-size:12px}
+    table{width:100%;border-collapse:collapse;margin-top:14px}th{background:#f1f5f9;text-align:left;font-size:12px;text-transform:uppercase;color:#334155}th,td{border:1px solid #d1d5db;padding:9px;font-size:13px;vertical-align:top}td:last-child,th:last-child{text-align:right}
+    .total{display:flex;justify-content:flex-end;margin-top:14px}.total div{min-width:260px;border:2px solid #0f172a;border-radius:10px;padding:12px;display:flex;justify-content:space-between;font-size:18px;font-weight:900}
+    .signs{display:grid;grid-template-columns:repeat(3,1fr);gap:18px;margin-top:54px}.sign{border-top:1px solid #111;text-align:center;padding-top:8px;font-size:12px;color:#333}
+    .foot{margin-top:18px;text-align:center;color:#555;font-size:11px}@media print{.toolbar{display:none}body{padding:12px}.head{break-inside:avoid}.signs{break-inside:avoid}}
+  </style></head><body>
+  <div class="toolbar"><button onclick="window.print()">Imprimir orden de compra</button></div>
+  <section class="head">
+    <div><h1>${escapeHtml(title)}</h1><p class="muted">${escapeHtml(storeSettings.taxId ? `NIT ${storeSettings.taxId}` : "")}<br>${escapeHtml(storeSettings.address || "")}<br>${escapeHtml(storeSettings.phone || "")}</p></div>
+    <div><span class="badge">${escapeHtml(code)}</span><p class="muted"><strong>Fecha:</strong> ${formatDateTime(new Date().toISOString())}<br><strong>Solicita:</strong> ${escapeHtml(currentUser.name || currentUser.username || "Usuario")}<br><strong>Estado:</strong> Pendiente de recepcion</p></div>
+  </section>
+  <section class="grid">
+    <div class="box"><strong>Proveedor</strong><span>${escapeHtml(supplier?.name || "Proveedor sin registrar")}</span><span>${escapeHtml(supplier?.tax_id ? `NIT/CI ${supplier.tax_id}` : "Sin NIT/CI")}</span><span>${escapeHtml(supplier?.phone ? `Cel. ${supplier.phone}` : "Sin celular")}</span></div>
+    <div class="box"><strong>Referencia</strong><span>${escapeHtml(invoice)}</span><span>${escapeHtml(note)}</span><span>Moneda: ${escapeHtml(storeSettings.currency || "BOB")}</span></div>
+  </section>
+  <table><thead><tr><th>Codigo</th><th>Producto</th><th>Stock actual</th><th>Cantidad</th><th>Costo unit.</th><th>Total</th></tr></thead><tbody>
+    ${purchaseCart.map((item) => {
+      const product = products.find((entry) => entry.id === item.productId);
+      return `<tr><td>${escapeHtml(product?.code || "")}</td><td>${escapeHtml(item.name)}</td><td>${num(product?.stock || 0)} / Min. ${num(product?.min_stock || 0)}</td><td>${num(item.quantity)}</td><td>${money(item.unitCost)}</td><td>${money(item.quantity * item.unitCost)}</td></tr>`;
+    }).join("")}
+  </tbody></table>
+  <div class="total"><div><span>Total estimado</span><strong>${money(total)}</strong></div></div>
+  <section class="signs"><div class="sign">Solicitado por</div><div class="sign">Autorizado por</div><div class="sign">Recibido almacen</div></section>
+  <p class="foot">Orden generada por Sistema ZOW SAAS / Wilmar Peinado B.</p>
+  </body></html>`);
+  printable.document.close();
+  printable.focus();
 }
 
 function updatePurchaseCostFromProduct() {
