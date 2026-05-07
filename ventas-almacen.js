@@ -377,9 +377,9 @@ function renderWorkflow() {
     routes: [`<strong>Operacion en ruta</strong><span>Organiza clientes, entrega, despacho y seguimiento de vendedores.</span>`, ""],
     promotions: [`<strong>Politica comercial</strong><span>Prepara listas de precios, paquetes y promociones por temporada.</span>`, ""],
     reports: [`<strong>Auditoria comercial</strong><span>Revisa ventas, caja, inventario critico y valor de almacen.</span>`, ""],
-    catalog: [`<strong>Catalogos</strong><span>Administra articulos y categorias.</span>`, can("manageCatalog") ? `<button class="ghost-button" type="button" id="newCategoryBtn">Nueva categoria</button><button class="primary-button" type="button" id="newProductBtn">Nuevo producto</button>` : ""],
+    catalog: [`<strong>Catalogos</strong><span>Administra articulos y categorias.</span>`, can("manageCatalog") ? `<button class="ghost-button" type="button" id="downloadProductTemplate">Plantilla CSV</button><label class="ghost-button file-action">Importar CSV<input id="importProductsCsv" type="file" accept=".csv,text/csv" /></label><button class="ghost-button" type="button" id="newCategoryBtn">Nueva categoria</button><button class="primary-button" type="button" id="newProductBtn">Nuevo producto</button>` : ""],
     customers: [`<strong>Clientes</strong><span>Registra compradores frecuentes para ventas y tienda virtual.</span>`, `<button class="primary-button" type="button" id="newCustomerBtn">Nuevo cliente</button>`],
-    inventory: [`<strong>Inventario</strong><span>Controla stock actual y regulariza entradas o salidas.</span>`, can("manageInventory") ? `<button class="primary-button" type="button" id="newProductInventoryBtn">Nuevo producto</button>` : ""],
+    inventory: [`<strong>Inventario</strong><span>Controla stock actual y regulariza entradas o salidas.</span>`, can("manageInventory") ? `<button class="ghost-button" type="button" id="downloadProductTemplate">Plantilla CSV</button><label class="ghost-button file-action">Importar CSV<input id="importProductsCsv" type="file" accept=".csv,text/csv" /></label><button class="primary-button" type="button" id="newProductInventoryBtn">Nuevo producto</button>` : ""],
     purchases: [`<strong>Compras</strong><span>Registra proveedores y entradas de mercaderia con Kardex automatico.</span>`, ""],
     users: [`<strong>Usuarios operativos</strong><span>Crea cajeros, vendedores, almacen y operador integral para la empresa.</span>`, ""],
     settings: [`<strong>Configuracion comercial</strong><span>Define datos de tienda, moneda y textos del comprobante.</span>`, ""]
@@ -391,6 +391,8 @@ function renderWorkflow() {
   document.querySelector("#newCategoryBtn")?.addEventListener("click", openCategoryModal);
   document.querySelector("#newCustomerBtn")?.addEventListener("click", openCustomerModal);
   document.querySelector("#closeCashBtn")?.addEventListener("click", closeCash);
+  document.querySelector("#downloadProductTemplate")?.addEventListener("click", downloadProductImportTemplate);
+  document.querySelector("#importProductsCsv")?.addEventListener("change", importProductsCsv);
 }
 
 function renderSummary() {
@@ -2831,6 +2833,74 @@ async function loadStarterProducts() {
   await render();
 }
 
+function downloadProductImportTemplate() {
+  downloadCsv(`plantilla-productos-zow-${csvDateStamp()}.csv`, [{
+    codigo: "SKU-001",
+    nombre: "Producto ejemplo",
+    categoria: "Abarrotes",
+    unidad: "Unidad",
+    costo: "10.50",
+    precio: "15.00",
+    stock_minimo: "5",
+    stock_inicial: "20",
+    lote: "L-001",
+    vencimiento: "2026-12-31"
+  }]);
+}
+
+async function importProductsCsv(event) {
+  const file = event.target.files?.[0];
+  event.target.value = "";
+  if (!file) return;
+  if (!can("manageInventory")) return window.alert("Tu rol no puede importar productos.");
+  try {
+    const rows = parseCsv(await file.text()).map(normalizeProductImportRow).filter(Boolean);
+    if (!rows.length) return window.alert("El archivo no contiene productos validos.");
+    if (!confirm(`Importar ${rows.length} producto${rows.length === 1 ? "" : "s"}? Si el codigo existe, se actualizara.`)) return;
+    let created = 0;
+    let updated = 0;
+    for (const row of rows) {
+      const existing = products.find((product) => String(product.code || "").toUpperCase() === row.code);
+      if (existing) {
+        await apiRequest(`/ventas/products/${existing.id}`, { method: "PATCH", body: row });
+        updated += 1;
+      } else {
+        await apiRequest("/ventas/products", { method: "POST", body: row });
+        created += 1;
+      }
+    }
+    ventasMessage = `Importacion completada: ${created} nuevo${created === 1 ? "" : "s"} y ${updated} actualizado${updated === 1 ? "" : "s"}.`;
+    activeView = "inventory";
+    await render();
+  } catch (error) {
+    ventasMessage = error.message || "No se pudo importar el archivo.";
+    renderMain();
+  }
+}
+
+function normalizeProductImportRow(row) {
+  const code = String(row.codigo || row.code || "").trim().toUpperCase();
+  const name = String(row.nombre || row.name || "").trim();
+  if (!code || !name) return null;
+  return {
+    code,
+    name,
+    category: String(row.categoria || row.category || "").trim(),
+    unit: String(row.unidad || row.unit || "Unidad").trim() || "Unidad",
+    costPrice: decimalFromImport(row.costo || row.cost || row.cost_price),
+    salePrice: decimalFromImport(row.precio || row.sale || row.sale_price || row.precio_venta),
+    minStock: decimalFromImport(row.stock_minimo || row.min_stock),
+    stock: decimalFromImport(row.stock_inicial || row.stock || row.stock_actual),
+    batchNumber: String(row.lote || row.batch_number || "").trim(),
+    expiresAt: String(row.vencimiento || row.expires_at || "").trim().slice(0, 10)
+  };
+}
+
+function decimalFromImport(value) {
+  const number = Number(String(value ?? "0").replace(/\s/g, "").replace(",", "."));
+  return Number.isFinite(number) ? number : 0;
+}
+
 async function assertVentasAccess() {
   if (currentUser?.role === "zow_owner") throw new Error("El panel ZOW administra empresas. Ingresa con un usuario de empresa.");
   await apiRequest("/ventas/settings");
@@ -3043,6 +3113,50 @@ function downloadCsv(filename, rows) {
 function csvCell(value) {
   const text = String(value ?? "");
   return /[",\n\r]/.test(text) ? `"${text.replaceAll('"', '""')}"` : text;
+}
+function parseCsv(text) {
+  const rows = [];
+  let row = [];
+  let cell = "";
+  let quoted = false;
+  for (let index = 0; index < text.length; index += 1) {
+    const char = text[index];
+    const next = text[index + 1];
+    if (char === '"' && quoted && next === '"') {
+      cell += '"';
+      index += 1;
+    } else if (char === '"') {
+      quoted = !quoted;
+    } else if (char === "," && !quoted) {
+      row.push(cell);
+      cell = "";
+    } else if ((char === "\n" || char === "\r") && !quoted) {
+      if (char === "\r" && next === "\n") index += 1;
+      row.push(cell);
+      if (row.some((value) => String(value).trim())) rows.push(row);
+      row = [];
+      cell = "";
+    } else {
+      cell += char;
+    }
+  }
+  row.push(cell);
+  if (row.some((value) => String(value).trim())) rows.push(row);
+  if (rows.length < 2) return [];
+  const headers = rows[0].map(normalizeCsvHeader);
+  return rows.slice(1).map((values) => headers.reduce((object, header, index) => {
+    object[header] = values[index] ?? "";
+    return object;
+  }, {}));
+}
+function normalizeCsvHeader(value) {
+  return String(value || "")
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "");
 }
 function csvDateStamp() {
   const now = new Date();
