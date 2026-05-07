@@ -1308,6 +1308,8 @@ app.post("/api/ventas/products", requireAuth, requireSystemAccess("ventas_almace
     name: String(req.body.name || "").trim(),
     category: String(req.body.category || "").trim(),
     unit: String(req.body.unit || "Unidad").trim(),
+    batchNumber: String(req.body.batchNumber || "").trim().slice(0, 80),
+    expiresAt: String(req.body.expiresAt || "").trim().slice(0, 10),
     costPrice: Number(req.body.costPrice || 0),
     salePrice: Number(req.body.salePrice || 0),
     minStock: Number(req.body.minStock || 0),
@@ -1316,8 +1318,8 @@ app.post("/api/ventas/products", requireAuth, requireSystemAccess("ventas_almace
   if (!product.code || !product.name) return res.status(400).json({ error: "Codigo y nombre son obligatorios" });
 
   db.prepare(
-    `INSERT INTO inventory_products (id, company_id, code, name, category, unit, cost_price, sale_price, min_stock, stock, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    `INSERT INTO inventory_products (id, company_id, code, name, category, unit, batch_number, expires_at, cost_price, sale_price, min_stock, stock, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   ).run(
     product.id,
     req.user.company_id,
@@ -1325,6 +1327,8 @@ app.post("/api/ventas/products", requireAuth, requireSystemAccess("ventas_almace
     product.name,
     product.category,
     product.unit,
+    product.batchNumber,
+    product.expiresAt,
     product.costPrice,
     product.salePrice,
     product.minStock,
@@ -1352,6 +1356,8 @@ app.patch("/api/ventas/products/:id", requireAuth, requireSystemAccess("ventas_a
     name: String(req.body.name || "").trim(),
     category: String(req.body.category || "").trim(),
     unit: String(req.body.unit || "Unidad").trim(),
+    batchNumber: String(req.body.batchNumber || "").trim().slice(0, 80),
+    expiresAt: String(req.body.expiresAt || "").trim().slice(0, 10),
     costPrice: Number(req.body.costPrice || 0),
     salePrice: Number(req.body.salePrice || 0),
     minStock: Number(req.body.minStock || 0)
@@ -1363,9 +1369,9 @@ app.patch("/api/ventas/products/:id", requireAuth, requireSystemAccess("ventas_a
   if (duplicate) return res.status(400).json({ error: "Ya existe otro producto con ese codigo" });
   db.prepare(
     `UPDATE inventory_products
-     SET code = ?, name = ?, category = ?, unit = ?, cost_price = ?, sale_price = ?, min_stock = ?, updated_at = ?
+     SET code = ?, name = ?, category = ?, unit = ?, batch_number = ?, expires_at = ?, cost_price = ?, sale_price = ?, min_stock = ?, updated_at = ?
      WHERE id = ? AND company_id = ?`
-  ).run(product.code, product.name, product.category, product.unit, product.costPrice, product.salePrice, product.minStock, now, existing.id, req.user.company_id);
+  ).run(product.code, product.name, product.category, product.unit, product.batchNumber, product.expiresAt, product.costPrice, product.salePrice, product.minStock, now, existing.id, req.user.company_id);
   res.json({ product: db.prepare("SELECT * FROM inventory_products WHERE id = ? AND company_id = ?").get(existing.id, req.user.company_id) });
 });
 

@@ -238,6 +238,8 @@ function initDb() {
       name TEXT NOT NULL,
       category TEXT NOT NULL DEFAULT '',
       unit TEXT NOT NULL DEFAULT 'Unidad',
+      batch_number TEXT NOT NULL DEFAULT '',
+      expires_at TEXT NOT NULL DEFAULT '',
       cost_price REAL NOT NULL DEFAULT 0,
       sale_price REAL NOT NULL DEFAULT 0,
       min_stock REAL NOT NULL DEFAULT 0,
@@ -459,6 +461,8 @@ function migrateSchema() {
   ensureColumn("users", "ci", "TEXT NOT NULL DEFAULT ''");
   ensureColumn("users", "phone", "TEXT NOT NULL DEFAULT ''");
   ensureColumn("users", "cash_register_number", "INTEGER NOT NULL DEFAULT 0");
+  ensureColumn("inventory_products", "batch_number", "TEXT NOT NULL DEFAULT ''");
+  ensureColumn("inventory_products", "expires_at", "TEXT NOT NULL DEFAULT ''");
   ensureColumn("documents", "applicant_name", "TEXT NOT NULL DEFAULT ''");
   ensureColumn("documents", "applicant_ci", "TEXT NOT NULL DEFAULT ''");
   ensureColumn("documents", "applicant_phone", "TEXT NOT NULL DEFAULT ''");

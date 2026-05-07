@@ -206,6 +206,8 @@ productForm.addEventListener("submit", async (event) => {
     name: value("#productName"),
     category: value("#productCategory"),
     unit: value("#productUnit"),
+    batchNumber: value("#productBatch"),
+    expiresAt: value("#productExpiry"),
     costPrice: Number(value("#productCost")),
     salePrice: Number(value("#productSale")),
     minStock: Number(value("#productMin"))
@@ -783,6 +785,27 @@ function daysSince(dateValue) {
   return Math.max(Math.floor((Date.now() - date.getTime()) / 86400000), 0);
 }
 
+function daysUntil(dateValue) {
+  const date = new Date(dateValue);
+  if (Number.isNaN(date.getTime())) return null;
+  return Math.ceil((date.getTime() - Date.now()) / 86400000);
+}
+
+function expiryStatus(product) {
+  if (!product?.expires_at) return { level: "none", label: "", className: "" };
+  const days = daysUntil(product.expires_at);
+  if (days === null) return { level: "none", label: "", className: "" };
+  if (days < 0) return { level: "danger", label: `Vencido hace ${num(Math.abs(days))} dia${Math.abs(days) === 1 ? "" : "s"}`, className: "danger-text" };
+  if (days <= 30) return { level: "warning", label: `Vence en ${num(days)} dia${days === 1 ? "" : "s"}`, className: "warn-text" };
+  return { level: "ok", label: `Vence ${formatShortDate(product.expires_at)}`, className: "ok-text" };
+}
+
+function formatShortDate(dateValue) {
+  const date = new Date(dateValue);
+  if (Number.isNaN(date.getTime())) return "";
+  return new Intl.DateTimeFormat("es-BO", { day: "2-digit", month: "short", year: "numeric" }).format(date);
+}
+
 function bindCashCounting(expectedCash) {
   const countedInput = document.querySelector("#cashCountedAmount");
   const denominationInputs = [...document.querySelectorAll("[data-cash-denomination]")];
@@ -1161,6 +1184,8 @@ function renderInventory() {
   const activeCount = products.filter(isProductActive).length;
   const outOfStock = products.filter((product) => isProductActive(product) && Number(product.stock || 0) <= 0).length;
   const lowStock = products.filter((product) => isProductActive(product) && Number(product.stock || 0) > 0 && Number(product.stock || 0) <= Number(product.min_stock || 0)).length;
+  const expiringSoon = products.filter((product) => isProductActive(product) && expiryStatus(product).level === "warning").length;
+  const expired = products.filter((product) => isProductActive(product) && expiryStatus(product).level === "danger").length;
   const inventoryValue = products.filter(isProductActive).reduce((sum, product) => sum + Number(product.stock || 0) * Number(product.cost_price || 0), 0);
   const potentialProfit = products.filter(isProductActive).reduce((sum, product) => sum + Number(product.stock || 0) * Math.max(Number(product.sale_price || 0) - Number(product.cost_price || 0), 0), 0);
   const highValueProducts = inventoryProducts.filter((product) => inventoryClass(product) === "A").length;
@@ -1170,7 +1195,7 @@ function renderInventory() {
       <article><span>Activos</span><strong>${num(activeCount)}</strong></article>
       <article><span>Sin stock</span><strong class="${outOfStock ? "danger-text" : "ok-text"}">${num(outOfStock)}</strong></article>
       <article><span>Bajo minimo</span><strong class="${lowStock ? "warn-text" : "ok-text"}">${num(lowStock)}</strong></article>
-      <article><span>Favoritos POS</span><strong>${num(favoriteProducts.length)}</strong></article>
+      <article><span>Por vencer</span><strong class="${expired ? "danger-text" : expiringSoon ? "warn-text" : "ok-text"}">${num(expired + expiringSoon)}</strong></article>
     </section>
     <section class="inventory-insight-grid">
       <article><span>Valor inventario</span><strong>${money(inventoryValue)}</strong><small>Costo total en almacen</small></article>
@@ -1257,7 +1282,8 @@ function renderSettings() {
 
 function renderProductRow(product) {
   const insight = productInventoryInsight(product);
-  return `<article class="admin-row"><div><strong>${escapeHtml(product.name)}</strong><span>${escapeHtml(product.code)} / ${escapeHtml(product.category || "Sin categoria")} / ${escapeHtml(product.unit)}</span><span>Stock ${num(product.stock)} / Minimo ${num(product.min_stock)} / Valor ${money(insight.stockValue)}</span></div><div class="admin-row-meta"><span>Costo ${money(product.cost_price)}</span><span>Venta ${money(product.sale_price)}</span><span>Margen ${num(insight.marginPercent)}%</span><span class="${Number(product.stock || 0) <= Number(product.min_stock || 0) ? "danger-text" : "ok-text"}">${Number(product.stock || 0) <= Number(product.min_stock || 0) ? "Bajo minimo" : "Stock OK"}</span></div></article>`;
+  const expiry = expiryStatus(product);
+  return `<article class="admin-row"><div><strong>${escapeHtml(product.name)}</strong><span>${escapeHtml(product.code)} / ${escapeHtml(product.category || "Sin categoria")} / ${escapeHtml(product.unit)}</span><span>Stock ${num(product.stock)} / Minimo ${num(product.min_stock)} / Valor ${money(insight.stockValue)}</span></div><div class="admin-row-meta"><span>Costo ${money(product.cost_price)}</span><span>Venta ${money(product.sale_price)}</span><span>Margen ${num(insight.marginPercent)}%</span>${expiry.label ? `<span class="${expiry.className}">${escapeHtml(expiry.label)}</span>` : ""}<span class="${Number(product.stock || 0) <= Number(product.min_stock || 0) ? "danger-text" : "ok-text"}">${Number(product.stock || 0) <= Number(product.min_stock || 0) ? "Bajo minimo" : "Stock OK"}</span></div></article>`;
 }
 
 function renderReorderRow(product) {
@@ -1282,17 +1308,19 @@ function renderInventoryProductRow(product) {
   const canMoveStock = ["admin", "ventas_admin", "almacen"].includes(currentUser?.role);
   const active = isProductActive(product);
   const insight = productInventoryInsight(product);
+  const expiry = expiryStatus(product);
   return `<article class="admin-row inventory-row">
     <div>
       <strong>${escapeHtml(product.name)}</strong>
       <span>${escapeHtml(product.code)} / ${escapeHtml(product.category || "Sin categoria")} / ${escapeHtml(product.unit)}</span>
-      <span>Stock ${num(product.stock)} / Minimo ${num(product.min_stock)} / Clase ${escapeHtml(insight.className)}</span>
+      <span>Stock ${num(product.stock)} / Minimo ${num(product.min_stock)} / Clase ${escapeHtml(insight.className)}${product.batch_number ? ` / Lote ${escapeHtml(product.batch_number)}` : ""}</span>
     </div>
     <div class="admin-row-meta">
       <span>Costo ${money(product.cost_price)}</span>
       <span>Venta ${money(product.sale_price)}</span>
       <span>Valor ${money(insight.stockValue)}</span>
       <span>Margen ${num(insight.marginPercent)}%</span>
+      ${expiry.label ? `<span class="${expiry.className}">${escapeHtml(expiry.label)}</span>` : ""}
       <span class="${active ? "ok-text" : "danger-text"}">${active ? "Activo" : "Inactivo"}</span>
       <span class="${Number(product.stock || 0) <= Number(product.min_stock || 0) ? "danger-text" : "ok-text"}">${Number(product.stock || 0) <= Number(product.min_stock || 0) ? "Bajo minimo" : "Stock OK"}</span>
       <div class="mini-action-row">
@@ -1333,11 +1361,13 @@ function buildInventoryInsights(alerts = []) {
   const inventoryValue = activeProducts.reduce((sum, product) => sum + Number(product.stock || 0) * Number(product.cost_price || 0), 0);
   const reorderValue = alerts.reduce((sum, product) => sum + suggestedReorderQuantity(product) * Number(product.cost_price || 0), 0);
   const negativeMargin = activeProducts.filter((product) => Number(product.sale_price || 0) <= Number(product.cost_price || 0));
+  const expiring = activeProducts.filter((product) => ["danger", "warning"].includes(expiryStatus(product).level));
   const inactiveValue = products.filter((product) => !isProductActive(product)).reduce((sum, product) => sum + Number(product.stock || 0) * Number(product.cost_price || 0), 0);
   return [
     { label: "Valor activo", value: money(inventoryValue), detail: "Costo de productos disponibles", className: inventoryValue ? "is-ok" : "is-muted" },
     { label: "Reposicion estimada", value: money(reorderValue), detail: "Compra sugerida para volver a nivel", className: reorderValue ? "is-warning" : "is-ok" },
     { label: "Margen a revisar", value: num(negativeMargin.length), detail: "Productos con precio menor o igual al costo", className: negativeMargin.length ? "is-danger" : "is-ok" },
+    { label: "Vencimiento", value: num(expiring.length), detail: "Vencidos o por vencer en 30 dias", className: expiring.length ? "is-warning" : "is-ok" },
     { label: "Valor inactivo", value: money(inactiveValue), detail: "Capital detenido en productos desactivados", className: inactiveValue ? "is-warning" : "is-muted" }
   ];
 }
@@ -1378,10 +1408,12 @@ function reorderPriority(product) {
 
 function renderSellProduct(product) {
   const stock = Number(product.stock || 0);
-  return `<button class="pos-product-card touch-product-card" type="button" data-add-product="${product.id}" ${stock <= 0 ? "disabled" : ""}>
+  const expiry = expiryStatus(product);
+  const blocked = stock <= 0 || expiry.level === "danger";
+  return `<button class="pos-product-card touch-product-card" type="button" data-add-product="${product.id}" ${blocked ? "disabled" : ""}>
     <span class="product-code">${escapeHtml(product.code)}</span>
     <strong>${escapeHtml(product.name)}</strong>
-    <span class="product-meta"><span>${escapeHtml(product.category || "Sin categoria")}</span><small class="${stock <= Number(product.min_stock || 0) ? "warn-text" : ""}">Stock ${num(stock)}</small></span>
+    <span class="product-meta"><span>${escapeHtml(product.category || "Sin categoria")}</span><small class="${stock <= Number(product.min_stock || 0) || expiry.level === "warning" ? "warn-text" : ""}">Stock ${num(stock)}${expiry.level !== "none" ? ` / ${escapeHtml(expiry.label)}` : ""}</small></span>
     <b>${money(product.sale_price)}</b>
   </button>`;
 }
@@ -1634,13 +1666,18 @@ function addToCart(productId, quantity = 1) {
   if (!product) return;
   const existing = saleCart.find((item) => item.productId === productId);
   const stock = Number(product.stock || 0);
+  const expiry = expiryStatus(product);
+  if (expiry.level === "danger") {
+    ventasMessage = `${product.name} esta vencido y no puede venderse. Revisa inventario.`;
+    return renderMain();
+  }
   const currentQuantity = Number(existing?.quantity || 0);
   const requestedQuantity = Math.max(Math.floor(Number(quantity || 1)), 1);
   if (currentQuantity + requestedQuantity > stock) {
     ventasMessage = `Stock insuficiente para ${product.name}. Disponible: ${num(stock)}.`;
     return renderMain();
   }
-  ventasMessage = `${requestedQuantity} x ${product.name} agregado al carrito.`;
+  ventasMessage = `${requestedQuantity} x ${product.name} agregado al carrito.${expiry.level === "warning" ? ` Atencion: ${expiry.label}.` : ""}`;
   if (existing) existing.quantity += requestedQuantity;
   else saleCart.push({ productId, name: product.name, quantity: requestedQuantity, salePrice: Number(product.sale_price || 0), discount: 0 });
   if (isMobilePos()) posMobilePanel = "cart";
@@ -2076,6 +2113,8 @@ function openProductModal(productId = "") {
     document.querySelector("#productSale").value = Number(product.sale_price || 0);
     document.querySelector("#productMin").value = Number(product.min_stock || 0);
     document.querySelector("#productStock").value = Number(product.stock || 0);
+    document.querySelector("#productBatch").value = product.batch_number || "";
+    document.querySelector("#productExpiry").value = product.expires_at || "";
   }
   productModal.showModal();
 }
@@ -2784,6 +2823,9 @@ function exportReorderCsv() {
         codigo: product.code,
         producto: product.name,
         categoria: product.category || "",
+        lote: product.batch_number || "",
+        vencimiento: product.expires_at || "",
+        alerta_vencimiento: expiryStatus(product).label || "",
         stock_actual: Number(product.stock || 0).toFixed(2),
         stock_minimo: Number(product.min_stock || 0).toFixed(2),
         cantidad_sugerida: suggested.toFixed(2),

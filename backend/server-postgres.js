@@ -1137,6 +1137,8 @@ app.post("/api/ventas/products", requireAuth, async (req, res) => {
     name: String(req.body.name || "").trim(),
     category: String(req.body.category || "").trim(),
     unit: String(req.body.unit || "Unidad").trim(),
+    batchNumber: String(req.body.batchNumber || "").trim().slice(0, 80),
+    expiresAt: normalizeDateInput(req.body.expiresAt),
     costPrice: Number(req.body.costPrice || 0),
     salePrice: Number(req.body.salePrice || 0),
     minStock: Number(req.body.minStock || 0),
@@ -1145,9 +1147,9 @@ app.post("/api/ventas/products", requireAuth, async (req, res) => {
   if (!product.code || !product.name) return res.status(400).json({ error: "Codigo y nombre son obligatorios" });
   await pg.tx(async (client) => {
     await client.run(
-      `INSERT INTO inventory_products (id, company_id, code, name, category, unit, cost_price, sale_price, min_stock, stock, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, now(), now())`,
-      [product.id, req.user.company_id, product.code, product.name, product.category, product.unit, product.costPrice, product.salePrice, product.minStock, product.stock]
+      `INSERT INTO inventory_products (id, company_id, code, name, category, unit, batch_number, expires_at, cost_price, sale_price, min_stock, stock, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, now(), now())`,
+      [product.id, req.user.company_id, product.code, product.name, product.category, product.unit, product.batchNumber, product.expiresAt, product.costPrice, product.salePrice, product.minStock, product.stock]
     );
     if (product.stock !== 0) {
       await client.run(
@@ -1171,6 +1173,8 @@ app.patch("/api/ventas/products/:id", requireAuth, async (req, res) => {
     name: String(req.body.name || "").trim(),
     category: String(req.body.category || "").trim(),
     unit: String(req.body.unit || "Unidad").trim(),
+    batchNumber: String(req.body.batchNumber || "").trim().slice(0, 80),
+    expiresAt: normalizeDateInput(req.body.expiresAt),
     costPrice: Number(req.body.costPrice || 0),
     salePrice: Number(req.body.salePrice || 0),
     minStock: Number(req.body.minStock || 0)
@@ -1183,9 +1187,9 @@ app.patch("/api/ventas/products/:id", requireAuth, async (req, res) => {
   if (duplicate) return res.status(400).json({ error: "Ya existe otro producto con ese codigo" });
   await pg.run(
     `UPDATE inventory_products
-     SET code = ?, name = ?, category = ?, unit = ?, cost_price = ?, sale_price = ?, min_stock = ?, updated_at = now()
+     SET code = ?, name = ?, category = ?, unit = ?, batch_number = ?, expires_at = ?, cost_price = ?, sale_price = ?, min_stock = ?, updated_at = now()
      WHERE id = ? AND company_id = ?`,
-    [product.code, product.name, product.category, product.unit, product.costPrice, product.salePrice, product.minStock, existing.id, req.user.company_id]
+    [product.code, product.name, product.category, product.unit, product.batchNumber, product.expiresAt, product.costPrice, product.salePrice, product.minStock, existing.id, req.user.company_id]
   );
   res.json({ product: await pg.get("SELECT * FROM inventory_products WHERE id = ? AND company_id = ?", [existing.id, req.user.company_id]) });
 });
@@ -2265,6 +2269,8 @@ async function ensureVentasSchema() {
           name text not null,
           category text not null default '',
           unit text not null default 'Unidad',
+          batch_number text not null default '',
+          expires_at text not null default '',
           cost_price numeric not null default 0,
           sale_price numeric not null default 0,
           min_stock numeric not null default 0,
@@ -2437,6 +2443,8 @@ async function ensureVentasSchema() {
       await pg.run("CREATE INDEX IF NOT EXISTS idx_cash_movements_session ON cash_movements(session_id, created_at)");
       await pg.run("CREATE INDEX IF NOT EXISTS idx_purchase_suppliers_company ON purchase_suppliers(company_id, name)");
       await pg.run("CREATE INDEX IF NOT EXISTS idx_purchase_orders_company ON purchase_orders(company_id, created_at)");
+      await pg.run("ALTER TABLE inventory_products ADD COLUMN IF NOT EXISTS batch_number text not null default ''");
+      await pg.run("ALTER TABLE inventory_products ADD COLUMN IF NOT EXISTS expires_at text not null default ''");
       await pg.run("ALTER TABLE cash_closures ADD COLUMN IF NOT EXISTS opening_amount numeric not null default 0");
       await pg.run("ALTER TABLE cash_closures ADD COLUMN IF NOT EXISTS register_number integer not null default 1");
       await pg.run("ALTER TABLE cash_closures ADD COLUMN IF NOT EXISTS movement_total numeric not null default 0");
