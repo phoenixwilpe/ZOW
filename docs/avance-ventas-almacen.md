@@ -4,7 +4,7 @@ Este documento sirve para medir cuanto falta para considerar el sistema listo pa
 
 ## Estado general
 
-Avance estimado actual: 95%
+Avance estimado actual: 96%
 
 ## Completado
 
@@ -35,20 +35,23 @@ Avance estimado actual: 95%
 - Ventas suspendidas en base de datos: se pueden recuperar desde otra sesion/equipo y quedan auditadas.
 - Favoritos POS en base de datos: se comparten entre cajas de la empresa, respetan limite operativo y quedan auditados.
 - Promociones reales basicas: reglas por producto, vigencia, cantidad minima, descuento automatico en POS y auditoria.
+- Plan de pruebas funcionales con casos reales por rol, flujo y evidencia esperada.
 - Reportes CSV: ventas, inventario, clientes y respaldo operativo JSON.
 - Despliegue en Vercel y backend PostgreSQL/Supabase.
 
 ## Faltante prioritario
 
 1. Combos comerciales avanzados: paquetes con varios productos y precio final fijo.
-2. Cierre de caja con desglose imprimible por metodo de pago, devoluciones y creditos cobrados.
-3. Pruebas funcionales documentadas con casos reales.
-4. Ajustes finales de experiencia movil y manuales cortos por rol.
-5. Preparacion comercial: demos, datos de prueba por rubro y checklist de instalacion.
-6. Revision final de seguridad y politicas de datos por empresa.
-7. Importacion Excel directa con libreria dedicada, si el cliente no quiere convertir a CSV.
-8. Modo instalable PWA para caja tactil.
-9. Panel de promociones avanzado con duplicar, editar y reglas por categoria.
+2. Ajustes finales de experiencia movil y manuales cortos por rol.
+3. Preparacion comercial: demos, datos de prueba por rubro y checklist de instalacion.
+4. Revision final de seguridad y politicas de datos por empresa.
+5. Importacion Excel directa con libreria dedicada, si el cliente no quiere convertir a CSV.
+6. Modo instalable PWA para caja tactil.
+7. Panel de promociones avanzado con duplicar, editar y reglas por categoria.
+
+## Omitido por ahora
+
+- Cierre de caja con desglose imprimible por metodo de pago, devoluciones y creditos cobrados.
 
 ## Despues
 
