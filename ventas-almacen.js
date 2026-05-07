@@ -439,11 +439,18 @@ function renderAlerts() {
       ${buildInventoryInsights(alerts).map(renderInventoryInsightCard).join("")}
     </section>
     <section class="admin-panel">
-      <div class="admin-panel-head"><div><p class="eyebrow">Reposicion</p><h3>Lista sugerida de compra</h3></div><button class="ghost-button" type="button" id="exportReorderCsv">Exportar reposicion</button></div>
+      <div class="admin-panel-head">
+        <div><p class="eyebrow">Reposicion</p><h3>Lista sugerida de compra</h3></div>
+        <div class="admin-head-actions">
+          <button class="ghost-button" type="button" id="prepareSuggestedPurchase" ${alerts.length ? "" : "disabled"}>Preparar compra</button>
+          <button class="ghost-button" type="button" id="exportReorderCsv">Exportar reposicion</button>
+        </div>
+      </div>
       <div class="admin-list">${alerts.map(renderReorderRow).join("") || empty("No hay alertas de stock")}</div>
     </section>
     ${selectedKardex ? renderKardexPanel() : ""}
   `;
+  document.querySelector("#prepareSuggestedPurchase")?.addEventListener("click", prepareSuggestedPurchase);
   document.querySelector("#exportReorderCsv")?.addEventListener("click", exportReorderCsv);
   document.querySelectorAll("[data-stock-history]").forEach((button) => {
     button.addEventListener("click", () => viewStockHistory(button.dataset.stockHistory));
@@ -1003,9 +1010,20 @@ function renderCustomerRiskRow(item) {
 
 function renderPurchases() {
   const activeProducts = products.filter(isProductActive);
+  const reorderAlerts = products.filter((product) => isProductActive(product) && Number(product.stock || 0) <= Number(product.min_stock || 0));
+  const reorderValue = reorderAlerts.reduce((sum, product) => sum + suggestedReorderQuantity(product) * Number(product.cost_price || 0), 0);
+  const highPriority = reorderAlerts.filter((product) => reorderPriority(product).level === "alta");
   setCount(`${purchases.length} compra${purchases.length === 1 ? "" : "s"}`);
   mainList().innerHTML = `
     ${ventasMessage ? `<div class="cloud-safe-note"><strong>${escapeHtml(ventasMessage)}</strong><span>La compra afecta solo el inventario de esta empresa.</span></div>` : ""}
+    <section class="purchase-assist-card">
+      <div>
+        <p class="eyebrow">Asistente de reposicion</p>
+        <h3>Compra sugerida por inventario minimo</h3>
+        <span>${num(reorderAlerts.length)} producto${reorderAlerts.length === 1 ? "" : "s"} en alerta / ${num(highPriority.length)} prioridad alta / inversion aprox. ${money(reorderValue)}</span>
+      </div>
+      <button class="primary-button" type="button" id="prepareSuggestedPurchaseFromPurchases" ${reorderAlerts.length ? "" : "disabled"}>Cargar compra sugerida</button>
+    </section>
     <section class="cashier-grid">
       <section class="admin-panel">
         <div class="admin-panel-head"><div><p class="eyebrow">Proveedor</p><h3>Registrar proveedor</h3></div></div>
@@ -1052,6 +1070,7 @@ function renderPurchases() {
   `;
   document.querySelector("#supplierForm")?.addEventListener("submit", saveSupplier);
   document.querySelector("#purchaseForm")?.addEventListener("submit", savePurchase);
+  document.querySelector("#prepareSuggestedPurchaseFromPurchases")?.addEventListener("click", prepareSuggestedPurchase);
   document.querySelector("#addPurchaseLine")?.addEventListener("click", addPurchaseLine);
   document.querySelectorAll("[data-remove-purchase-line]").forEach((button) => button.addEventListener("click", () => {
     purchaseCart = purchaseCart.filter((item) => item.id !== button.dataset.removePurchaseLine);
@@ -2327,6 +2346,35 @@ function addPurchaseLine() {
   const existing = purchaseCart.find((item) => item.productId === product.id && Number(item.unitCost) === unitCost);
   if (existing) existing.quantity += quantity;
   else purchaseCart.push({ id: crypto.randomUUID(), productId: product.id, name: product.name, quantity, unitCost });
+  renderMain();
+}
+
+function prepareSuggestedPurchase() {
+  const suggestions = products
+    .filter((product) => isProductActive(product) && Number(product.stock || 0) <= Number(product.min_stock || 0))
+    .map((product) => ({
+      product,
+      quantity: suggestedReorderQuantity(product),
+      unitCost: Number(product.cost_price || 0)
+    }))
+    .filter((item) => item.quantity > 0);
+
+  if (!suggestions.length) {
+    ventasMessage = "No hay productos por reponer en este momento.";
+    activeView = "purchases";
+    renderMain();
+    return;
+  }
+
+  suggestions.forEach(({ product, quantity, unitCost }) => {
+    const existing = purchaseCart.find((item) => item.productId === product.id && Number(item.unitCost) === unitCost);
+    if (existing) existing.quantity = Math.max(Number(existing.quantity || 0), quantity);
+    else purchaseCart.push({ id: crypto.randomUUID(), productId: product.id, name: product.name, quantity, unitCost });
+  });
+
+  selectedKardex = null;
+  ventasMessage = `Compra sugerida preparada con ${suggestions.length} producto${suggestions.length === 1 ? "" : "s"} en alerta. Revisa cantidades antes de registrar.`;
+  activeView = "purchases";
   renderMain();
 }
 
