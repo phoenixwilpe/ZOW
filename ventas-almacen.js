@@ -26,6 +26,7 @@ let units = [];
 let suppliers = [];
 let purchases = [];
 let receivables = [];
+let auditEvents = [];
 let cash = { pendingSales: [], total: 0 };
 let summary = {};
 let saleCart = [];
@@ -274,7 +275,7 @@ async function render() {
   try {
     await assertVentasAccess();
     const canReadPurchases = canAccessView("purchases");
-    const [settingsResponse, summaryResponse, productsResponse, customersResponse, categoriesResponse, salesResponse, cashResponse, cashHistoryResponse, suppliersResponse, purchasesResponse, receivablesResponse, usersResponse, unitsResponse] = await Promise.all([
+    const [settingsResponse, summaryResponse, productsResponse, customersResponse, categoriesResponse, salesResponse, cashResponse, cashHistoryResponse, suppliersResponse, purchasesResponse, receivablesResponse, auditResponse, usersResponse, unitsResponse] = await Promise.all([
       apiRequest("/ventas/settings"),
       apiRequest("/ventas/summary"),
       apiRequest("/ventas/products"),
@@ -286,6 +287,7 @@ async function render() {
       canReadPurchases ? apiRequest("/ventas/suppliers") : Promise.resolve({ suppliers: [] }),
       canReadPurchases ? apiRequest("/ventas/purchases") : Promise.resolve({ purchases: [] }),
       canAccessView("customers") ? apiRequest("/ventas/receivables") : Promise.resolve({ receivables: [] }),
+      canAccessView("reports") ? apiRequest("/ventas/audit") : Promise.resolve({ events: [] }),
       currentUser?.role === "admin" ? apiRequest("/users") : Promise.resolve({ users: [] }),
       currentUser?.role === "admin" ? apiRequest("/units") : Promise.resolve({ units: [] })
     ]);
@@ -298,6 +300,7 @@ async function render() {
     suppliers = suppliersResponse.suppliers || [];
     purchases = purchasesResponse.purchases || [];
     receivables = receivablesResponse.receivables || [];
+    auditEvents = auditResponse.events || [];
     users = (usersResponse.users || []).map(normalizeUser);
     units = (unitsResponse.units || []).map(normalizeUnit);
     cash = cashResponse || { pendingSales: [], total: 0 };
@@ -948,6 +951,10 @@ function renderReports() {
         </div>
       </div>
     </section>
+    <section class="admin-panel">
+      <div class="admin-panel-head"><div><p class="eyebrow">Auditoria visible</p><h3>Ultimas acciones comerciales</h3></div><span>${auditEvents.length} evento${auditEvents.length === 1 ? "" : "s"}</span></div>
+      <div class="admin-list compact-audit-list">${auditEvents.slice(0, 20).map(renderAuditEventRow).join("") || empty("Aun no hay eventos comerciales auditados")}</div>
+    </section>
   `;
   document.querySelector("#reportDateFrom")?.addEventListener("change", (event) => { reportFilter.from = event.target.value; renderMain(); });
   document.querySelector("#reportDateTo")?.addEventListener("change", (event) => { reportFilter.to = event.target.value; renderMain(); });
@@ -956,6 +963,33 @@ function renderReports() {
   document.querySelector("#exportInventoryCsv")?.addEventListener("click", exportInventoryCsv);
   document.querySelector("#exportCustomersCsv")?.addEventListener("click", exportCustomersCsv);
   document.querySelector("#exportBackupJson")?.addEventListener("click", exportBackupJson);
+}
+
+function renderAuditEventRow(event) {
+  return `<article class="admin-row">
+    <div>
+      <strong>${escapeHtml(auditActionLabel(event.action))}</strong>
+      <span>${escapeHtml(event.description || "Accion registrada")}</span>
+      <span>${escapeHtml(event.actor_name || "Sistema")} / ${event.created_at ? formatDateTime(event.created_at) : ""}</span>
+    </div>
+    <div class="admin-row-meta"><span>${escapeHtml(event.entity_type || "ventas")}</span></div>
+  </article>`;
+}
+
+function auditActionLabel(action) {
+  return {
+    sale_create: "Venta registrada",
+    sale_void: "Venta anulada",
+    sale_return: "Devolucion",
+    credit_payment: "Cobro de credito",
+    cash_open: "Caja abierta",
+    cash_close: "Caja cerrada",
+    cash_movement: "Movimiento de caja",
+    product_create: "Producto creado",
+    product_update: "Producto actualizado",
+    product_status: "Estado de producto",
+    stock_movement: "Movimiento de stock"
+  }[action] || action || "Evento";
 }
 
 function renderCatalog() {
@@ -2013,7 +2047,12 @@ async function submitSale(event) {
       paymentMethod: paymentDraft.method,
       paymentDetail: paymentDraft.method === "mixto" ? paymentDraft.split : {},
       cashReceived: paymentDraft.method === "credito" ? Number(paymentDraft.received || 0) : paymentDraft.method === "mixto" ? paidTotal : Number(paymentDraft.received || totals.total),
-      items: saleCart.map((item) => ({ productId: item.productId, quantity: item.quantity, unitPrice: item.salePrice }))
+      items: saleCart.map((item) => ({
+        productId: item.productId,
+        quantity: item.quantity,
+        unitPrice: item.salePrice,
+        discount: storeSettings.allowDiscounts ? Number(item.discount || 0) : 0
+      }))
     }
   });
   localSaleMeta[response.sale.id] = { method: paymentDraft.method, status: response.sale.payment_status || "pagada", received: paidTotal, split: paymentDraft.split, createdAt: new Date().toISOString() };

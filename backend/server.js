@@ -1233,6 +1233,33 @@ app.get("/api/ventas/settings", requireAuth, requireSystemAccess("ventas_almacen
   res.json({ settings: mapSettings(loadSettings(req.user.company_id)) });
 });
 
+app.get("/api/ventas/audit", requireAuth, requireSystemAccess("ventas_almacen"), requireVentasRole("admin", "ventas_admin", "supervisor"), (req, res) => {
+  const actions = [
+    "sale_create",
+    "sale_void",
+    "sale_return",
+    "credit_payment",
+    "cash_open",
+    "cash_close",
+    "cash_movement",
+    "product_create",
+    "product_update",
+    "product_status",
+    "stock_movement"
+  ];
+  const placeholders = actions.map(() => "?").join(",");
+  const events = db
+    .prepare(
+      `SELECT id, actor_name, action, entity_type, entity_id, description, metadata, ip_address, created_at
+       FROM audit_events
+       WHERE company_id = ? AND action IN (${placeholders})
+       ORDER BY created_at DESC
+       LIMIT 80`
+    )
+    .all(req.user.company_id, ...actions);
+  res.json({ events });
+});
+
 app.patch("/api/ventas/settings", requireAuth, requireSystemAccess("ventas_almacen"), requireVentasRole("admin", "ventas_admin"), (req, res) => {
   const current = mapSettings(loadSettings(req.user.company_id));
   const settings = {
@@ -1317,6 +1344,12 @@ app.post("/api/ventas/products", requireAuth, requireSystemAccess("ventas_almace
     stock: Number(req.body.stock || 0)
   };
   if (!product.code || !product.name) return res.status(400).json({ error: "Codigo y nombre son obligatorios" });
+  if (product.barcode) {
+    const duplicateBarcode = db
+      .prepare("SELECT id FROM inventory_products WHERE company_id = ? AND barcode <> '' AND lower(barcode) = lower(?)")
+      .get(req.user.company_id, product.barcode);
+    if (duplicateBarcode) return res.status(400).json({ error: "Ya existe otro producto con ese codigo de barras" });
+  }
 
   db.prepare(
     `INSERT INTO inventory_products (id, company_id, code, barcode, name, category, unit, batch_number, expires_at, cost_price, sale_price, min_stock, stock, created_at, updated_at)
@@ -1345,6 +1378,14 @@ app.post("/api/ventas/products", requireAuth, requireSystemAccess("ventas_almace
        VALUES (?, ?, ?, 'entrada', ?, ?, ?, ?, ?)`
     ).run(randomUUID(), req.user.company_id, product.id, product.stock, "Stock inicial", "Registro inicial de producto", req.user.id, now);
   }
+  recordAuditEvent({
+    req,
+    action: "product_create",
+    entityType: "product",
+    entityId: product.id,
+    description: `Creo producto ${product.code} - ${product.name}`,
+    metadata: { stock: product.stock, cost: product.costPrice, price: product.salePrice, barcode: product.barcode }
+  });
 
   res.status(201).json({ product: db.prepare("SELECT * FROM inventory_products WHERE id = ?").get(product.id) });
 });
@@ -1370,11 +1411,28 @@ app.patch("/api/ventas/products/:id", requireAuth, requireSystemAccess("ventas_a
     .prepare("SELECT id FROM inventory_products WHERE company_id = ? AND upper(code) = upper(?) AND id <> ?")
     .get(req.user.company_id, product.code, existing.id);
   if (duplicate) return res.status(400).json({ error: "Ya existe otro producto con ese codigo" });
+  if (product.barcode) {
+    const duplicateBarcode = db
+      .prepare("SELECT id FROM inventory_products WHERE company_id = ? AND barcode <> '' AND lower(barcode) = lower(?) AND id <> ?")
+      .get(req.user.company_id, product.barcode, existing.id);
+    if (duplicateBarcode) return res.status(400).json({ error: "Ya existe otro producto con ese codigo de barras" });
+  }
   db.prepare(
     `UPDATE inventory_products
      SET code = ?, barcode = ?, name = ?, category = ?, unit = ?, batch_number = ?, expires_at = ?, cost_price = ?, sale_price = ?, min_stock = ?, updated_at = ?
      WHERE id = ? AND company_id = ?`
   ).run(product.code, product.barcode, product.name, product.category, product.unit, product.batchNumber, product.expiresAt, product.costPrice, product.salePrice, product.minStock, now, existing.id, req.user.company_id);
+  recordAuditEvent({
+    req,
+    action: "product_update",
+    entityType: "product",
+    entityId: existing.id,
+    description: `Actualizo producto ${product.code}`,
+    metadata: {
+      previous: { code: existing.code, price: existing.sale_price, cost: existing.cost_price, stock: existing.stock },
+      next: { code: product.code, price: product.salePrice, cost: product.costPrice, minStock: product.minStock }
+    }
+  });
   res.json({ product: db.prepare("SELECT * FROM inventory_products WHERE id = ? AND company_id = ?").get(existing.id, req.user.company_id) });
 });
 
@@ -1383,6 +1441,7 @@ app.patch("/api/ventas/products/:id/status", requireAuth, requireSystemAccess("v
   if (!product) return res.status(404).json({ error: "Producto no encontrado" });
   const active = req.body.active ? 1 : 0;
   db.prepare("UPDATE inventory_products SET is_active = ?, updated_at = ? WHERE id = ? AND company_id = ?").run(active, new Date().toISOString(), product.id, req.user.company_id);
+  recordAuditEvent({ req, action: "product_status", entityType: "product", entityId: product.id, description: `${active ? "Activo" : "Desactivo"} producto ${product.name}` });
   res.json({ product: db.prepare("SELECT * FROM inventory_products WHERE id = ? AND company_id = ?").get(product.id, req.user.company_id) });
 });
 
@@ -1688,6 +1747,14 @@ app.post("/api/ventas/sales/:id/pay", requireAuth, requireSystemAccess("ventas_a
        VALUES (?, ?, ?, 'ingreso', ?, ?, ?, ?)`
     ).run(randomUUID(), req.user.company_id, session.id, amount, `Cobro de credito ${sale.code}`, req.user.id, new Date().toISOString());
   }
+  recordAuditEvent({
+    req,
+    action: "credit_payment",
+    entityType: "sale",
+    entityId: sale.id,
+    description: `Cobro credito ${sale.code} por ${amount}`,
+    metadata: { previousBalance: balance, nextBalance, paymentMethod: method }
+  });
   res.json({ sale: db.prepare("SELECT * FROM sales_orders WHERE id = ? AND company_id = ?").get(sale.id, req.user.company_id) });
 });
 
@@ -1785,6 +1852,10 @@ app.post("/api/ventas/sales", requireAuth, requireSystemAccess("ventas_almacen")
   const customerName = customer?.name || String(req.body.customerName || "Cliente sin registrar").trim();
   const settings = mapSettings(loadSettings(req.user.company_id));
   const note = String(req.body.note || "").trim().slice(0, 500);
+  const cashSession = db
+    .prepare("SELECT * FROM cash_sessions WHERE company_id = ? AND opened_by = ? AND status = 'abierta'")
+    .get(req.user.company_id, req.user.id);
+  if (!cashSession) return res.status(400).json({ error: "Abre caja antes de confirmar ventas" });
   if (settings.requireCustomerForSale && !customer) return res.status(400).json({ error: "Selecciona un cliente registrado para confirmar la venta" });
   if (customer?.status === "bloqueado") return res.status(400).json({ error: "Cliente bloqueado para ventas" });
 
@@ -1799,16 +1870,21 @@ app.post("/api/ventas/sales", requireAuth, requireSystemAccess("ventas_almacen")
         product,
         quantity,
         unitPrice: Number(item.unitPrice || product.sale_price || 0),
-        total: quantity * Number(item.unitPrice || product.sale_price || 0)
+        costPriceAtSale: Number(product.cost_price || 0),
+        subtotal: quantity * Number(item.unitPrice || product.sale_price || 0),
+        discount: Math.min(Math.max(Number(item.discount || 0), 0), quantity * Number(item.unitPrice || product.sale_price || 0)),
+        total: Math.max(quantity * Number(item.unitPrice || product.sale_price || 0) - Math.min(Math.max(Number(item.discount || 0), 0), quantity * Number(item.unitPrice || product.sale_price || 0)), 0)
       };
     });
   } catch (error) {
     return res.status(400).json({ error: error.message || "No se pudo preparar la venta" });
   }
 
-  const subtotal = preparedItems.reduce((total, item) => total + item.total, 0);
+  const subtotal = preparedItems.reduce((total, item) => total + item.subtotal, 0);
+  const lineDiscountTotal = preparedItems.reduce((total, item) => total + item.discount, 0);
   const requestedDiscount = Math.max(Number(req.body.discount || 0), 0);
-  const discount = Math.min(requestedDiscount, subtotal);
+  const orderDiscount = Math.max(requestedDiscount - lineDiscountTotal, 0);
+  const discount = Math.min(lineDiscountTotal + orderDiscount, subtotal);
   if (!settings.allowDiscounts && discount > 0) return res.status(400).json({ error: "Los descuentos estan desactivados para esta tienda" });
   const taxableBase = Math.max(subtotal - discount, 0);
   const tax = Number((taxableBase * Number(settings.taxRate || 0) / 100).toFixed(2));
@@ -1840,15 +1916,15 @@ app.post("/api/ventas/sales", requireAuth, requireSystemAccess("ventas_almacen")
   try {
     db.prepare(
       `INSERT INTO sales_orders (
-        id, company_id, code, customer_id, customer_name, subtotal, discount, tax, total, note,
+        id, company_id, cash_session_id, code, customer_id, customer_name, subtotal, discount, tax, total, note,
         cash_received, change_amount, payment_method, payment_detail, amount_paid, balance_due, payment_status,
         status, cash_closed, created_by, created_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'confirmada', 0, ?, ?)`
-    ).run(saleId, req.user.company_id, saleCode, customer?.id || null, customerName, subtotal, discount, tax, total, note, cashReceived, changeAmount, paymentMethod, paymentDetail.serialized, amountPaid, balanceDue, balanceDue > 0 ? "pendiente" : "pagada", req.user.id, now);
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'confirmada', 0, ?, ?)`
+    ).run(saleId, req.user.company_id, cashSession.id, saleCode, customer?.id || null, customerName, subtotal, discount, tax, total, note, cashReceived, changeAmount, paymentMethod, paymentDetail.serialized, amountPaid, balanceDue, balanceDue > 0 ? "pendiente" : "pagada", req.user.id, now);
 
     const insertItem = db.prepare(
-      `INSERT INTO sales_order_items (id, company_id, sale_id, product_id, product_name, quantity, unit_price, total)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+      `INSERT INTO sales_order_items (id, company_id, sale_id, product_id, product_name, quantity, unit_price, cost_price_at_sale, subtotal, discount, total)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     );
     const insertMovement = db.prepare(
       `INSERT INTO inventory_movements (id, company_id, product_id, type, quantity, reference, note, created_by, created_at)
@@ -1856,7 +1932,7 @@ app.post("/api/ventas/sales", requireAuth, requireSystemAccess("ventas_almacen")
     );
     const updateStock = db.prepare("UPDATE inventory_products SET stock = stock - ?, updated_at = ? WHERE id = ? AND company_id = ?");
     preparedItems.forEach((item) => {
-      insertItem.run(randomUUID(), req.user.company_id, saleId, item.product.id, item.product.name, item.quantity, item.unitPrice, item.total);
+      insertItem.run(randomUUID(), req.user.company_id, saleId, item.product.id, item.product.name, item.quantity, item.unitPrice, item.costPriceAtSale, item.subtotal, item.discount, item.total);
       insertMovement.run(randomUUID(), req.user.company_id, item.product.id, item.quantity, saleCode, "Venta confirmada", req.user.id, now);
       updateStock.run(item.quantity, now, item.product.id, req.user.company_id);
     });
@@ -1865,6 +1941,14 @@ app.post("/api/ventas/sales", requireAuth, requireSystemAccess("ventas_almacen")
     db.exec("ROLLBACK");
     return res.status(400).json({ error: error.message || "No se pudo registrar la venta" });
   }
+  recordAuditEvent({
+    req,
+    action: "sale_create",
+    entityType: "sale",
+    entityId: saleId,
+    description: `Registro venta ${saleCode} por ${total}`,
+    metadata: { cashSessionId: cashSession.id, itemCount: preparedItems.length, discount }
+  });
 
   res.status(201).json({
     sale: db.prepare("SELECT * FROM sales_orders WHERE id = ?").get(saleId),
@@ -1894,11 +1978,18 @@ app.get("/api/ventas/cash", requireAuth, requireSystemAccess("ventas_almacen"), 
         )
         .all(req.user.company_id, activeSession.id)
     : [];
-  const cashierScopeUserId = activeSession ? activeSession.opened_by : req.user.id;
-  const shouldScopeSales = Boolean(activeSession) || ownOnly;
-  const pendingSales = db
-    .prepare(`SELECT * FROM sales_orders WHERE company_id = ? AND status = 'confirmada' AND cash_closed = 0 ${shouldScopeSales ? "AND created_by = ?" : ""} ORDER BY created_at DESC`)
-    .all(...(shouldScopeSales ? [req.user.company_id, cashierScopeUserId] : [req.user.company_id]));
+  const pendingSales = activeSession
+    ? db
+        .prepare(
+          `SELECT * FROM sales_orders
+           WHERE company_id = ? AND status = 'confirmada' AND cash_closed = 0
+             AND (cash_session_id = ? OR (cash_session_id = '' AND created_by = ?))
+           ORDER BY created_at DESC`
+        )
+        .all(req.user.company_id, activeSession.id, activeSession.opened_by)
+    : db
+        .prepare(`SELECT * FROM sales_orders WHERE company_id = ? AND status = 'confirmada' AND cash_closed = 0 ${ownOnly ? "AND created_by = ?" : ""} ORDER BY created_at DESC`)
+        .all(...(ownOnly ? [req.user.company_id, req.user.id] : [req.user.company_id]));
   const total = pendingSales.reduce((sum, sale) => sum + payableToCash(sale), 0);
   res.json({ pendingSales, total, activeSession, movements });
 });
@@ -1925,6 +2016,7 @@ app.post("/api/ventas/cash/open", requireAuth, requireSystemAccess("ventas_almac
     `INSERT INTO cash_sessions (id, company_id, opened_by, register_number, opening_amount, status, opened_at)
      VALUES (?, ?, ?, ?, ?, 'abierta', ?)`
   ).run(session.id, req.user.company_id, req.user.id, session.registerNumber, session.openingAmount, session.openedAt);
+  recordAuditEvent({ req, action: "cash_open", entityType: "cash_session", entityId: session.id, description: `Abrio caja ${session.registerNumber} con ${session.openingAmount}` });
   res.status(201).json({
     session: db.prepare("SELECT * FROM cash_sessions WHERE id = ?").get(session.id)
   });
@@ -1949,6 +2041,7 @@ app.post("/api/ventas/cash/movements", requireAuth, requireSystemAccess("ventas_
     `INSERT INTO cash_movements (id, company_id, session_id, type, amount, reason, created_by, created_at)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
   ).run(movement.id, req.user.company_id, session.id, movement.type, movement.amount, movement.reason, req.user.id, movement.createdAt);
+  recordAuditEvent({ req, action: "cash_movement", entityType: "cash_session", entityId: session.id, description: `${movement.type} de caja por ${movement.amount}: ${movement.reason}` });
   res.status(201).json({ movement: db.prepare("SELECT * FROM cash_movements WHERE id = ?").get(movement.id) });
 });
 
@@ -1957,7 +2050,13 @@ app.post("/api/ventas/cash/close", requireAuth, requireSystemAccess("ventas_alma
     .prepare("SELECT * FROM cash_sessions WHERE company_id = ? AND opened_by = ? AND status = 'abierta'")
     .get(req.user.company_id, req.user.id);
   if (!session) return res.status(400).json({ error: "No tienes una caja abierta" });
-  const pendingSales = db.prepare("SELECT * FROM sales_orders WHERE company_id = ? AND status = 'confirmada' AND cash_closed = 0 AND created_by = ?").all(req.user.company_id, session.opened_by);
+  const pendingSales = db
+    .prepare(
+      `SELECT * FROM sales_orders
+       WHERE company_id = ? AND status = 'confirmada' AND cash_closed = 0
+         AND (cash_session_id = ? OR (cash_session_id = '' AND created_by = ?))`
+    )
+    .all(req.user.company_id, session.id, session.opened_by);
   const now = new Date().toISOString();
   const closureId = randomUUID();
   const code = buildNextCashCode(req.user.company_id, now);
@@ -1978,13 +2077,21 @@ app.post("/api/ventas/cash/close", requireAuth, requireSystemAccess("ventas_alma
      )
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   ).run(closureId, req.user.company_id, code, Number(session.register_number || 1), openingAmount, total, movementTotal, expectedAmount, countedAmount, differenceAmount, pendingSales.length, req.user.id, now);
-  db.prepare("UPDATE sales_orders SET cash_closed = 1 WHERE company_id = ? AND status = 'confirmada' AND cash_closed = 0 AND created_by = ?").run(req.user.company_id, session.opened_by);
+  db.prepare("UPDATE sales_orders SET cash_closed = 1 WHERE company_id = ? AND status = 'confirmada' AND cash_closed = 0 AND (cash_session_id = ? OR (cash_session_id = '' AND created_by = ?))").run(req.user.company_id, session.id, session.opened_by);
   db.prepare("UPDATE cash_sessions SET status = 'cerrada', closed_at = ? WHERE id = ? AND company_id = ?").run(now, session.id, req.user.company_id);
   db.exec("COMMIT");
   } catch (error) {
     db.exec("ROLLBACK");
     return res.status(400).json({ error: error.message || "No se pudo cerrar la caja" });
   }
+  recordAuditEvent({
+    req,
+    action: "cash_close",
+    entityType: "cash_closure",
+    entityId: closureId,
+    description: `Cerro caja ${session.register_number || 1}. Esperado ${expectedAmount}, contado ${countedAmount}, diferencia ${differenceAmount}`,
+    metadata: { saleCount: pendingSales.length, total, movementTotal, openingAmount }
+  });
   res.status(201).json({ closure: db.prepare("SELECT * FROM cash_closures WHERE id = ?").get(closureId) });
 });
 
@@ -2020,6 +2127,14 @@ app.post("/api/ventas/products/:id/movements", requireAuth, requireSystemAccess(
     now
   );
   db.prepare("UPDATE inventory_products SET stock = ?, updated_at = ? WHERE id = ? AND company_id = ?").run(Math.max(Number(product.stock || 0) + signedQuantity, 0), now, product.id, req.user.company_id);
+  recordAuditEvent({
+    req,
+    action: "stock_movement",
+    entityType: "product",
+    entityId: product.id,
+    description: `${type} de stock para ${product.name}: ${movementQuantity}`,
+    metadata: { previousStock: Number(product.stock || 0), nextStock: Math.max(Number(product.stock || 0) + signedQuantity, 0), reference: String(req.body.reference || "") }
+  });
   res.json({ product: db.prepare("SELECT * FROM inventory_products WHERE id = ?").get(product.id) });
 });
 

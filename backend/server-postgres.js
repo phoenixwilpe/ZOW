@@ -1054,6 +1054,34 @@ app.get("/api/ventas/summary", requireAuth, async (req, res) => {
   res.json({ summary: { ...inventory, ...sales, ...pendingCash } });
 });
 
+app.get("/api/ventas/audit", requireAuth, async (req, res) => {
+  if (!(await requireSystemAccess("ventas_almacen", req, res))) return;
+  if (!requireVentasRole(req, res, "admin", "ventas_admin", "supervisor")) return;
+  await ensureAuditSchema();
+  const actions = [
+    "sale_create",
+    "sale_void",
+    "sale_return",
+    "credit_payment",
+    "cash_open",
+    "cash_close",
+    "cash_movement",
+    "product_create",
+    "product_update",
+    "product_status",
+    "stock_movement"
+  ];
+  const events = await pg.all(
+    `SELECT id, actor_name, action, entity_type, entity_id, description, metadata, ip_address, created_at
+     FROM audit_events
+     WHERE company_id = ? AND action = ANY(?::text[])
+     ORDER BY created_at DESC
+     LIMIT 80`,
+    [req.user.company_id, actions]
+  );
+  res.json({ events });
+});
+
 app.get("/api/ventas/settings", requireAuth, async (req, res) => {
   if (!(await requireSystemAccess("ventas_almacen", req, res))) return;
   res.json({ settings: await mapSettings(await loadSettings(req.user.company_id)) });
@@ -1146,6 +1174,10 @@ app.post("/api/ventas/products", requireAuth, async (req, res) => {
     stock: Number(req.body.stock || 0)
   };
   if (!product.code || !product.name) return res.status(400).json({ error: "Codigo y nombre son obligatorios" });
+  if (product.barcode) {
+    const duplicateBarcode = await pg.get("SELECT id FROM inventory_products WHERE company_id = ? AND barcode <> '' AND lower(barcode) = lower(?)", [req.user.company_id, product.barcode]);
+    if (duplicateBarcode) return res.status(400).json({ error: "Ya existe otro producto con ese codigo de barras" });
+  }
   await pg.tx(async (client) => {
     await client.run(
       `INSERT INTO inventory_products (id, company_id, code, barcode, name, category, unit, batch_number, expires_at, cost_price, sale_price, min_stock, stock, created_at, updated_at)
@@ -1159,6 +1191,14 @@ app.post("/api/ventas/products", requireAuth, async (req, res) => {
         [randomUUID(), req.user.company_id, product.id, product.stock, "Stock inicial", "Registro inicial de producto", req.user.id]
       );
     }
+  });
+  await recordAuditEvent({
+    req,
+    action: "product_create",
+    entityType: "product",
+    entityId: product.id,
+    description: `Creo producto ${product.code} - ${product.name}`,
+    metadata: { stock: product.stock, cost: product.costPrice, price: product.salePrice, barcode: product.barcode }
   });
   res.status(201).json({ product: await pg.get("SELECT * FROM inventory_products WHERE id = ?", [product.id]) });
 });
@@ -1187,12 +1227,30 @@ app.patch("/api/ventas/products/:id", requireAuth, async (req, res) => {
     [req.user.company_id, product.code, existing.id]
   );
   if (duplicate) return res.status(400).json({ error: "Ya existe otro producto con ese codigo" });
+  if (product.barcode) {
+    const duplicateBarcode = await pg.get(
+      "SELECT id FROM inventory_products WHERE company_id = ? AND barcode <> '' AND lower(barcode) = lower(?) AND id <> ?",
+      [req.user.company_id, product.barcode, existing.id]
+    );
+    if (duplicateBarcode) return res.status(400).json({ error: "Ya existe otro producto con ese codigo de barras" });
+  }
   await pg.run(
     `UPDATE inventory_products
      SET code = ?, barcode = ?, name = ?, category = ?, unit = ?, batch_number = ?, expires_at = ?, cost_price = ?, sale_price = ?, min_stock = ?, updated_at = now()
      WHERE id = ? AND company_id = ?`,
     [product.code, product.barcode, product.name, product.category, product.unit, product.batchNumber, product.expiresAt, product.costPrice, product.salePrice, product.minStock, existing.id, req.user.company_id]
   );
+  await recordAuditEvent({
+    req,
+    action: "product_update",
+    entityType: "product",
+    entityId: existing.id,
+    description: `Actualizo producto ${product.code}`,
+    metadata: {
+      previous: { code: existing.code, price: existing.sale_price, cost: existing.cost_price, stock: existing.stock },
+      next: { code: product.code, price: product.salePrice, cost: product.costPrice, minStock: product.minStock }
+    }
+  });
   res.json({ product: await pg.get("SELECT * FROM inventory_products WHERE id = ? AND company_id = ?", [existing.id, req.user.company_id]) });
 });
 
@@ -1203,6 +1261,7 @@ app.patch("/api/ventas/products/:id/status", requireAuth, async (req, res) => {
   const product = await pg.get("SELECT id, name, is_active FROM inventory_products WHERE id = ? AND company_id = ?", [req.params.id, req.user.company_id]);
   if (!product) return res.status(404).json({ error: "Producto no encontrado" });
   await pg.run("UPDATE inventory_products SET is_active = ?, updated_at = now() WHERE id = ? AND company_id = ?", [Boolean(req.body.active), product.id, req.user.company_id]);
+  await recordAuditEvent({ req, action: "product_status", entityType: "product", entityId: product.id, description: `${Boolean(req.body.active) ? "Activo" : "Desactivo"} producto ${product.name}` });
   res.json({ product: await pg.get("SELECT * FROM inventory_products WHERE id = ? AND company_id = ?", [product.id]) });
 });
 
@@ -1539,6 +1598,14 @@ app.post("/api/ventas/sales/:id/pay", requireAuth, async (req, res) => {
       );
     }
   });
+  await recordAuditEvent({
+    req,
+    action: "credit_payment",
+    entityType: "sale",
+    entityId: sale.id,
+    description: `Cobro credito ${sale.code} por ${amount}`,
+    metadata: { previousBalance: balance, nextBalance, paymentMethod: method }
+  });
   res.json({ sale: await pg.get("SELECT * FROM sales_orders WHERE id = ? AND company_id = ?", [sale.id, req.user.company_id]) });
 });
 
@@ -1639,6 +1706,8 @@ app.post("/api/ventas/sales", requireAuth, async (req, res) => {
   const note = String(req.body.note || "").trim().slice(0, 500);
   try {
     const result = await pg.tx(async (client) => {
+      const cashSession = await client.get("SELECT * FROM cash_sessions WHERE company_id = ? AND opened_by = ? AND status = 'abierta'", [req.user.company_id, req.user.id]);
+      if (!cashSession) throw new Error("Abre caja antes de confirmar ventas");
       const saleCode = await buildNextSaleCode(req.user.company_id, new Date().toISOString(), client);
       const customer = customerId ? await client.get("SELECT * FROM sales_customers WHERE id = ? AND company_id = ?", [customerId, req.user.company_id]) : null;
       const customerName = customer?.name || String(req.body.customerName || "Cliente sin registrar").trim();
@@ -1651,11 +1720,23 @@ app.post("/api/ventas/sales", requireAuth, async (req, res) => {
         if (!product || quantity <= 0) throw new Error("Producto o cantidad invalida");
         if (Number(product.stock) < quantity) throw new Error(`Stock insuficiente para ${product.name}`);
         const unitPrice = Number(item.unitPrice || product.sale_price || 0);
-        preparedItems.push({ product, quantity, unitPrice, total: quantity * unitPrice });
+        const grossTotal = quantity * unitPrice;
+        const lineDiscount = Math.min(Math.max(Number(item.discount || 0), 0), grossTotal);
+        preparedItems.push({
+          product,
+          quantity,
+          unitPrice,
+          costPriceAtSale: Number(product.cost_price || 0),
+          subtotal: grossTotal,
+          discount: lineDiscount,
+          total: Math.max(grossTotal - lineDiscount, 0)
+        });
       }
-      const subtotal = preparedItems.reduce((total, item) => total + item.total, 0);
+      const subtotal = preparedItems.reduce((total, item) => total + item.subtotal, 0);
+      const lineDiscountTotal = preparedItems.reduce((total, item) => total + item.discount, 0);
       const requestedDiscount = Math.max(Number(req.body.discount || 0), 0);
-      const discount = Math.min(requestedDiscount, subtotal);
+      const orderDiscount = Math.max(requestedDiscount - lineDiscountTotal, 0);
+      const discount = Math.min(lineDiscountTotal + orderDiscount, subtotal);
       if (!settings.allowDiscounts && discount > 0) throw new Error("Los descuentos estan desactivados para esta tienda");
       const taxableBase = Math.max(subtotal - discount, 0);
       const tax = Number((taxableBase * Number(settings.taxRate || 0) / 100).toFixed(2));
@@ -1678,17 +1759,17 @@ app.post("/api/ventas/sales", requireAuth, async (req, res) => {
       }
       await client.run(
         `INSERT INTO sales_orders (
-          id, company_id, code, customer_id, customer_name, subtotal, discount, tax, total, note,
+          id, company_id, cash_session_id, code, customer_id, customer_name, subtotal, discount, tax, total, note,
           cash_received, change_amount, payment_method, payment_detail, amount_paid, balance_due, payment_status,
           status, cash_closed, created_by, created_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'confirmada', false, ?, now())`,
-        [saleId, req.user.company_id, saleCode, customer?.id || null, customerName, subtotal, discount, tax, total, note, cashReceived, changeAmount, paymentMethod, paymentDetail.serialized, amountPaid, balanceDue, balanceDue > 0 ? "pendiente" : "pagada", req.user.id]
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'confirmada', false, ?, now())`,
+        [saleId, req.user.company_id, cashSession.id, saleCode, customer?.id || null, customerName, subtotal, discount, tax, total, note, cashReceived, changeAmount, paymentMethod, paymentDetail.serialized, amountPaid, balanceDue, balanceDue > 0 ? "pendiente" : "pagada", req.user.id]
       );
       for (const item of preparedItems) {
         await client.run(
-          `INSERT INTO sales_order_items (id, company_id, sale_id, product_id, product_name, quantity, unit_price, total)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-          [randomUUID(), req.user.company_id, saleId, item.product.id, item.product.name, item.quantity, item.unitPrice, item.total]
+          `INSERT INTO sales_order_items (id, company_id, sale_id, product_id, product_name, quantity, unit_price, cost_price_at_sale, subtotal, discount, total)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [randomUUID(), req.user.company_id, saleId, item.product.id, item.product.name, item.quantity, item.unitPrice, item.costPriceAtSale, item.subtotal, item.discount, item.total]
         );
         await client.run(
           `INSERT INTO inventory_movements (id, company_id, product_id, type, quantity, reference, note, created_by, created_at)
@@ -1697,7 +1778,15 @@ app.post("/api/ventas/sales", requireAuth, async (req, res) => {
         );
         await client.run("UPDATE inventory_products SET stock = stock - ?, updated_at = now() WHERE id = ? AND company_id = ?", [item.quantity, item.product.id, req.user.company_id]);
       }
-      return { saleCode };
+      return { saleCode, cashSessionId: cashSession.id, itemCount: preparedItems.length, total, discount };
+    });
+    await recordAuditEvent({
+      req,
+      action: "sale_create",
+      entityType: "sale",
+      entityId: saleId,
+      description: `Registro venta ${result.saleCode} por ${result.total}`,
+      metadata: { cashSessionId: result.cashSessionId, itemCount: result.itemCount, discount: result.discount }
     });
     res.status(201).json({
       sale: await pg.get("SELECT * FROM sales_orders WHERE id = ?", [saleId]),
@@ -1732,11 +1821,18 @@ app.get("/api/ventas/cash", requireAuth, async (req, res) => {
       )
     : [];
   const cashierScopeUserId = activeSession ? activeSession.opened_by : req.user.id;
-  const shouldScopeSales = Boolean(activeSession) || ownOnly;
-  const pendingSales = await pg.all(
-    `SELECT * FROM sales_orders WHERE company_id = ? AND status = 'confirmada' AND cash_closed = false ${shouldScopeSales ? "AND created_by = ?" : ""} ORDER BY created_at DESC`,
-    shouldScopeSales ? [req.user.company_id, cashierScopeUserId] : [req.user.company_id]
-  );
+  const pendingSales = activeSession
+    ? await pg.all(
+        `SELECT * FROM sales_orders
+         WHERE company_id = ? AND status = 'confirmada' AND cash_closed = false
+           AND (cash_session_id = ? OR (cash_session_id = '' AND created_by = ?))
+         ORDER BY created_at DESC`,
+        [req.user.company_id, activeSession.id, cashierScopeUserId]
+      )
+    : await pg.all(
+        `SELECT * FROM sales_orders WHERE company_id = ? AND status = 'confirmada' AND cash_closed = false ${ownOnly ? "AND created_by = ?" : ""} ORDER BY created_at DESC`,
+        ownOnly ? [req.user.company_id, req.user.id] : [req.user.company_id]
+      );
   const total = pendingSales.reduce((sum, sale) => sum + payableToCash(sale), 0);
   res.json({ pendingSales, total, activeSession, movements });
 });
@@ -1759,6 +1855,7 @@ app.post("/api/ventas/cash/open", requireAuth, async (req, res) => {
      VALUES (?, ?, ?, ?, ?, 'abierta', now())`,
     [sessionId, req.user.company_id, req.user.id, registerNumber, openingAmount]
   );
+  await recordAuditEvent({ req, action: "cash_open", entityType: "cash_session", entityId: sessionId, description: `Abrio caja ${registerNumber} con ${openingAmount}` });
   res.status(201).json({ session: await pg.get("SELECT * FROM cash_sessions WHERE id = ?", [sessionId]) });
 });
 
@@ -1782,6 +1879,7 @@ app.post("/api/ventas/cash/movements", requireAuth, async (req, res) => {
      VALUES (?, ?, ?, ?, ?, ?, ?, now())`,
     [movement.id, req.user.company_id, session.id, movement.type, movement.amount, movement.reason, req.user.id]
   );
+  await recordAuditEvent({ req, action: "cash_movement", entityType: "cash_session", entityId: session.id, description: `${movement.type} de caja por ${movement.amount}: ${movement.reason}` });
   res.status(201).json({ movement: await pg.get("SELECT * FROM cash_movements WHERE id = ?", [movement.id]) });
 });
 
@@ -1792,8 +1890,10 @@ app.post("/api/ventas/cash/close", requireAuth, async (req, res) => {
   const session = await pg.get("SELECT * FROM cash_sessions WHERE company_id = ? AND opened_by = ? AND status = 'abierta'", [req.user.company_id, req.user.id]);
   if (!session) return res.status(400).json({ error: "No tienes una caja abierta" });
   const pendingSales = await pg.all(
-    "SELECT * FROM sales_orders WHERE company_id = ? AND status = 'confirmada' AND cash_closed = false AND created_by = ?",
-    [req.user.company_id, session.opened_by]
+    `SELECT * FROM sales_orders
+     WHERE company_id = ? AND status = 'confirmada' AND cash_closed = false
+       AND (cash_session_id = ? OR (cash_session_id = '' AND created_by = ?))`,
+    [req.user.company_id, session.id, session.opened_by]
   );
   const closureId = randomUUID();
   const total = pendingSales.reduce((sum, sale) => sum + payableToCash(sale), 0);
@@ -1815,10 +1915,18 @@ app.post("/api/ventas/cash/close", requireAuth, async (req, res) => {
       [closureId, req.user.company_id, code, Number(session.register_number || 1), openingAmount, total, movementTotal, expectedAmount, countedAmount, differenceAmount, pendingSales.length, req.user.id]
     );
     await client.run(
-      "UPDATE sales_orders SET cash_closed = true WHERE company_id = ? AND status = 'confirmada' AND cash_closed = false AND created_by = ?",
-      [req.user.company_id, session.opened_by]
+      "UPDATE sales_orders SET cash_closed = true WHERE company_id = ? AND status = 'confirmada' AND cash_closed = false AND (cash_session_id = ? OR (cash_session_id = '' AND created_by = ?))",
+      [req.user.company_id, session.id, session.opened_by]
     );
     await client.run("UPDATE cash_sessions SET status = 'cerrada', closed_at = now() WHERE id = ? AND company_id = ?", [session.id, req.user.company_id]);
+  });
+  await recordAuditEvent({
+    req,
+    action: "cash_close",
+    entityType: "cash_closure",
+    entityId: closureId,
+    description: `Cerro caja ${session.register_number || 1}. Esperado ${expectedAmount}, contado ${countedAmount}, diferencia ${differenceAmount}`,
+    metadata: { saleCount: pendingSales.length, total, movementTotal, openingAmount }
   });
   res.status(201).json({ closure: await pg.get("SELECT * FROM cash_closures WHERE id = ?", [closureId]) });
 });
@@ -1854,7 +1962,15 @@ app.post("/api/ventas/products/:id/movements", requireAuth, async (req, res) => 
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, now())`,
       [randomUUID(), req.user.company_id, product.id, type, movementQuantity, String(req.body.reference || ""), String(req.body.note || ""), req.user.id]
     );
-    await client.run("UPDATE inventory_products SET stock = ?, updated_at = now() WHERE id = ? AND company_id = ?", [Math.max(Number(product.stock || 0) + signedQuantity, 0), product.id, req.user.company_id]);
+      await client.run("UPDATE inventory_products SET stock = ?, updated_at = now() WHERE id = ? AND company_id = ?", [Math.max(Number(product.stock || 0) + signedQuantity, 0), product.id, req.user.company_id]);
+  });
+  await recordAuditEvent({
+    req,
+    action: "stock_movement",
+    entityType: "product",
+    entityId: product.id,
+    description: `${type} de stock para ${product.name}: ${movementQuantity}`,
+    metadata: { previousStock: Number(product.stock || 0), nextStock: Math.max(Number(product.stock || 0) + signedQuantity, 0), reference: String(req.body.reference || "") }
   });
   res.json({ product: await pg.get("SELECT * FROM inventory_products WHERE id = ?", [product.id]) });
 });
@@ -2395,6 +2511,7 @@ async function ensureVentasSchema() {
         CREATE TABLE IF NOT EXISTS inventory_products (
           id text primary key,
           company_id text not null references companies(id) on delete cascade,
+          cash_session_id text not null default '',
           code text not null,
           barcode text not null default '',
           name text not null,
@@ -2514,6 +2631,9 @@ async function ensureVentasSchema() {
           product_name text not null,
           quantity numeric not null default 0,
           unit_price numeric not null default 0,
+          cost_price_at_sale numeric not null default 0,
+          subtotal numeric not null default 0,
+          discount numeric not null default 0,
           total numeric not null default 0
         )
       `);
@@ -2627,6 +2747,12 @@ async function ensureVentasSchema() {
       await pg.run("ALTER TABLE sales_orders ADD COLUMN IF NOT EXISTS tax numeric not null default 0");
       await pg.run("ALTER TABLE sales_orders ADD COLUMN IF NOT EXISTS note text not null default ''");
       await pg.run("ALTER TABLE sales_orders ADD COLUMN IF NOT EXISTS updated_at timestamptz");
+      await pg.run("ALTER TABLE sales_orders ADD COLUMN IF NOT EXISTS cash_session_id text not null default ''");
+      await pg.run("ALTER TABLE sales_order_items ADD COLUMN IF NOT EXISTS cost_price_at_sale numeric not null default 0");
+      await pg.run("ALTER TABLE sales_order_items ADD COLUMN IF NOT EXISTS subtotal numeric not null default 0");
+      await pg.run("ALTER TABLE sales_order_items ADD COLUMN IF NOT EXISTS discount numeric not null default 0");
+      await pg.run("UPDATE sales_order_items SET subtotal = quantity * unit_price WHERE subtotal = 0");
+      await pg.run("UPDATE sales_order_items SET cost_price_at_sale = COALESCE(inventory_products.cost_price, 0) FROM inventory_products WHERE sales_order_items.product_id = inventory_products.id AND sales_order_items.cost_price_at_sale = 0");
       await pg.run("ALTER TABLE sales_customers ADD COLUMN IF NOT EXISTS status text not null default 'activo'");
       await pg.run("ALTER TABLE sales_customers ADD COLUMN IF NOT EXISTS credit_limit numeric not null default 0");
       await pg.run("ALTER TABLE cash_sessions ADD COLUMN IF NOT EXISTS register_number integer not null default 1");

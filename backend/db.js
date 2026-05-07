@@ -234,6 +234,7 @@ function initDb() {
     CREATE TABLE IF NOT EXISTS inventory_products (
       id TEXT PRIMARY KEY,
       company_id TEXT NOT NULL,
+      cash_session_id TEXT NOT NULL DEFAULT '',
       code TEXT NOT NULL,
       barcode TEXT NOT NULL DEFAULT '',
       name TEXT NOT NULL,
@@ -360,6 +361,9 @@ function initDb() {
       product_name TEXT NOT NULL,
       quantity REAL NOT NULL,
       unit_price REAL NOT NULL,
+      cost_price_at_sale REAL NOT NULL DEFAULT 0,
+      subtotal REAL NOT NULL DEFAULT 0,
+      discount REAL NOT NULL DEFAULT 0,
       total REAL NOT NULL,
       FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE,
       FOREIGN KEY (sale_id) REFERENCES sales_orders(id) ON DELETE CASCADE,
@@ -533,9 +537,19 @@ function migrateSchema() {
   ensureColumn("sales_orders", "tax", "REAL NOT NULL DEFAULT 0");
   ensureColumn("sales_orders", "note", "TEXT NOT NULL DEFAULT ''");
   ensureColumn("sales_orders", "updated_at", "TEXT NOT NULL DEFAULT ''");
+  ensureColumn("sales_orders", "cash_session_id", "TEXT NOT NULL DEFAULT ''");
+  ensureColumn("sales_order_items", "cost_price_at_sale", "REAL NOT NULL DEFAULT 0");
+  ensureColumn("sales_order_items", "subtotal", "REAL NOT NULL DEFAULT 0");
+  ensureColumn("sales_order_items", "discount", "REAL NOT NULL DEFAULT 0");
   ensureColumn("sales_customers", "status", "TEXT NOT NULL DEFAULT 'activo'");
   ensureColumn("sales_customers", "credit_limit", "REAL NOT NULL DEFAULT 0");
   ensureColumn("cash_sessions", "register_number", "INTEGER NOT NULL DEFAULT 1");
+  db.prepare("UPDATE sales_order_items SET subtotal = quantity * unit_price WHERE subtotal = 0").run();
+  db.prepare(
+    `UPDATE sales_order_items
+     SET cost_price_at_sale = COALESCE((SELECT cost_price FROM inventory_products WHERE inventory_products.id = sales_order_items.product_id), 0)
+     WHERE cost_price_at_sale = 0`
+  ).run();
   db.prepare("UPDATE sales_orders SET amount_paid = total WHERE amount_paid = 0 AND payment_method <> 'credito' AND status <> 'anulada'").run();
   db.prepare("CREATE INDEX IF NOT EXISTS idx_leads_priority ON leads(priority, created_at)").run();
   db.prepare("CREATE INDEX IF NOT EXISTS idx_lead_history_lead ON lead_history(lead_id, created_at)").run();
