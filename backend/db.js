@@ -338,10 +338,13 @@ function initDb() {
       amount_paid REAL NOT NULL DEFAULT 0,
       balance_due REAL NOT NULL DEFAULT 0,
       payment_status TEXT NOT NULL DEFAULT 'pagada',
+      returned_amount REAL NOT NULL DEFAULT 0,
+      return_status TEXT NOT NULL DEFAULT '',
       status TEXT NOT NULL DEFAULT 'confirmada',
       cash_closed INTEGER NOT NULL DEFAULT 0,
       created_by TEXT NOT NULL,
       created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TEXT NOT NULL DEFAULT '',
       UNIQUE (company_id, code),
       FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE,
       FOREIGN KEY (customer_id) REFERENCES sales_customers(id),
@@ -358,6 +361,38 @@ function initDb() {
       unit_price REAL NOT NULL,
       total REAL NOT NULL,
       FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE,
+      FOREIGN KEY (sale_id) REFERENCES sales_orders(id) ON DELETE CASCADE,
+      FOREIGN KEY (product_id) REFERENCES inventory_products(id)
+    );
+
+    CREATE TABLE IF NOT EXISTS sales_returns (
+      id TEXT PRIMARY KEY,
+      company_id TEXT NOT NULL,
+      sale_id TEXT NOT NULL,
+      code TEXT NOT NULL,
+      reason TEXT NOT NULL DEFAULT '',
+      refund_amount REAL NOT NULL DEFAULT 0,
+      total REAL NOT NULL DEFAULT 0,
+      created_by TEXT NOT NULL,
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE (company_id, code),
+      FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE,
+      FOREIGN KEY (sale_id) REFERENCES sales_orders(id) ON DELETE CASCADE,
+      FOREIGN KEY (created_by) REFERENCES users(id)
+    );
+
+    CREATE TABLE IF NOT EXISTS sales_return_items (
+      id TEXT PRIMARY KEY,
+      company_id TEXT NOT NULL,
+      return_id TEXT NOT NULL,
+      sale_id TEXT NOT NULL,
+      product_id TEXT NOT NULL,
+      product_name TEXT NOT NULL,
+      quantity REAL NOT NULL DEFAULT 0,
+      unit_price REAL NOT NULL DEFAULT 0,
+      total REAL NOT NULL DEFAULT 0,
+      FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE,
+      FOREIGN KEY (return_id) REFERENCES sales_returns(id) ON DELETE CASCADE,
       FOREIGN KEY (sale_id) REFERENCES sales_orders(id) ON DELETE CASCADE,
       FOREIGN KEY (product_id) REFERENCES inventory_products(id)
     );
@@ -491,8 +526,11 @@ function migrateSchema() {
   ensureColumn("sales_orders", "amount_paid", "REAL NOT NULL DEFAULT 0");
   ensureColumn("sales_orders", "balance_due", "REAL NOT NULL DEFAULT 0");
   ensureColumn("sales_orders", "payment_status", "TEXT NOT NULL DEFAULT 'pagada'");
+  ensureColumn("sales_orders", "returned_amount", "REAL NOT NULL DEFAULT 0");
+  ensureColumn("sales_orders", "return_status", "TEXT NOT NULL DEFAULT ''");
   ensureColumn("sales_orders", "tax", "REAL NOT NULL DEFAULT 0");
   ensureColumn("sales_orders", "note", "TEXT NOT NULL DEFAULT ''");
+  ensureColumn("sales_orders", "updated_at", "TEXT NOT NULL DEFAULT ''");
   ensureColumn("sales_customers", "status", "TEXT NOT NULL DEFAULT 'activo'");
   ensureColumn("sales_customers", "credit_limit", "REAL NOT NULL DEFAULT 0");
   ensureColumn("cash_sessions", "register_number", "INTEGER NOT NULL DEFAULT 1");

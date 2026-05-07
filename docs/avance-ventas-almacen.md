@@ -4,7 +4,7 @@ Este documento sirve para medir cuanto falta para considerar el sistema listo pa
 
 ## Estado general
 
-Avance estimado actual: 72%
+Avance estimado actual: 76%
 
 ## Completado
 
@@ -24,21 +24,22 @@ Avance estimado actual: 72%
 - Ordenes de compra persistentes: pendiente, recibida y cancelada.
 - Alertas de stock minimo, compra sugerida y exportacion de reposicion.
 - Lotes y vencimientos: alerta, bloqueo de venta vencida y aviso de productos por vencer.
+- Devoluciones de clientes: parcial/total, reposicion de stock y egreso de caja.
 - Reportes CSV: ventas, inventario, clientes y respaldo operativo JSON.
 - Despliegue en Vercel y backend PostgreSQL/Supabase.
 
 ## Faltante prioritario
 
-1. Devoluciones de clientes: registrar devolucion parcial o total y afectar caja/stock.
-2. Permisos finos por rol: definir acciones exactas por pantalla y bloquear botones no autorizados.
-3. Importacion masiva de productos desde CSV/Excel.
-4. Busqueda por codigo de barras real con foco automatico para lector USB.
-5. Auditoria visible: quien cambio precio, stock, usuario, caja o configuracion.
-6. Reporte de utilidad por producto y por periodo con costo historico.
-7. Dashboard de ventas del dia para encargado.
-8. Respaldo/restauracion guiada por empresa.
-9. Pruebas funcionales documentadas con casos reales.
-10. Ajustes finales de experiencia movil y manuales cortos por rol.
+1. Permisos finos por rol: definir acciones exactas por pantalla y bloquear botones no autorizados.
+2. Importacion masiva de productos desde CSV/Excel.
+3. Busqueda por codigo de barras real con foco automatico para lector USB.
+4. Auditoria visible: quien cambio precio, stock, usuario, caja o configuracion.
+5. Reporte de utilidad por producto y por periodo con costo historico.
+6. Dashboard de ventas del dia para encargado.
+7. Respaldo/restauracion guiada por empresa.
+8. Pruebas funcionales documentadas con casos reales.
+9. Ajustes finales de experiencia movil y manuales cortos por rol.
+10. Preparacion comercial: demos, datos de prueba por rubro y checklist de instalacion.
 
 ## Despues
 

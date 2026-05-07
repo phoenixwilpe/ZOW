@@ -1688,6 +1688,88 @@ app.post("/api/ventas/sales/:id/pay", requireAuth, requireSystemAccess("ventas_a
   res.json({ sale: db.prepare("SELECT * FROM sales_orders WHERE id = ? AND company_id = ?").get(sale.id, req.user.company_id) });
 });
 
+app.post("/api/ventas/sales/:id/returns", requireAuth, requireSystemAccess("ventas_almacen"), requireVentasRole("admin", "ventas_admin", "supervisor", "cajero", "vendedor"), (req, res) => {
+  const sale = db.prepare("SELECT * FROM sales_orders WHERE id = ? AND company_id = ?").get(req.params.id, req.user.company_id);
+  if (!sale) return res.status(404).json({ error: "Venta no encontrada" });
+  if (ventasOwnOnly(req.user.role) && sale.created_by !== req.user.id) return res.status(403).json({ error: "Permiso insuficiente" });
+  if (sale.status === "anulada") return res.status(400).json({ error: "No se puede devolver una venta anulada" });
+  const requestedItems = Array.isArray(req.body.items) ? req.body.items : [];
+  const reason = String(req.body.reason || "").trim();
+  const refundAmount = Number(req.body.refundAmount || 0);
+  if (!reason) return res.status(400).json({ error: "Motivo de devolucion obligatorio" });
+  if (!requestedItems.length) return res.status(400).json({ error: "Selecciona al menos un producto para devolver" });
+  const saleItems = db.prepare("SELECT * FROM sales_order_items WHERE sale_id = ? AND company_id = ?").all(sale.id, req.user.company_id);
+  const returnedRows = db
+    .prepare("SELECT product_id, COALESCE(SUM(quantity), 0) AS returned FROM sales_return_items WHERE company_id = ? AND sale_id = ? GROUP BY product_id")
+    .all(req.user.company_id, sale.id);
+  const returnedByProduct = new Map(returnedRows.map((item) => [item.product_id, Number(item.returned || 0)]));
+  let prepared;
+  try {
+    prepared = requestedItems.map((item) => {
+      const saleItem = saleItems.find((entry) => entry.product_id === String(item.productId || ""));
+      const quantity = Number(item.quantity || 0);
+      if (!saleItem || quantity <= 0) throw new Error("Producto o cantidad invalida");
+      const available = Number(saleItem.quantity || 0) - Number(returnedByProduct.get(saleItem.product_id) || 0);
+      if (quantity > available) throw new Error(`No puedes devolver mas de ${available} unidad(es) de ${saleItem.product_name}`);
+      const unitPrice = Number(saleItem.unit_price || 0);
+      return { saleItem, quantity, unitPrice, total: quantity * unitPrice };
+    });
+  } catch (error) {
+    return res.status(400).json({ error: error.message || "No se pudo preparar la devolucion" });
+  }
+  const totalReturn = prepared.reduce((sum, item) => sum + item.total, 0);
+  if (refundAmount < 0 || refundAmount > totalReturn) return res.status(400).json({ error: "Monto devuelto invalido" });
+  const session = refundAmount > 0
+    ? db.prepare("SELECT * FROM cash_sessions WHERE company_id = ? AND opened_by = ? AND status = 'abierta'").get(req.user.company_id, req.user.id)
+    : null;
+  if (refundAmount > 0 && !session) return res.status(400).json({ error: "Abre caja para registrar devolucion de dinero" });
+  const now = new Date().toISOString();
+  const returnId = randomUUID();
+  const returnCode = buildNextSalesReturnCode(req.user.company_id, now);
+  db.exec("BEGIN");
+  try {
+    db.prepare(
+      `INSERT INTO sales_returns (id, company_id, sale_id, code, reason, refund_amount, total, created_by, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    ).run(returnId, req.user.company_id, sale.id, returnCode, reason, refundAmount, totalReturn, req.user.id, now);
+    const insertReturnItem = db.prepare(
+      `INSERT INTO sales_return_items (id, company_id, return_id, sale_id, product_id, product_name, quantity, unit_price, total)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    );
+    const restoreStock = db.prepare("UPDATE inventory_products SET stock = stock + ?, updated_at = ? WHERE id = ? AND company_id = ?");
+    const insertMovement = db.prepare(
+      `INSERT INTO inventory_movements (id, company_id, product_id, type, quantity, reference, note, created_by, created_at)
+       VALUES (?, ?, ?, 'entrada', ?, ?, ?, ?, ?)`
+    );
+    prepared.forEach((item) => {
+      insertReturnItem.run(randomUUID(), req.user.company_id, returnId, sale.id, item.saleItem.product_id, item.saleItem.product_name, item.quantity, item.unitPrice, item.total);
+      restoreStock.run(item.quantity, now, item.saleItem.product_id, req.user.company_id);
+      insertMovement.run(randomUUID(), req.user.company_id, item.saleItem.product_id, item.quantity, returnCode, `Devolucion de venta ${sale.code}: ${reason}`, req.user.id, now);
+    });
+    if (refundAmount > 0) {
+      db.prepare(
+        `INSERT INTO cash_movements (id, company_id, session_id, type, amount, reason, created_by, created_at)
+         VALUES (?, ?, ?, 'egreso', ?, ?, ?, ?)`
+      ).run(randomUUID(), req.user.company_id, session.id, refundAmount, `Devolucion ${returnCode} / ${sale.code}`, req.user.id, now);
+    }
+    const totalSold = saleItems.reduce((sum, item) => sum + Number(item.quantity || 0), 0);
+    const previousReturned = [...returnedByProduct.values()].reduce((sum, value) => sum + Number(value || 0), 0);
+    const nextReturned = previousReturned + prepared.reduce((sum, item) => sum + item.quantity, 0);
+    db.prepare(
+      `UPDATE sales_orders SET returned_amount = COALESCE(returned_amount, 0) + ?, return_status = ?, updated_at = ? WHERE id = ? AND company_id = ?`
+    ).run(refundAmount, nextReturned >= totalSold ? "total" : "parcial", now, sale.id, req.user.company_id);
+    db.exec("COMMIT");
+  } catch (error) {
+    db.exec("ROLLBACK");
+    return res.status(400).json({ error: error.message || "No se pudo registrar la devolucion" });
+  }
+  recordAuditEvent({ req, action: "sale_return", entityType: "sale", entityId: sale.id, description: `Devolucion ${returnCode} de venta ${sale.code}: ${reason}` });
+  res.status(201).json({
+    sale: db.prepare("SELECT * FROM sales_orders WHERE id = ? AND company_id = ?").get(sale.id, req.user.company_id),
+    return: db.prepare("SELECT * FROM sales_returns WHERE id = ? AND company_id = ?").get(returnId, req.user.company_id)
+  });
+});
+
 app.post("/api/ventas/sales", requireAuth, requireSystemAccess("ventas_almacen"), requireVentasRole("admin", "ventas_admin", "cajero", "vendedor"), (req, res) => {
   const items = Array.isArray(req.body.items) ? req.body.items : [];
   if (!items.length) return res.status(400).json({ error: "Agrega al menos un producto a la venta" });
@@ -2253,6 +2335,17 @@ function buildNextPurchaseCode(companyId, date = new Date().toISOString()) {
   const year = new Date(date).getFullYear();
   const prefix = `P-${year}`;
   const rows = db.prepare("SELECT code FROM purchase_orders WHERE company_id = ? AND code LIKE ?").all(companyId, `${prefix}-%`);
+  const next = rows.reduce((max, row) => {
+    const match = String(row.code || "").match(/(\d+)$/);
+    return match ? Math.max(max, Number(match[1])) : max;
+  }, 0) + 1;
+  return `${prefix}-${String(next).padStart(5, "0")}`;
+}
+
+function buildNextSalesReturnCode(companyId, date = new Date().toISOString()) {
+  const current = new Date(date);
+  const prefix = `DEV-${String(current.getMonth() + 1).padStart(2, "0")}${current.getFullYear()}`;
+  const rows = db.prepare("SELECT code FROM sales_returns WHERE company_id = ? AND code LIKE ?").all(companyId, `${prefix}-%`);
   const next = rows.reduce((max, row) => {
     const match = String(row.code || "").match(/(\d+)$/);
     return match ? Math.max(max, Number(match[1])) : max;

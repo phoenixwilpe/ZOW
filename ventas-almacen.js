@@ -1486,6 +1486,8 @@ function renderHistorySaleRow(sale) {
 
 function saleStatus(sale) {
   if (sale.status === "anulada") return "anulada";
+  if (sale.return_status === "total") return "devuelta";
+  if (sale.return_status === "parcial") return "devolucion parcial";
   if (sale.payment_status === "pendiente" || Number(sale.balance_due || 0) > 0) return "pendiente";
   if (sale.payment_status === "pagada") return "pagada";
   const meta = localSaleMeta[sale.id] || {};
@@ -2234,6 +2236,7 @@ async function showSaleDetail(saleId) {
 
 function renderSaleDetail(sale, items) {
   const status = saleStatus(sale);
+  const canReturn = !["anulada", "devuelta"].includes(status) && ["admin", "ventas_admin", "supervisor", "cajero", "vendedor"].includes(currentUser?.role);
   saleDetailTitle.textContent = sale.code || "Comprobante";
   saleDetailContent.innerHTML = `
     <section class="sale-detail-summary">
@@ -2270,6 +2273,7 @@ function renderSaleDetail(sale, items) {
         </article>
       `).join("") || empty("Sin productos registrados")}
     </div>
+    ${canReturn ? renderSaleReturnPanel(items) : ""}
     <div class="modal-actions">
       <button class="ghost-button" type="button" id="detailPrintSale">Reimprimir</button>
       ${status !== "anulada" && !sale.cash_closed ? `<button class="ghost-button danger-action" type="button" id="detailVoidSale">Anular venta</button>` : ""}
@@ -2280,6 +2284,75 @@ function renderSaleDetail(sale, items) {
     saleDetailModal.close();
     await voidSale(sale.id);
   });
+  saleDetailContent.querySelector("#saleReturnForm")?.addEventListener("submit", (event) => submitSaleReturn(event, sale, items));
+  saleDetailContent.querySelectorAll("[data-return-qty]").forEach((input) => {
+    input.addEventListener("input", () => updateReturnEstimate(items));
+  });
+  updateReturnEstimate(items);
+}
+
+function renderSaleReturnPanel(items) {
+  if (!items.length) return "";
+  return `<section class="sale-detail-card sale-return-panel">
+    <div>
+      <span>Devolucion</span>
+      <strong>Parcial o total</strong>
+    </div>
+    <form id="saleReturnForm" class="admin-form span-2">
+      <div class="return-item-list">
+        ${items.map((item) => `<label class="return-item-row">
+          <span>${escapeHtml(item.product_name)} <small>Vendidos: ${num(item.quantity)}</small></span>
+          <input data-return-qty="${item.product_id}" type="number" min="0" max="${Number(item.quantity || 0)}" step="1" value="0" />
+        </label>`).join("")}
+      </div>
+      <div class="form-grid">
+        <label>Monto a devolver<input id="returnRefundAmount" type="number" min="0" step="0.01" value="0" /></label>
+        <label>Motivo<input id="returnReason" type="text" required placeholder="Producto danado, cambio, error, etc." /></label>
+      </div>
+      <div class="cloud-safe-note"><strong id="returnEstimate">Total seleccionado: 0.00</strong><span>Si devuelves dinero, el cajero debe tener caja abierta.</span></div>
+      <div class="modal-actions"><button class="primary-button" type="submit">Registrar devolucion</button></div>
+    </form>
+  </section>`;
+}
+
+function updateReturnEstimate(items) {
+  const total = items.reduce((sum, item) => {
+    const quantity = Number(saleDetailContent.querySelector(`[data-return-qty="${CSS.escape(item.product_id)}"]`)?.value || 0);
+    return sum + quantity * Number(item.unit_price || 0);
+  }, 0);
+  const label = saleDetailContent.querySelector("#returnEstimate");
+  const refund = saleDetailContent.querySelector("#returnRefundAmount");
+  if (label) label.textContent = `Total seleccionado: ${money(total)}`;
+  if (refund && Number(refund.value || 0) === 0) refund.value = total.toFixed(2);
+}
+
+async function submitSaleReturn(event, sale, items) {
+  event.preventDefault();
+  const returnItems = items
+    .map((item) => ({
+      productId: item.product_id,
+      quantity: Number(saleDetailContent.querySelector(`[data-return-qty="${CSS.escape(item.product_id)}"]`)?.value || 0)
+    }))
+    .filter((item) => item.quantity > 0);
+  if (!returnItems.length) return window.alert("Selecciona al menos un producto para devolver.");
+  const reason = value("#returnReason").trim();
+  if (!reason) return window.alert("El motivo de devolucion es obligatorio.");
+  try {
+    const response = await apiRequest(`/ventas/sales/${sale.id}/returns`, {
+      method: "POST",
+      body: {
+        reason,
+        refundAmount: Number(value("#returnRefundAmount") || 0),
+        items: returnItems
+      }
+    });
+    saleDetailModal.close();
+    ventasMessage = `Devolucion ${response.return.code} registrada. Stock actualizado${Number(response.return.refund_amount || 0) > 0 ? " y egreso de caja guardado" : ""}.`;
+    await render();
+  } catch (error) {
+    ventasMessage = error.message || "No se pudo registrar la devolucion.";
+    renderMain();
+  }
 }
 
 function renderTicketPaymentDetail(sale) {

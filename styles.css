@@ -2912,6 +2912,38 @@ body.app-correspondencia .metrics article:hover {
   text-transform: uppercase;
 }
 
+.sale-return-panel {
+  margin-top: 12px;
+}
+
+.return-item-list {
+  display: grid;
+  gap: 8px;
+}
+
+.return-item-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 110px;
+  gap: 10px;
+  align-items: center;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 10px;
+  background: rgb(255 255 255 / 82%);
+}
+
+.return-item-row span {
+  display: grid;
+  gap: 2px;
+  color: var(--ink);
+  font-weight: 900;
+}
+
+.return-item-row small {
+  color: var(--muted);
+  font-weight: 800;
+}
+
 .price-list {
   display: grid;
   gap: 10px;

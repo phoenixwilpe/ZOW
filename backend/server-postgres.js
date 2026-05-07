@@ -1540,6 +1540,91 @@ app.post("/api/ventas/sales/:id/pay", requireAuth, async (req, res) => {
   res.json({ sale: await pg.get("SELECT * FROM sales_orders WHERE id = ? AND company_id = ?", [sale.id, req.user.company_id]) });
 });
 
+app.post("/api/ventas/sales/:id/returns", requireAuth, async (req, res) => {
+  if (!(await requireSystemAccess("ventas_almacen", req, res))) return;
+  if (!requireVentasRole(req, res, "admin", "ventas_admin", "supervisor", "cajero", "vendedor")) return;
+  await ensureVentasSchema();
+  const sale = await pg.get("SELECT * FROM sales_orders WHERE id = ? AND company_id = ?", [req.params.id, req.user.company_id]);
+  if (!sale) return res.status(404).json({ error: "Venta no encontrada" });
+  if (ventasOwnOnly(req.user.role) && sale.created_by !== req.user.id) return res.status(403).json({ error: "Permiso insuficiente" });
+  if (sale.status === "anulada") return res.status(400).json({ error: "No se puede devolver una venta anulada" });
+  const requestedItems = Array.isArray(req.body.items) ? req.body.items : [];
+  const reason = String(req.body.reason || "").trim();
+  const refundAmount = Number(req.body.refundAmount || 0);
+  if (!reason) return res.status(400).json({ error: "Motivo de devolucion obligatorio" });
+  if (!requestedItems.length) return res.status(400).json({ error: "Selecciona al menos un producto para devolver" });
+  const saleItems = await pg.all("SELECT * FROM sales_order_items WHERE sale_id = ? AND company_id = ?", [sale.id, req.user.company_id]);
+  const returnedRows = await pg.all(
+    `SELECT product_id, COALESCE(SUM(quantity), 0) AS returned
+     FROM sales_return_items
+     WHERE company_id = ? AND sale_id = ?
+     GROUP BY product_id`,
+    [req.user.company_id, sale.id]
+  );
+  const returnedByProduct = new Map(returnedRows.map((item) => [item.product_id, Number(item.returned || 0)]));
+  const prepared = requestedItems.map((item) => {
+    const saleItem = saleItems.find((entry) => entry.product_id === String(item.productId || ""));
+    const quantity = Number(item.quantity || 0);
+    if (!saleItem || quantity <= 0) throw new Error("Producto o cantidad invalida");
+    const available = Number(saleItem.quantity || 0) - Number(returnedByProduct.get(saleItem.product_id) || 0);
+    if (quantity > available) throw new Error(`No puedes devolver mas de ${available} unidad(es) de ${saleItem.product_name}`);
+    const unitPrice = Number(saleItem.unit_price || 0);
+    return { saleItem, quantity, unitPrice, total: quantity * unitPrice };
+  });
+  const totalReturn = prepared.reduce((sum, item) => sum + item.total, 0);
+  if (refundAmount < 0 || refundAmount > totalReturn) return res.status(400).json({ error: "Monto devuelto invalido" });
+  const session = refundAmount > 0
+    ? await pg.get("SELECT * FROM cash_sessions WHERE company_id = ? AND opened_by = ? AND status = 'abierta'", [req.user.company_id, req.user.id])
+    : null;
+  if (refundAmount > 0 && !session) return res.status(400).json({ error: "Abre caja para registrar devolucion de dinero" });
+  const returnId = randomUUID();
+  const returnCode = await buildNextSalesReturnCode(req.user.company_id);
+  await pg.tx(async (client) => {
+    await client.run(
+      `INSERT INTO sales_returns (id, company_id, sale_id, code, reason, refund_amount, total, created_by, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, now())`,
+      [returnId, req.user.company_id, sale.id, returnCode, reason, refundAmount, totalReturn, req.user.id]
+    );
+    for (const item of prepared) {
+      await client.run(
+        `INSERT INTO sales_return_items (id, company_id, return_id, sale_id, product_id, product_name, quantity, unit_price, total)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [randomUUID(), req.user.company_id, returnId, sale.id, item.saleItem.product_id, item.saleItem.product_name, item.quantity, item.unitPrice, item.total]
+      );
+      await client.run("UPDATE inventory_products SET stock = stock + ?, updated_at = now() WHERE id = ? AND company_id = ?", [item.quantity, item.saleItem.product_id, req.user.company_id]);
+      await client.run(
+        `INSERT INTO inventory_movements (id, company_id, product_id, type, quantity, reference, note, created_by, created_at)
+         VALUES (?, ?, ?, 'entrada', ?, ?, ?, ?, now())`,
+        [randomUUID(), req.user.company_id, item.saleItem.product_id, item.quantity, returnCode, `Devolucion de venta ${sale.code}: ${reason}`, req.user.id]
+      );
+    }
+    if (refundAmount > 0) {
+      await client.run(
+        `INSERT INTO cash_movements (id, company_id, session_id, type, amount, reason, created_by, created_at)
+         VALUES (?, ?, ?, 'egreso', ?, ?, ?, now())`,
+        [randomUUID(), req.user.company_id, session.id, refundAmount, `Devolucion ${returnCode} / ${sale.code}`, req.user.id]
+      );
+    }
+    const totalSold = saleItems.reduce((sum, item) => sum + Number(item.quantity || 0), 0);
+    const previousReturned = [...returnedByProduct.values()].reduce((sum, value) => sum + Number(value || 0), 0);
+    const nextReturned = previousReturned + prepared.reduce((sum, item) => sum + item.quantity, 0);
+    const returnStatus = nextReturned >= totalSold ? "total" : "parcial";
+    await client.run(
+      `UPDATE sales_orders
+       SET returned_amount = COALESCE(returned_amount, 0) + ?,
+           return_status = ?,
+           updated_at = now()
+       WHERE id = ? AND company_id = ?`,
+      [refundAmount, returnStatus, sale.id, req.user.company_id]
+    );
+  });
+  await recordAuditEvent({ req, action: "sale_return", entityType: "sale", entityId: sale.id, description: `Devolucion ${returnCode} de venta ${sale.code}: ${reason}` });
+  res.status(201).json({
+    sale: await pg.get("SELECT * FROM sales_orders WHERE id = ? AND company_id = ?", [sale.id, req.user.company_id]),
+    return: await pg.get("SELECT * FROM sales_returns WHERE id = ? AND company_id = ?", [returnId, req.user.company_id])
+  });
+});
+
 app.post("/api/ventas/sales", requireAuth, async (req, res) => {
   if (!(await requireSystemAccess("ventas_almacen", req, res))) return;
   if (!requireVentasRole(req, res, "admin", "ventas_admin", "cajero", "vendedor")) return;
@@ -2407,10 +2492,13 @@ async function ensureVentasSchema() {
           amount_paid numeric not null default 0,
           balance_due numeric not null default 0,
           payment_status text not null default 'pagada',
+          returned_amount numeric not null default 0,
+          return_status text not null default '',
           status text not null default 'confirmada',
           cash_closed boolean not null default false,
           created_by text not null references users(id),
           created_at timestamptz not null default now(),
+          updated_at timestamptz,
           unique (company_id, code)
         )
       `);
@@ -2418,6 +2506,33 @@ async function ensureVentasSchema() {
         CREATE TABLE IF NOT EXISTS sales_order_items (
           id text primary key,
           company_id text not null references companies(id) on delete cascade,
+          sale_id text not null references sales_orders(id) on delete cascade,
+          product_id text references inventory_products(id),
+          product_name text not null,
+          quantity numeric not null default 0,
+          unit_price numeric not null default 0,
+          total numeric not null default 0
+        )
+      `);
+      await pg.run(`
+        CREATE TABLE IF NOT EXISTS sales_returns (
+          id text primary key,
+          company_id text not null references companies(id) on delete cascade,
+          sale_id text not null references sales_orders(id) on delete cascade,
+          code text not null,
+          reason text not null default '',
+          refund_amount numeric not null default 0,
+          total numeric not null default 0,
+          created_by text not null references users(id),
+          created_at timestamptz not null default now(),
+          unique (company_id, code)
+        )
+      `);
+      await pg.run(`
+        CREATE TABLE IF NOT EXISTS sales_return_items (
+          id text primary key,
+          company_id text not null references companies(id) on delete cascade,
+          return_id text not null references sales_returns(id) on delete cascade,
           sale_id text not null references sales_orders(id) on delete cascade,
           product_id text references inventory_products(id),
           product_name text not null,
@@ -2503,8 +2618,11 @@ async function ensureVentasSchema() {
       await pg.run("ALTER TABLE sales_orders ADD COLUMN IF NOT EXISTS amount_paid numeric not null default 0");
       await pg.run("ALTER TABLE sales_orders ADD COLUMN IF NOT EXISTS balance_due numeric not null default 0");
       await pg.run("ALTER TABLE sales_orders ADD COLUMN IF NOT EXISTS payment_status text not null default 'pagada'");
+      await pg.run("ALTER TABLE sales_orders ADD COLUMN IF NOT EXISTS returned_amount numeric not null default 0");
+      await pg.run("ALTER TABLE sales_orders ADD COLUMN IF NOT EXISTS return_status text not null default ''");
       await pg.run("ALTER TABLE sales_orders ADD COLUMN IF NOT EXISTS tax numeric not null default 0");
       await pg.run("ALTER TABLE sales_orders ADD COLUMN IF NOT EXISTS note text not null default ''");
+      await pg.run("ALTER TABLE sales_orders ADD COLUMN IF NOT EXISTS updated_at timestamptz");
       await pg.run("ALTER TABLE sales_customers ADD COLUMN IF NOT EXISTS status text not null default 'activo'");
       await pg.run("ALTER TABLE sales_customers ADD COLUMN IF NOT EXISTS credit_limit numeric not null default 0");
       await pg.run("ALTER TABLE cash_sessions ADD COLUMN IF NOT EXISTS register_number integer not null default 1");
@@ -2565,6 +2683,17 @@ async function buildNextPurchaseCode(companyId, date = new Date().toISOString(),
   const year = new Date(date).getFullYear();
   const prefix = `P-${year}`;
   const rows = await client.all("SELECT code FROM purchase_orders WHERE company_id = ? AND code LIKE ?", [companyId, `${prefix}-%`]);
+  const next = rows.reduce((max, row) => {
+    const match = String(row.code || "").match(/(\d+)$/);
+    return match ? Math.max(max, Number(match[1])) : max;
+  }, 0) + 1;
+  return `${prefix}-${String(next).padStart(5, "0")}`;
+}
+
+async function buildNextSalesReturnCode(companyId, client = pg) {
+  const now = new Date();
+  const prefix = `DEV-${String(now.getMonth() + 1).padStart(2, "0")}${now.getFullYear()}`;
+  const rows = await client.all("SELECT code FROM sales_returns WHERE company_id = ? AND code LIKE ?", [companyId, `${prefix}-%`]);
   const next = rows.reduce((max, row) => {
     const match = String(row.code || "").match(/(\d+)$/);
     return match ? Math.max(max, Number(match[1])) : max;
