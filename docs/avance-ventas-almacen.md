@@ -4,7 +4,7 @@ Este documento sirve para medir cuanto falta para considerar el sistema listo pa
 
 ## Estado general
 
-Avance estimado actual: 76%
+Avance estimado actual: 79%
 
 ## Completado
 
@@ -25,21 +25,22 @@ Avance estimado actual: 76%
 - Alertas de stock minimo, compra sugerida y exportacion de reposicion.
 - Lotes y vencimientos: alerta, bloqueo de venta vencida y aviso de productos por vencer.
 - Devoluciones de clientes: parcial/total, reposicion de stock y egreso de caja.
+- Permisos finos por rol para acciones sensibles de caja, stock, compras, usuarios y configuracion.
 - Reportes CSV: ventas, inventario, clientes y respaldo operativo JSON.
 - Despliegue en Vercel y backend PostgreSQL/Supabase.
 
 ## Faltante prioritario
 
-1. Permisos finos por rol: definir acciones exactas por pantalla y bloquear botones no autorizados.
-2. Importacion masiva de productos desde CSV/Excel.
-3. Busqueda por codigo de barras real con foco automatico para lector USB.
-4. Auditoria visible: quien cambio precio, stock, usuario, caja o configuracion.
-5. Reporte de utilidad por producto y por periodo con costo historico.
-6. Dashboard de ventas del dia para encargado.
-7. Respaldo/restauracion guiada por empresa.
-8. Pruebas funcionales documentadas con casos reales.
-9. Ajustes finales de experiencia movil y manuales cortos por rol.
-10. Preparacion comercial: demos, datos de prueba por rubro y checklist de instalacion.
+1. Importacion masiva de productos desde CSV/Excel.
+2. Busqueda por codigo de barras real con foco automatico para lector USB.
+3. Auditoria visible: quien cambio precio, stock, usuario, caja o configuracion.
+4. Reporte de utilidad por producto y por periodo con costo historico.
+5. Dashboard de ventas del dia para encargado.
+6. Respaldo/restauracion guiada por empresa.
+7. Pruebas funcionales documentadas con casos reales.
+8. Ajustes finales de experiencia movil y manuales cortos por rol.
+9. Preparacion comercial: demos, datos de prueba por rubro y checklist de instalacion.
+10. Revision final de seguridad y politicas de datos por empresa.
 
 ## Despues
 

@@ -1619,7 +1619,7 @@ app.get("/api/ventas/sales/:id", requireAuth, requireSystemAccess("ventas_almace
   res.json({ sale, items });
 });
 
-app.post("/api/ventas/sales/:id/void", requireAuth, requireSystemAccess("ventas_almacen"), requireVentasRole("admin", "ventas_admin", "supervisor", "cajero", "vendedor"), (req, res) => {
+app.post("/api/ventas/sales/:id/void", requireAuth, requireSystemAccess("ventas_almacen"), requireVentasRole("admin", "ventas_admin", "supervisor", "cajero"), (req, res) => {
   const sale = db.prepare("SELECT * FROM sales_orders WHERE id = ? AND company_id = ?").get(req.params.id, req.user.company_id);
   if (!sale) return res.status(404).json({ error: "Venta no encontrada" });
   if (ventasOwnOnly(req.user.role) && sale.created_by !== req.user.id) {
@@ -1688,7 +1688,7 @@ app.post("/api/ventas/sales/:id/pay", requireAuth, requireSystemAccess("ventas_a
   res.json({ sale: db.prepare("SELECT * FROM sales_orders WHERE id = ? AND company_id = ?").get(sale.id, req.user.company_id) });
 });
 
-app.post("/api/ventas/sales/:id/returns", requireAuth, requireSystemAccess("ventas_almacen"), requireVentasRole("admin", "ventas_admin", "supervisor", "cajero", "vendedor"), (req, res) => {
+app.post("/api/ventas/sales/:id/returns", requireAuth, requireSystemAccess("ventas_almacen"), requireVentasRole("admin", "ventas_admin", "supervisor", "cajero"), (req, res) => {
   const sale = db.prepare("SELECT * FROM sales_orders WHERE id = ? AND company_id = ?").get(req.params.id, req.user.company_id);
   if (!sale) return res.status(404).json({ error: "Venta no encontrada" });
   if (ventasOwnOnly(req.user.role) && sale.created_by !== req.user.id) return res.status(403).json({ error: "Permiso insuficiente" });

@@ -372,14 +372,14 @@ function renderWorkflow() {
     summary: [`<strong>Resumen operativo</strong><span>Consulta ventas, ingresos, productos y alertas de stock.</span>`, ""],
     alerts: [`<strong>Alertas de stock</strong><span>Repone productos agotados o por debajo del minimo.</span>`, ""],
     sell: [`<strong>Nueva venta</strong><span>Productos, cliente, descuento y cobro en un solo flujo.</span>`, ""],
-    finance: [`<strong>Caja</strong><span>Controla ventas pendientes de cierre y procesa cortes.</span>`, `<button class="primary-button" type="button" id="closeCashBtn">Procesar caja</button>`],
+    finance: [`<strong>Caja</strong><span>Controla ventas pendientes de cierre y procesa cortes.</span>`, can("closeCash") ? `<button class="primary-button" type="button" id="closeCashBtn">Procesar caja</button>` : ""],
     history: [`<strong>Historial del turno</strong><span>Consulta, reimprime o marca operaciones anuladas.</span>`, ""],
     routes: [`<strong>Operacion en ruta</strong><span>Organiza clientes, entrega, despacho y seguimiento de vendedores.</span>`, ""],
     promotions: [`<strong>Politica comercial</strong><span>Prepara listas de precios, paquetes y promociones por temporada.</span>`, ""],
     reports: [`<strong>Auditoria comercial</strong><span>Revisa ventas, caja, inventario critico y valor de almacen.</span>`, ""],
-    catalog: [`<strong>Catalogos</strong><span>Administra articulos y categorias.</span>`, `<button class="ghost-button" type="button" id="newCategoryBtn">Nueva categoria</button><button class="primary-button" type="button" id="newProductBtn">Nuevo producto</button>`],
+    catalog: [`<strong>Catalogos</strong><span>Administra articulos y categorias.</span>`, can("manageCatalog") ? `<button class="ghost-button" type="button" id="newCategoryBtn">Nueva categoria</button><button class="primary-button" type="button" id="newProductBtn">Nuevo producto</button>` : ""],
     customers: [`<strong>Clientes</strong><span>Registra compradores frecuentes para ventas y tienda virtual.</span>`, `<button class="primary-button" type="button" id="newCustomerBtn">Nuevo cliente</button>`],
-    inventory: [`<strong>Inventario</strong><span>Controla stock actual y regulariza entradas o salidas.</span>`, `<button class="primary-button" type="button" id="newProductInventoryBtn">Nuevo producto</button>`],
+    inventory: [`<strong>Inventario</strong><span>Controla stock actual y regulariza entradas o salidas.</span>`, can("manageInventory") ? `<button class="primary-button" type="button" id="newProductInventoryBtn">Nuevo producto</button>` : ""],
     purchases: [`<strong>Compras</strong><span>Registra proveedores y entradas de mercaderia con Kardex automatico.</span>`, ""],
     users: [`<strong>Usuarios operativos</strong><span>Crea cajeros, vendedores, almacen y operador integral para la empresa.</span>`, ""],
     settings: [`<strong>Configuracion comercial</strong><span>Define datos de tienda, moneda y textos del comprobante.</span>`, ""]
@@ -1084,9 +1084,9 @@ function renderPurchases() {
             <label class="span-2">Nota<input id="purchaseNote" type="text" placeholder="Compra, reposicion, factura, etc." /></label>
           </div>
           <div class="modal-actions">
-            <button class="ghost-button" type="button" id="addPurchaseLine" ${activeProducts.length ? "" : "disabled"}>Agregar linea</button>
-            <button class="ghost-button" type="button" id="savePendingPurchase" ${activeProducts.length ? "" : "disabled"}>Guardar orden pendiente</button>
-            <button class="primary-button" type="submit" ${activeProducts.length ? "" : "disabled"}>Registrar compra y sumar stock</button>
+            <button class="ghost-button" type="button" id="addPurchaseLine" ${activeProducts.length && can("managePurchases") ? "" : "disabled"}>Agregar linea</button>
+            <button class="ghost-button" type="button" id="savePendingPurchase" ${activeProducts.length && can("managePurchases") ? "" : "disabled"}>Guardar orden pendiente</button>
+            <button class="primary-button" type="submit" ${activeProducts.length && can("managePurchases") ? "" : "disabled"}>Registrar compra y sumar stock</button>
           </div>
         </form>
       </section>
@@ -1097,7 +1097,7 @@ function renderPurchases() {
         <div class="admin-head-actions">
           <span>${money(purchaseTotal)}</span>
           <button class="ghost-button" type="button" id="printPurchaseOrder" ${purchaseCart.length ? "" : "disabled"}>Imprimir orden</button>
-          <button class="ghost-button danger-action" type="button" id="clearPurchaseCart" ${purchaseCart.length ? "" : "disabled"}>Limpiar</button>
+          <button class="ghost-button danger-action" type="button" id="clearPurchaseCart" ${purchaseCart.length && can("managePurchases") ? "" : "disabled"}>Limpiar</button>
         </div>
       </div>
       <div class="admin-list">${purchaseCart.map(renderPurchaseCartRow).join("") || empty("Agrega productos a la compra")}</div>
@@ -1193,7 +1193,7 @@ function renderPurchaseCartRow(item) {
 function renderPurchaseRow(purchase) {
   const status = purchase.status || "confirmada";
   const statusClass = status === "pendiente" ? "warn-text" : status === "cancelada" ? "danger-text" : "ok-text";
-  return `<article class="admin-row"><div><strong>${escapeHtml(purchase.code)}</strong><span>${escapeHtml(purchase.supplier_name || "Proveedor sin registrar")} / ${escapeHtml(purchase.invoice_number || "Sin factura")}</span><span>${formatDateTime(purchase.created_at)} / ${escapeHtml(purchase.created_by_name || "Usuario")}</span></div><div class="admin-row-meta"><span>Total ${money(purchase.total)}</span><span class="${statusClass}">${escapeHtml(purchaseStatusLabel(status))}</span>${status === "pendiente" ? `<button class="primary-button" type="button" data-receive-purchase="${purchase.id}">Recibir</button><button class="ghost-button danger-action" type="button" data-cancel-purchase="${purchase.id}">Cancelar</button>` : ""}</div></article>`;
+  return `<article class="admin-row"><div><strong>${escapeHtml(purchase.code)}</strong><span>${escapeHtml(purchase.supplier_name || "Proveedor sin registrar")} / ${escapeHtml(purchase.invoice_number || "Sin factura")}</span><span>${formatDateTime(purchase.created_at)} / ${escapeHtml(purchase.created_by_name || "Usuario")}</span></div><div class="admin-row-meta"><span>Total ${money(purchase.total)}</span><span class="${statusClass}">${escapeHtml(purchaseStatusLabel(status))}</span>${status === "pendiente" && can("managePurchases") ? `<button class="primary-button" type="button" data-receive-purchase="${purchase.id}">Recibir</button><button class="ghost-button danger-action" type="button" data-cancel-purchase="${purchase.id}">Cancelar</button>` : ""}</div></article>`;
 }
 
 function renderSupplierRow(supplier) {
@@ -1326,7 +1326,8 @@ function renderReorderRow(product) {
 }
 
 function renderInventoryProductRow(product) {
-  const canMoveStock = ["admin", "ventas_admin", "almacen"].includes(currentUser?.role);
+  const canMoveStock = can("adjustStock");
+  const canManageProducts = can("manageInventory");
   const active = isProductActive(product);
   const insight = productInventoryInsight(product);
   const expiry = expiryStatus(product);
@@ -1346,7 +1347,10 @@ function renderInventoryProductRow(product) {
       <span class="${Number(product.stock || 0) <= Number(product.min_stock || 0) ? "danger-text" : "ok-text"}">${Number(product.stock || 0) <= Number(product.min_stock || 0) ? "Bajo minimo" : "Stock OK"}</span>
       <div class="mini-action-row">
         <button class="ghost-button" type="button" data-stock-history="${product.id}">Kardex</button>
-        ${canMoveStock ? `<button class="ghost-button" type="button" data-edit-product="${product.id}">Editar</button><button class="ghost-button" type="button" data-stock-move="${product.id}" data-type="entrada">Entrada</button><button class="ghost-button" type="button" data-stock-move="${product.id}" data-type="salida">Salida</button><button class="ghost-button" type="button" data-stock-move="${product.id}" data-type="ajuste">Ajuste</button><button class="ghost-button" type="button" data-toggle-favorite="${product.id}">${favoriteProducts.includes(product.id) ? "Quitar favorito" : "Favorito POS"}</button><button class="ghost-button ${active ? "danger-action" : ""}" type="button" data-product-status="${product.id}">${active ? "Desactivar" : "Reactivar"}</button>` : ""}
+        ${canManageProducts ? `<button class="ghost-button" type="button" data-edit-product="${product.id}">Editar</button>` : ""}
+        ${canMoveStock ? `<button class="ghost-button" type="button" data-stock-move="${product.id}" data-type="entrada">Entrada</button><button class="ghost-button" type="button" data-stock-move="${product.id}" data-type="salida">Salida</button><button class="ghost-button" type="button" data-stock-move="${product.id}" data-type="ajuste">Ajuste</button>` : ""}
+        ${can("manageFavorites") ? `<button class="ghost-button" type="button" data-toggle-favorite="${product.id}">${favoriteProducts.includes(product.id) ? "Quitar favorito" : "Favorito POS"}</button>` : ""}
+        ${canManageProducts ? `<button class="ghost-button ${active ? "danger-action" : ""}" type="button" data-product-status="${product.id}">${active ? "Desactivar" : "Reactivar"}</button>` : ""}
       </div>
     </div>
   </article>`;
@@ -1477,7 +1481,7 @@ function renderSaleRow(sale) {
 function renderHistorySaleRow(sale) {
   const meta = localSaleMeta[sale.id] || {};
   const status = saleStatus(sale);
-  const canVoid = status !== "anulada" && !sale.cash_closed;
+  const canVoid = status !== "anulada" && !sale.cash_closed && can("voidSales");
   return `<article class="admin-row">
     <div><strong>${escapeHtml(sale.code)}</strong><span>${escapeHtml(sale.customer_name || "Cliente sin registrar")} / ${formatDateTime(sale.created_at)}</span><span>Metodo: ${escapeHtml(paymentLabel(sale.payment_method || meta.method || "efectivo"))} / Pagado ${money(sale.amount_paid || sale.cash_received || 0)}</span></div>
     <div class="admin-row-meta"><span>Total ${money(sale.total)}</span>${Number(sale.balance_due || 0) > 0 ? `<span class="warn-text">Debe ${money(sale.balance_due)}</span>` : ""}<span class="${status === "anulada" ? "danger-text" : status === "pagada" ? "ok-text" : "warn-text"}">${status}</span><button class="ghost-button" type="button" data-detail-sale="${sale.id}">Ver detalle</button><button class="ghost-button" type="button" data-reprint-sale="${sale.id}">Reimprimir</button>${canVoid ? `<button class="ghost-button danger-action" type="button" data-void-sale="${sale.id}">Anular</button>` : `<span class="muted-text">${status === "anulada" ? "Stock devuelto" : "Caja cerrada"}</span>`}</div>
@@ -2236,7 +2240,7 @@ async function showSaleDetail(saleId) {
 
 function renderSaleDetail(sale, items) {
   const status = saleStatus(sale);
-  const canReturn = !["anulada", "devuelta"].includes(status) && ["admin", "ventas_admin", "supervisor", "cajero", "vendedor"].includes(currentUser?.role);
+  const canReturn = !["anulada", "devuelta"].includes(status) && can("returnSales");
   saleDetailTitle.textContent = sale.code || "Comprobante";
   saleDetailContent.innerHTML = `
     <section class="sale-detail-summary">
@@ -3125,6 +3129,25 @@ function normalizeCashClosure(closure) {
 function canAccessView(view) { return accessibleViewsForRole(currentUser?.role).includes(view); }
 function defaultViewForRole() { return accessibleViewsForRole(currentUser?.role)[0] || "summary"; }
 function canSeeProfit() { return ["admin", "ventas_admin", "supervisor"].includes(currentUser?.role); }
+function can(permission) {
+  const role = currentUser?.role || "";
+  const permissions = {
+    manageSettings: ["admin", "ventas_admin"],
+    manageUsers: ["admin"],
+    manageCatalog: ["admin", "ventas_admin", "almacen"],
+    manageInventory: ["admin", "ventas_admin", "almacen"],
+    adjustStock: ["admin", "ventas_admin", "almacen"],
+    manageFavorites: ["admin", "ventas_admin", "almacen"],
+    managePurchases: ["admin", "ventas_admin", "almacen"],
+    closeCash: ["admin", "ventas_admin", "cajero"],
+    cashMovements: ["admin", "ventas_admin", "cajero"],
+    voidSales: ["admin", "ventas_admin", "supervisor", "cajero"],
+    returnSales: ["admin", "ventas_admin", "supervisor", "cajero"],
+    manageCustomers: ["admin", "ventas_admin", "cajero", "vendedor"],
+    seeProfit: ["admin", "ventas_admin", "supervisor"]
+  };
+  return (permissions[permission] || []).includes(role);
+}
 function accessibleViewsForRole(role) {
   const views = {
     admin: ["sell", "summary", "alerts", "finance", "history", "routes", "promotions", "reports", "catalog", "customers", "inventory", "purchases", "users", "settings"],
