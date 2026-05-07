@@ -4,7 +4,7 @@ Este documento sirve para medir cuanto falta para considerar el sistema listo pa
 
 ## Estado general
 
-Avance estimado actual: 82%
+Avance estimado actual: 84%
 
 ## Completado
 
@@ -27,21 +27,22 @@ Avance estimado actual: 82%
 - Devoluciones de clientes: parcial/total, reposicion de stock y egreso de caja.
 - Permisos finos por rol para acciones sensibles de caja, stock, compras, usuarios y configuracion.
 - Importacion masiva de productos por plantilla CSV con actualizacion por codigo.
+- Busqueda y escaneo por codigo de barras: foco POS, Enter automatico, cantidades rapidas y campo barcode por producto.
 - Reportes CSV: ventas, inventario, clientes y respaldo operativo JSON.
 - Despliegue en Vercel y backend PostgreSQL/Supabase.
 
 ## Faltante prioritario
 
-1. Busqueda por codigo de barras real con foco automatico para lector USB.
-2. Auditoria visible: quien cambio precio, stock, usuario, caja o configuracion.
-3. Reporte de utilidad por producto y por periodo con costo historico.
-4. Dashboard de ventas del dia para encargado.
-5. Respaldo/restauracion guiada por empresa.
-6. Pruebas funcionales documentadas con casos reales.
-7. Ajustes finales de experiencia movil y manuales cortos por rol.
-8. Preparacion comercial: demos, datos de prueba por rubro y checklist de instalacion.
-9. Revision final de seguridad y politicas de datos por empresa.
-10. Importacion Excel directa con libreria dedicada, si el cliente no quiere convertir a CSV.
+1. Auditoria visible: quien cambio precio, stock, usuario, caja o configuracion.
+2. Reporte de utilidad por producto y por periodo con costo historico.
+3. Dashboard de ventas del dia para encargado.
+4. Respaldo/restauracion guiada por empresa.
+5. Pruebas funcionales documentadas con casos reales.
+6. Ajustes finales de experiencia movil y manuales cortos por rol.
+7. Preparacion comercial: demos, datos de prueba por rubro y checklist de instalacion.
+8. Revision final de seguridad y politicas de datos por empresa.
+9. Importacion Excel directa con libreria dedicada, si el cliente no quiere convertir a CSV.
+10. Mejoras de rendimiento con medicion en celular y pantalla tactil.
 
 ## Despues
 

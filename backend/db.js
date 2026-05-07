@@ -235,6 +235,7 @@ function initDb() {
       id TEXT PRIMARY KEY,
       company_id TEXT NOT NULL,
       code TEXT NOT NULL,
+      barcode TEXT NOT NULL DEFAULT '',
       name TEXT NOT NULL,
       category TEXT NOT NULL DEFAULT '',
       unit TEXT NOT NULL DEFAULT 'Unidad',
@@ -500,6 +501,7 @@ function migrateSchema() {
   ensureColumn("users", "cash_register_number", "INTEGER NOT NULL DEFAULT 0");
   ensureColumn("inventory_products", "batch_number", "TEXT NOT NULL DEFAULT ''");
   ensureColumn("inventory_products", "expires_at", "TEXT NOT NULL DEFAULT ''");
+  ensureColumn("inventory_products", "barcode", "TEXT NOT NULL DEFAULT ''");
   ensureColumn("purchase_orders", "received_at", "TEXT NOT NULL DEFAULT ''");
   ensureColumn("purchase_orders", "cancelled_at", "TEXT NOT NULL DEFAULT ''");
   ensureColumn("documents", "applicant_name", "TEXT NOT NULL DEFAULT ''");

@@ -8,7 +8,7 @@ const LOCAL_SALE_META_KEY = "zowVentasAlmacen.saleMeta";
 const FAVORITE_PRODUCTS_KEY = "zowVentasAlmacen.favoriteProducts";
 
 /**
- * @typedef {{ id:string, code:string, name:string, category:string, stock:number, sale_price:number, cost_price:number }} Product
+ * @typedef {{ id:string, code:string, barcode?:string, name:string, category:string, stock:number, sale_price:number, cost_price:number }} Product
  * @typedef {{ productId:string, name:string, quantity:number, salePrice:number, discount:number }} CartItem
  * @typedef {{ id:string, openedAt:string, openedBy:string, openingAmount:number, status:"abierta"|"cerrada" }} CashSession
  * @typedef {{ id:string, type:"ingreso"|"egreso", amount:number, reason:string, createdAt:string, user:string }} CashMovement
@@ -35,6 +35,7 @@ let editingUserId = "";
 let editingProductId = "";
 let editingCustomerId = "";
 let productSearch = "";
+let productSearchTimer = 0;
 let ventasMessage = "";
 let paymentDraft = { method: "efectivo", received: 0, split: { efectivo: 0, tarjeta: 0, transferencia: 0, qr: 0 } };
 let saleCustomerId = "";
@@ -203,6 +204,7 @@ productForm.addEventListener("submit", async (event) => {
   event.preventDefault();
   const productPayload = {
     code: value("#productCode"),
+    barcode: value("#productBarcode"),
     name: value("#productName"),
     category: value("#productCategory"),
     unit: value("#productUnit"),
@@ -508,7 +510,8 @@ function renderSell() {
           <button class="primary-button touch-action" type="button" id="scanAddBtn">Agregar</button>
           ${productSearch ? `<button class="ghost-button touch-action" type="button" id="clearSearchBtn">Limpiar</button>` : ""}
         </div>
-        <div class="pos-input-hint">Acepta cantidad rapida: <strong>3x codigo</strong>, <strong>codigo*3</strong> o lector de barras.</div>
+        <div class="scanner-status"><strong>Lector listo</strong><span>F2 enfoca / escanea y Enter agrega</span></div>
+        <div class="pos-input-hint">Acepta cantidad rapida: <strong>3x codigo</strong>, <strong>codigo*3</strong> o lector de barras USB.</div>
         <div class="pos-section-block">
           <div class="pos-section-title"><strong>Categorias</strong><span>Filtra rapido por familia</span></div>
           <div class="pos-category-rail">
@@ -1437,8 +1440,9 @@ function renderSellProduct(product) {
   const stock = Number(product.stock || 0);
   const expiry = expiryStatus(product);
   const blocked = stock <= 0 || expiry.level === "danger";
+  const productCode = product.barcode ? `${product.code} / ${product.barcode}` : product.code;
   return `<button class="pos-product-card touch-product-card" type="button" data-add-product="${product.id}" ${blocked ? "disabled" : ""}>
-    <span class="product-code">${escapeHtml(product.code)}</span>
+    <span class="product-code">${escapeHtml(productCode)}</span>
     <strong>${escapeHtml(product.name)}</strong>
     <span class="product-meta"><span>${escapeHtml(product.category || "Sin categoria")}</span><small class="${stock <= Number(product.min_stock || 0) || expiry.level === "warning" ? "warn-text" : ""}">Stock ${num(stock)}${expiry.level !== "none" ? ` / ${escapeHtml(expiry.label)}` : ""}</small></span>
     <b>${money(product.sale_price)}</b>
@@ -1572,7 +1576,7 @@ function filteredProducts(options = {}) {
   const term = String(options.term ?? productSearch).trim().toLowerCase();
   const source = options.includeInactive ? products : products.filter(isProductActive);
   if (!term) return source;
-  return source.filter((product) => [product.code, product.name, product.category]
+  return source.filter((product) => [product.code, product.barcode, product.name, product.category]
     .some((value) => String(value || "").toLowerCase().includes(term)));
 }
 
@@ -1585,18 +1589,24 @@ function bindProductSearch() {
   if (!input) return;
   input.addEventListener("input", () => {
     productSearch = input.value;
-    renderMain();
+    clearTimeout(productSearchTimer);
+    productSearchTimer = window.setTimeout(() => renderMain(), 120);
   });
   input.addEventListener("keydown", (event) => {
     if (event.key === "Enter") {
       event.preventDefault();
+      clearTimeout(productSearchTimer);
       scanAddProduct();
     }
     if (event.key === "Escape") {
+      clearTimeout(productSearchTimer);
       productSearch = "";
       renderMain();
     }
   });
+  if (activeView === "sell" && !isMobilePos()) {
+    window.requestAnimationFrame(() => input.focus({ preventScroll: true }));
+  }
 }
 
 function renderVentasUsersPanel() {
@@ -1772,10 +1782,10 @@ function isMobilePos() {
 function scanAddProduct() {
   const parsed = parseProductSearch(productSearch);
   const term = parsed.term.toLowerCase();
-  const product = products.find((item) => [item.code, item.name].some((value) => String(value || "").toLowerCase() === term)) || filteredProducts({ term: parsed.term })[0];
+  const product = products.find((item) => [item.code, item.barcode, item.name].some((value) => String(value || "").toLowerCase() === term)) || filteredProducts({ term: parsed.term })[0];
   if (product) addToCart(product.id, parsed.quantity);
   else {
-    ventasMessage = "No encontre un producto con ese codigo o nombre.";
+    ventasMessage = "No encontre un producto con ese codigo, barras o nombre.";
     renderMain();
   }
 }
@@ -2136,6 +2146,7 @@ function openProductModal(productId = "") {
   document.querySelector("#productUnit").value = product?.unit || "Unidad";
   if (product) {
     document.querySelector("#productCode").value = product.code || "";
+    document.querySelector("#productBarcode").value = product.barcode || "";
     document.querySelector("#productName").value = product.name || "";
     document.querySelector("#productCategory").value = product.category || "";
     document.querySelector("#productCost").value = Number(product.cost_price || 0);
@@ -2836,6 +2847,7 @@ async function loadStarterProducts() {
 function downloadProductImportTemplate() {
   downloadCsv(`plantilla-productos-zow-${csvDateStamp()}.csv`, [{
     codigo: "SKU-001",
+    codigo_barras: "7791234567890",
     nombre: "Producto ejemplo",
     categoria: "Abarrotes",
     unidad: "Unidad",
@@ -2884,6 +2896,7 @@ function normalizeProductImportRow(row) {
   if (!code || !name) return null;
   return {
     code,
+    barcode: String(row.codigo_barras || row.barcode || row.barras || "").trim(),
     name,
     category: String(row.categoria || row.category || "").trim(),
     unit: String(row.unidad || row.unit || "Unidad").trim() || "Unidad",
@@ -3070,6 +3083,7 @@ function exportInventoryCsv() {
     const priority = reorderPriority(product);
     return {
       codigo: product.code,
+      codigo_barras: product.barcode || "",
       producto: product.name,
       categoria: product.category || "",
       unidad: product.unit || "",

@@ -3716,6 +3716,32 @@ body.app-correspondencia .metrics article:hover {
   color: var(--accent-dark);
 }
 
+.scanner-status {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin: -2px 0 10px;
+  border: 1px solid rgb(15 159 110 / 18%);
+  border-radius: 8px;
+  padding: 9px 11px;
+  background:
+    linear-gradient(135deg, rgb(255 255 255 / 92%), rgb(236 253 245 / 82%)),
+    radial-gradient(circle at 8% 50%, rgb(15 159 110 / 16%), transparent 28%);
+  color: var(--accent-dark);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 70%);
+}
+
+.scanner-status strong {
+  font-size: 0.82rem;
+}
+
+.scanner-status span {
+  color: #55706b;
+  font-size: 0.76rem;
+  font-weight: 850;
+}
+
 .pos-quick-status,
 .inventory-health-grid,
 .owner-dashboard-grid {
