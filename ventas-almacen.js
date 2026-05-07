@@ -27,6 +27,7 @@ let suppliers = [];
 let purchases = [];
 let receivables = [];
 let auditEvents = [];
+let profitReport = { rows: [], totals: {} };
 let cash = { pendingSales: [], total: 0 };
 let summary = {};
 let saleCart = [];
@@ -275,7 +276,7 @@ async function render() {
   try {
     await assertVentasAccess();
     const canReadPurchases = canAccessView("purchases");
-    const [settingsResponse, summaryResponse, productsResponse, customersResponse, categoriesResponse, salesResponse, cashResponse, cashHistoryResponse, suppliersResponse, purchasesResponse, receivablesResponse, auditResponse, usersResponse, unitsResponse] = await Promise.all([
+    const [settingsResponse, summaryResponse, productsResponse, customersResponse, categoriesResponse, salesResponse, cashResponse, cashHistoryResponse, suppliersResponse, purchasesResponse, receivablesResponse, auditResponse, profitResponse, usersResponse, unitsResponse] = await Promise.all([
       apiRequest("/ventas/settings"),
       apiRequest("/ventas/summary"),
       apiRequest("/ventas/products"),
@@ -288,6 +289,7 @@ async function render() {
       canReadPurchases ? apiRequest("/ventas/purchases") : Promise.resolve({ purchases: [] }),
       canAccessView("customers") ? apiRequest("/ventas/receivables") : Promise.resolve({ receivables: [] }),
       canAccessView("reports") ? apiRequest("/ventas/audit") : Promise.resolve({ events: [] }),
+      canAccessView("reports") ? apiRequest(`/ventas/reports/profit${profitReportQuery()}`) : Promise.resolve({ rows: [], totals: {} }),
       currentUser?.role === "admin" ? apiRequest("/users") : Promise.resolve({ users: [] }),
       currentUser?.role === "admin" ? apiRequest("/units") : Promise.resolve({ units: [] })
     ]);
@@ -301,6 +303,7 @@ async function render() {
     purchases = purchasesResponse.purchases || [];
     receivables = receivablesResponse.receivables || [];
     auditEvents = auditResponse.events || [];
+    profitReport = { rows: profitResponse.rows || [], totals: profitResponse.totals || {} };
     users = (usersResponse.users || []).map(normalizeUser);
     units = (unitsResponse.units || []).map(normalizeUnit);
     cash = cashResponse || { pendingSales: [], total: 0 };
@@ -898,6 +901,9 @@ function renderReports() {
   const averageSale = confirmedSales.length ? totalSold / confirmedSales.length : 0;
   const voidedSales = filteredSales.filter((sale) => sale.status === "anulada").length;
   const paymentBreakdown = buildSalesPaymentBreakdown(confirmedSales);
+  const profitRows = profitReport.rows || [];
+  const profitTotals = profitReport.totals || {};
+  const marginPercent = Number(profitTotals.netSales || 0) ? (Number(profitTotals.profit || 0) / Number(profitTotals.netSales || 0)) * 100 : 0;
   setCount("Auditoria");
   mainList().innerHTML = `
     <section class="admin-panel report-filter-panel">
@@ -920,6 +926,15 @@ function renderReports() {
       <div class="admin-panel-head"><div><p class="eyebrow">Cobros</p><h3>Ventas por metodo de pago</h3></div></div>
       <div class="payment-breakdown-grid">${paymentBreakdown.map((item) => `<article><span>${escapeHtml(item.label)}</span><strong>${money(item.total)}</strong><small>${num(item.count)} venta${item.count === 1 ? "" : "s"}</small></article>`).join("")}</div>
     </section>
+    <section class="admin-panel">
+      <div class="admin-panel-head"><div><p class="eyebrow">Utilidad real</p><h3>Ganancia por producto</h3></div><span>Margen ${marginPercent.toFixed(1)}%</span></div>
+      <div class="report-grid compact-report-grid">
+        <article><span>Venta neta</span><strong>${money(profitTotals.netSales || 0)}</strong><small>Despues de descuentos</small></article>
+        <article><span>Costo historico</span><strong>${money(profitTotals.costTotal || 0)}</strong><small>Costo al vender</small></article>
+        <article><span>Utilidad</span><strong>${money(profitTotals.profit || 0)}</strong><small>${num(profitTotals.quantity || 0)} unidades vendidas</small></article>
+      </div>
+      <div class="admin-list">${profitRows.slice(0, 12).map(renderProfitProductRow).join("") || empty("Sin ventas confirmadas en este periodo")}</div>
+    </section>
     <section class="report-actions" aria-label="Exportaciones">
       <article class="report-export-card">
         <div><strong>Ventas del periodo</strong><span>Descarga operaciones con cliente, metodo de pago, estado y saldos para auditoria.</span></div>
@@ -932,6 +947,10 @@ function renderReports() {
       <article class="report-export-card">
         <div><strong>Clientes y saldos</strong><span>Exporta clientes, cuentas por cobrar y saldos pendientes para seguimiento comercial.</span></div>
         <button class="ghost-button" type="button" id="exportCustomersCsv">Exportar clientes CSV</button>
+      </article>
+      <article class="report-export-card">
+        <div><strong>Utilidad por producto</strong><span>Descarga ventas netas, costo historico, utilidad y margen por articulo.</span></div>
+        <button class="ghost-button" type="button" id="exportProfitCsv">Exportar utilidad CSV</button>
       </article>
       <article class="report-export-card">
         <div><strong>Respaldo operativo</strong><span>Descarga un archivo JSON con ventas, productos, clientes, compras y configuracion visible.</span></div>
@@ -956,13 +975,26 @@ function renderReports() {
       <div class="admin-list compact-audit-list">${auditEvents.slice(0, 20).map(renderAuditEventRow).join("") || empty("Aun no hay eventos comerciales auditados")}</div>
     </section>
   `;
-  document.querySelector("#reportDateFrom")?.addEventListener("change", (event) => { reportFilter.from = event.target.value; renderMain(); });
-  document.querySelector("#reportDateTo")?.addEventListener("change", (event) => { reportFilter.to = event.target.value; renderMain(); });
-  document.querySelector("#clearReportFilter")?.addEventListener("click", () => { reportFilter = { from: "", to: "" }; renderMain(); });
+  document.querySelector("#reportDateFrom")?.addEventListener("change", async (event) => { reportFilter.from = event.target.value; await render(); });
+  document.querySelector("#reportDateTo")?.addEventListener("change", async (event) => { reportFilter.to = event.target.value; await render(); });
+  document.querySelector("#clearReportFilter")?.addEventListener("click", async () => { reportFilter = { from: "", to: "" }; await render(); });
   document.querySelector("#exportSalesCsv")?.addEventListener("click", exportSalesCsv);
   document.querySelector("#exportInventoryCsv")?.addEventListener("click", exportInventoryCsv);
   document.querySelector("#exportCustomersCsv")?.addEventListener("click", exportCustomersCsv);
+  document.querySelector("#exportProfitCsv")?.addEventListener("click", exportProfitCsv);
   document.querySelector("#exportBackupJson")?.addEventListener("click", exportBackupJson);
+}
+
+function renderProfitProductRow(row) {
+  const margin = Number(row.netSales || 0) ? (Number(row.profit || 0) / Number(row.netSales || 0)) * 100 : 0;
+  return `<article class="admin-row">
+    <div>
+      <strong>${escapeHtml(row.productName || "Producto")}</strong>
+      <span>${num(row.quantity)} unidad${Number(row.quantity || 0) === 1 ? "" : "es"} / Venta neta ${money(row.netSales)}</span>
+      <span>Costo ${money(row.costTotal)} / Descuento ${money(row.discounts)}</span>
+    </div>
+    <div class="admin-row-meta"><span class="${Number(row.profit || 0) >= 0 ? "ok-text" : "danger-text"}">Utilidad ${money(row.profit)}</span><span>Margen ${margin.toFixed(1)}%</span></div>
+  </article>`;
 }
 
 function renderAuditEventRow(event) {
@@ -3066,6 +3098,31 @@ function exportCustomersCsv() {
     });
   });
   downloadCsv(`clientes-${csvDateStamp()}.csv`, rows);
+}
+
+function exportProfitCsv() {
+  const rows = (profitReport.rows || []).map((row) => {
+    const margin = Number(row.netSales || 0) ? (Number(row.profit || 0) / Number(row.netSales || 0)) * 100 : 0;
+    return {
+      producto: row.productName || "",
+      cantidad: Number(row.quantity || 0).toFixed(2),
+      venta_bruta: Number(row.grossSales || 0).toFixed(2),
+      descuentos: Number(row.discounts || 0).toFixed(2),
+      venta_neta: Number(row.netSales || 0).toFixed(2),
+      costo_historico: Number(row.costTotal || 0).toFixed(2),
+      utilidad: Number(row.profit || 0).toFixed(2),
+      margen_porcentaje: margin.toFixed(2)
+    };
+  });
+  downloadCsv(`utilidad-productos-${csvDateStamp()}.csv`, rows);
+}
+
+function profitReportQuery() {
+  const params = new URLSearchParams();
+  if (reportFilter.from) params.set("from", reportFilter.from);
+  if (reportFilter.to) params.set("to", reportFilter.to);
+  const query = params.toString();
+  return query ? `?${query}` : "";
 }
 
 function exportReorderCsv() {

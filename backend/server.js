@@ -1260,6 +1260,65 @@ app.get("/api/ventas/audit", requireAuth, requireSystemAccess("ventas_almacen"),
   res.json({ events });
 });
 
+app.get("/api/ventas/reports/profit", requireAuth, requireSystemAccess("ventas_almacen"), requireVentasRole("admin", "ventas_admin", "supervisor"), (req, res) => {
+  const ownOnly = ventasOwnOnly(req.user.role);
+  const params = [req.user.company_id];
+  const filters = ["sales_orders.company_id = ?", "sales_orders.status = 'confirmada'"];
+  const from = String(req.query.from || "").trim().slice(0, 10);
+  const to = String(req.query.to || "").trim().slice(0, 10);
+  if (from) {
+    params.push(from);
+    filters.push("substr(sales_orders.created_at, 1, 10) >= ?");
+  }
+  if (to) {
+    params.push(to);
+    filters.push("substr(sales_orders.created_at, 1, 10) <= ?");
+  }
+  if (ownOnly) {
+    params.push(req.user.id);
+    filters.push("sales_orders.created_by = ?");
+  }
+  const rows = db
+    .prepare(
+      `SELECT sales_order_items.product_id,
+              sales_order_items.product_name,
+              COALESCE(SUM(sales_order_items.quantity), 0) AS quantity,
+              COALESCE(SUM(CASE WHEN sales_order_items.subtotal = 0 THEN sales_order_items.quantity * sales_order_items.unit_price ELSE sales_order_items.subtotal END), 0) AS gross_sales,
+              COALESCE(SUM(sales_order_items.discount), 0) AS discounts,
+              COALESCE(SUM(sales_order_items.total), 0) AS net_sales,
+              COALESCE(SUM(sales_order_items.quantity * sales_order_items.cost_price_at_sale), 0) AS cost_total,
+              COALESCE(SUM(sales_order_items.total - (sales_order_items.quantity * sales_order_items.cost_price_at_sale)), 0) AS profit
+       FROM sales_order_items
+       JOIN sales_orders ON sales_orders.id = sales_order_items.sale_id AND sales_orders.company_id = sales_order_items.company_id
+       WHERE ${filters.join(" AND ")}
+       GROUP BY sales_order_items.product_id, sales_order_items.product_name
+       ORDER BY profit DESC, net_sales DESC
+       LIMIT 120`
+    )
+    .all(...params);
+  const totals = rows.reduce((sum, row) => ({
+    quantity: sum.quantity + Number(row.quantity || 0),
+    grossSales: sum.grossSales + Number(row.gross_sales || 0),
+    discounts: sum.discounts + Number(row.discounts || 0),
+    netSales: sum.netSales + Number(row.net_sales || 0),
+    costTotal: sum.costTotal + Number(row.cost_total || 0),
+    profit: sum.profit + Number(row.profit || 0)
+  }), { quantity: 0, grossSales: 0, discounts: 0, netSales: 0, costTotal: 0, profit: 0 });
+  res.json({
+    rows: rows.map((row) => ({
+      productId: row.product_id,
+      productName: row.product_name,
+      quantity: Number(row.quantity || 0),
+      grossSales: Number(row.gross_sales || 0),
+      discounts: Number(row.discounts || 0),
+      netSales: Number(row.net_sales || 0),
+      costTotal: Number(row.cost_total || 0),
+      profit: Number(row.profit || 0)
+    })),
+    totals
+  });
+});
+
 app.patch("/api/ventas/settings", requireAuth, requireSystemAccess("ventas_almacen"), requireVentasRole("admin", "ventas_admin"), (req, res) => {
   const current = mapSettings(loadSettings(req.user.company_id));
   const settings = {

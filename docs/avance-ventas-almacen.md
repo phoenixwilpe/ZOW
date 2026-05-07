@@ -4,7 +4,7 @@ Este documento sirve para medir cuanto falta para considerar el sistema listo pa
 
 ## Estado general
 
-Avance estimado actual: 88%
+Avance estimado actual: 90%
 
 ## Completado
 
@@ -31,21 +31,22 @@ Avance estimado actual: 88%
 - Caja amarrada a sesion real: cada venta queda ligada a la caja abierta y el cierre solo toma ventas de esa sesion.
 - Venta con datos historicos por item: descuento, subtotal y costo al momento de vender para utilidad real.
 - Auditoria comercial visible: ventas, anulaciones, devoluciones, cobros, caja y stock quedan consultables en reportes.
+- Reporte de utilidad por producto y periodo usando costo historico, venta neta, descuento y margen.
 - Reportes CSV: ventas, inventario, clientes y respaldo operativo JSON.
 - Despliegue en Vercel y backend PostgreSQL/Supabase.
 
 ## Faltante prioritario
 
-1. Reporte de utilidad por producto y por periodo usando costo historico de venta.
-2. Suspender/recuperar ventas en base de datos, no solo en el navegador.
-3. Favoritos POS configurables por empresa o por caja.
-4. Promociones reales: vigencia, combos, descuento por cantidad y precio especial.
-5. Cierre de caja con desglose imprimible por metodo de pago, devoluciones y creditos cobrados.
-6. Pruebas funcionales documentadas con casos reales.
-7. Ajustes finales de experiencia movil y manuales cortos por rol.
-8. Preparacion comercial: demos, datos de prueba por rubro y checklist de instalacion.
-9. Revision final de seguridad y politicas de datos por empresa.
-10. Importacion Excel directa con libreria dedicada, si el cliente no quiere convertir a CSV.
+1. Suspender/recuperar ventas en base de datos, no solo en el navegador.
+2. Favoritos POS configurables por empresa o por caja.
+3. Promociones reales: vigencia, combos, descuento por cantidad y precio especial.
+4. Cierre de caja con desglose imprimible por metodo de pago, devoluciones y creditos cobrados.
+5. Pruebas funcionales documentadas con casos reales.
+6. Ajustes finales de experiencia movil y manuales cortos por rol.
+7. Preparacion comercial: demos, datos de prueba por rubro y checklist de instalacion.
+8. Revision final de seguridad y politicas de datos por empresa.
+9. Importacion Excel directa con libreria dedicada, si el cliente no quiere convertir a CSV.
+10. Modo instalable PWA para caja tactil.
 
 ## Despues
 

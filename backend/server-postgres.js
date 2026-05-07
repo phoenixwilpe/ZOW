@@ -1082,6 +1082,67 @@ app.get("/api/ventas/audit", requireAuth, async (req, res) => {
   res.json({ events });
 });
 
+app.get("/api/ventas/reports/profit", requireAuth, async (req, res) => {
+  if (!(await requireSystemAccess("ventas_almacen", req, res))) return;
+  if (!requireVentasRole(req, res, "admin", "ventas_admin", "supervisor")) return;
+  await ensureVentasSchema();
+  const ownOnly = ventasOwnOnly(req.user.role);
+  const params = [req.user.company_id];
+  const filters = ["sales_orders.company_id = ?", "sales_orders.status = 'confirmada'"];
+  const from = normalizeDateInput(req.query.from);
+  const to = normalizeDateInput(req.query.to);
+  if (from) {
+    params.push(from);
+    filters.push("sales_orders.created_at::date >= ?::date");
+  }
+  if (to) {
+    params.push(to);
+    filters.push("sales_orders.created_at::date <= ?::date");
+  }
+  if (ownOnly) {
+    params.push(req.user.id);
+    filters.push("sales_orders.created_by = ?");
+  }
+  const rows = await pg.all(
+    `SELECT sales_order_items.product_id,
+            sales_order_items.product_name,
+            COALESCE(SUM(sales_order_items.quantity), 0) AS quantity,
+            COALESCE(SUM(COALESCE(NULLIF(sales_order_items.subtotal, 0), sales_order_items.quantity * sales_order_items.unit_price)), 0) AS gross_sales,
+            COALESCE(SUM(sales_order_items.discount), 0) AS discounts,
+            COALESCE(SUM(sales_order_items.total), 0) AS net_sales,
+            COALESCE(SUM(sales_order_items.quantity * sales_order_items.cost_price_at_sale), 0) AS cost_total,
+            COALESCE(SUM(sales_order_items.total - (sales_order_items.quantity * sales_order_items.cost_price_at_sale)), 0) AS profit
+     FROM sales_order_items
+     JOIN sales_orders ON sales_orders.id = sales_order_items.sale_id AND sales_orders.company_id = sales_order_items.company_id
+     WHERE ${filters.join(" AND ")}
+     GROUP BY sales_order_items.product_id, sales_order_items.product_name
+     ORDER BY profit DESC, net_sales DESC
+     LIMIT 120`,
+    params
+  );
+  const totals = rows.reduce((sum, row) => ({
+    quantity: sum.quantity + Number(row.quantity || 0),
+    grossSales: sum.grossSales + Number(row.gross_sales || 0),
+    discounts: sum.discounts + Number(row.discounts || 0),
+    netSales: sum.netSales + Number(row.net_sales || 0),
+    costTotal: sum.costTotal + Number(row.cost_total || 0),
+    profit: sum.profit + Number(row.profit || 0)
+  }), { quantity: 0, grossSales: 0, discounts: 0, netSales: 0, costTotal: 0, profit: 0 });
+  res.json({
+    rows: rows.map((row) => ({
+      productId: row.product_id,
+      productName: row.product_name,
+      quantity: Number(row.quantity || 0),
+      grossSales: Number(row.gross_sales || 0),
+      discounts: Number(row.discounts || 0),
+      netSales: Number(row.net_sales || 0),
+      costTotal: Number(row.cost_total || 0),
+      profit: Number(row.profit || 0)
+    })),
+    totals
+  });
+});
+
 app.get("/api/ventas/settings", requireAuth, async (req, res) => {
   if (!(await requireSystemAccess("ventas_almacen", req, res))) return;
   res.json({ settings: await mapSettings(await loadSettings(req.user.company_id)) });
