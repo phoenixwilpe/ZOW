@@ -396,6 +396,25 @@ function initDb() {
       FOREIGN KEY (created_by) REFERENCES users(id)
     );
 
+    CREATE TABLE IF NOT EXISTS sales_promotions (
+      id TEXT PRIMARY KEY,
+      company_id TEXT NOT NULL,
+      name TEXT NOT NULL,
+      product_id TEXT NOT NULL,
+      type TEXT NOT NULL DEFAULT 'percent',
+      value REAL NOT NULL DEFAULT 0,
+      min_quantity REAL NOT NULL DEFAULT 1,
+      starts_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      ends_at TEXT NOT NULL DEFAULT '',
+      is_active INTEGER NOT NULL DEFAULT 1,
+      created_by TEXT NOT NULL,
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TEXT NOT NULL DEFAULT '',
+      FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE,
+      FOREIGN KEY (product_id) REFERENCES inventory_products(id) ON DELETE CASCADE,
+      FOREIGN KEY (created_by) REFERENCES users(id)
+    );
+
     CREATE TABLE IF NOT EXISTS sales_returns (
       id TEXT PRIMARY KEY,
       company_id TEXT NOT NULL,
@@ -585,6 +604,7 @@ function migrateSchema() {
   db.prepare("CREATE INDEX IF NOT EXISTS idx_purchase_orders_company ON purchase_orders(company_id, created_at)").run();
   db.prepare("CREATE INDEX IF NOT EXISTS idx_suspended_sales_company ON suspended_sales(company_id, status, created_at)").run();
   db.prepare("CREATE INDEX IF NOT EXISTS idx_pos_favorites_company ON pos_favorite_products(company_id, sort_order, created_at)").run();
+  db.prepare("CREATE INDEX IF NOT EXISTS idx_sales_promotions_company ON sales_promotions(company_id, is_active, starts_at, ends_at)").run();
   migrateTenantTables();
   db.prepare("UPDATE units SET company_id = COALESCE(NULLIF(company_id, ''), 'company-default')").run();
   db.prepare("UPDATE users SET company_id = COALESCE(NULLIF(company_id, ''), 'company-default')").run();

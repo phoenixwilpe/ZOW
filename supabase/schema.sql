@@ -384,6 +384,22 @@ create table if not exists pos_favorite_products (
   unique (company_id, product_id)
 );
 
+create table if not exists sales_promotions (
+  id text primary key,
+  company_id text not null references companies(id) on delete cascade,
+  name text not null,
+  product_id text not null references inventory_products(id) on delete cascade,
+  type text not null default 'percent',
+  value numeric not null default 0,
+  min_quantity numeric not null default 1,
+  starts_at date not null default current_date,
+  ends_at date,
+  is_active boolean not null default true,
+  created_by text not null references users(id),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz
+);
+
 create index if not exists idx_users_company on users(company_id);
 create index if not exists idx_units_company on units(company_id);
 create index if not exists idx_documents_company on documents(company_id);
@@ -403,6 +419,7 @@ create index if not exists idx_cash_sessions_company on cash_sessions(company_id
 create index if not exists idx_cash_movements_session on cash_movements(session_id, created_at);
 create index if not exists idx_inventory_movements_product on inventory_movements(product_id, created_at desc);
 create index if not exists idx_pos_favorites_company on pos_favorite_products(company_id, sort_order, created_at);
+create index if not exists idx_sales_promotions_company on sales_promotions(company_id, is_active, starts_at, ends_at);
 
 alter table companies enable row level security;
 alter table units enable row level security;
@@ -424,6 +441,7 @@ alter table cash_sessions enable row level security;
 alter table cash_movements enable row level security;
 alter table inventory_movements enable row level security;
 alter table pos_favorite_products enable row level security;
+alter table sales_promotions enable row level security;
 
 -- El backend de Vercel usara SUPABASE_SERVICE_ROLE_KEY, por eso RLS no bloquea al servidor.
 -- Cuando pasemos auth directa de Supabase al frontend, agregaremos politicas por JWT/company_id.

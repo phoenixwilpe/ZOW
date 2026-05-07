@@ -26,6 +26,7 @@ let units = [];
 let suppliers = [];
 let purchases = [];
 let receivables = [];
+let promotions = [];
 let auditEvents = [];
 let profitReport = { rows: [], totals: {} };
 let cash = { pendingSales: [], total: 0 };
@@ -276,7 +277,7 @@ async function render() {
   try {
     await assertVentasAccess();
     const canReadPurchases = canAccessView("purchases");
-    const [settingsResponse, summaryResponse, productsResponse, customersResponse, categoriesResponse, salesResponse, cashResponse, cashHistoryResponse, suppliersResponse, purchasesResponse, receivablesResponse, auditResponse, profitResponse, suspendedResponse, favoritesResponse, usersResponse, unitsResponse] = await Promise.all([
+    const [settingsResponse, summaryResponse, productsResponse, customersResponse, categoriesResponse, salesResponse, cashResponse, cashHistoryResponse, suppliersResponse, purchasesResponse, receivablesResponse, promotionsResponse, auditResponse, profitResponse, suspendedResponse, favoritesResponse, usersResponse, unitsResponse] = await Promise.all([
       apiRequest("/ventas/settings"),
       apiRequest("/ventas/summary"),
       apiRequest("/ventas/products"),
@@ -288,6 +289,7 @@ async function render() {
       canReadPurchases ? apiRequest("/ventas/suppliers") : Promise.resolve({ suppliers: [] }),
       canReadPurchases ? apiRequest("/ventas/purchases") : Promise.resolve({ purchases: [] }),
       canAccessView("customers") ? apiRequest("/ventas/receivables") : Promise.resolve({ receivables: [] }),
+      canAccessView("promotions") || canAccessView("sell") ? apiRequest("/ventas/promotions") : Promise.resolve({ promotions: [] }),
       canAccessView("reports") ? apiRequest("/ventas/audit") : Promise.resolve({ events: [] }),
       canAccessView("reports") ? apiRequest(`/ventas/reports/profit${profitReportQuery()}`) : Promise.resolve({ rows: [], totals: {} }),
       apiRequest("/ventas/suspended-sales").catch(() => ({ sales: suspendedSales })),
@@ -304,6 +306,7 @@ async function render() {
     suppliers = suppliersResponse.suppliers || [];
     purchases = purchasesResponse.purchases || [];
     receivables = receivablesResponse.receivables || [];
+    promotions = (promotionsResponse.promotions || []).map(normalizePromotion);
     auditEvents = auditResponse.events || [];
     profitReport = { rows: profitResponse.rows || [], totals: profitResponse.totals || {} };
     const localSuspended = loadJson(SUSPENDED_SALES_KEY, []).map((sale) => normalizeSuspendedSale({ ...sale, localOnly: true }));
@@ -879,20 +882,46 @@ function renderRoutes() {
 }
 
 function renderPromotions() {
-  const featured = products.slice().sort((a, b) => Number(b.stock || 0) - Number(a.stock || 0)).slice(0, 6);
+  const activePromotions = promotions.filter(isPromotionActiveNow);
   const critical = products.filter((product) => Number(product.stock || 0) <= Number(product.min_stock || 0)).slice(0, 4);
-  setCount(`${featured.length} articulo${featured.length === 1 ? "" : "s"}`);
+  setCount(`${activePromotions.length} activa${activePromotions.length === 1 ? "" : "s"}`);
   mainList().innerHTML = `
     <section class="promotion-grid">
-      <article class="promotion-card is-green"><span>Lista base</span><strong>${products.length} productos activos</strong><p>Precios actuales listos para caja, vendedores y ruta.</p></article>
-      <article class="promotion-card is-amber"><span>Paquetes</span><strong>${featured.length} sugeridos</strong><p>Combina productos con mayor disponibilidad para impulsar salida.</p></article>
+      <article class="promotion-card is-green"><span>Promociones activas</span><strong>${activePromotions.length}</strong><p>Se aplican automaticamente en el POS al cumplir cantidad y fecha.</p></article>
+      <article class="promotion-card is-amber"><span>Reglas creadas</span><strong>${promotions.length}</strong><p>Descuento por porcentaje o monto fijo sobre productos elegidos.</p></article>
       <article class="promotion-card is-red"><span>Reposicion</span><strong>${critical.length} criticos</strong><p>Evita promocionar articulos por debajo del minimo.</p></article>
     </section>
+    ${can("managePromotions") ? `
+      <section class="admin-panel">
+        <div class="admin-panel-head"><div><p class="eyebrow">Nueva promocion</p><h3>Regla automatica para POS</h3></div></div>
+        <form class="admin-form promotion-rule-form" id="promotionForm">
+          <label>Nombre<input id="promotionName" type="text" required placeholder="Ej. Descuento refrescos fin de semana" /></label>
+          <label>Producto<select id="promotionProduct" required><option value="">Seleccionar producto</option>${products.filter(isProductActive).map((product) => `<option value="${product.id}">${escapeHtml(product.name)} / ${money(product.sale_price)}</option>`).join("")}</select></label>
+          <label>Tipo<select id="promotionType"><option value="percent">Porcentaje</option><option value="fixed">Monto fijo</option></select></label>
+          <label>Valor<input id="promotionValue" type="number" min="0.01" step="0.01" required /></label>
+          <label>Cantidad minima<input id="promotionMinQuantity" type="number" min="1" step="1" value="1" /></label>
+          <label>Desde<input id="promotionStartsAt" type="date" value="${todayDate()}" /></label>
+          <label>Hasta<input id="promotionEndsAt" type="date" /></label>
+          <button class="primary-button" type="submit">Crear promocion</button>
+        </form>
+      </section>
+    ` : ""}
     <section class="admin-panel">
-      <div class="admin-panel-head"><div><p class="eyebrow">Lista de precios</p><h3>Productos para venta</h3></div></div>
-      <div class="price-list">${featured.map(renderPriceRow).join("") || empty("Registra productos para crear listas de precios")}</div>
+      <div class="admin-panel-head"><div><p class="eyebrow">Promociones registradas</p><h3>Reglas comerciales</h3></div></div>
+      <div class="admin-list">${promotions.map(renderPromotionRow).join("") || empty("Crea tu primera promocion para aplicarla en caja")}</div>
+    </section>
+    <section class="admin-panel">
+      <div class="admin-panel-head"><div><p class="eyebrow">Lista base</p><h3>Productos para venta</h3></div></div>
+      <div class="price-list">${products.filter(isProductActive).slice(0, 8).map(renderPriceRow).join("") || empty("Registra productos para crear listas de precios")}</div>
     </section>
   `;
+  document.querySelector("#promotionForm")?.addEventListener("submit", savePromotion);
+  document.querySelectorAll("[data-toggle-promotion]").forEach((button) => {
+    button.addEventListener("click", () => togglePromotion(button.dataset.togglePromotion));
+  });
+  document.querySelectorAll("[data-delete-promotion]").forEach((button) => {
+    button.addEventListener("click", () => deletePromotion(button.dataset.deletePromotion));
+  });
 }
 
 function renderReports() {
@@ -1002,6 +1031,22 @@ function renderProfitProductRow(row) {
   </article>`;
 }
 
+function renderPromotionRow(promotion) {
+  const product = products.find((item) => item.id === promotion.productId);
+  const active = isPromotionActiveNow(promotion);
+  return `<article class="admin-row">
+    <div>
+      <strong>${escapeHtml(promotion.name)}</strong>
+      <span>${escapeHtml(product?.name || promotion.productName || "Producto")} / ${promotionLabel(promotion)}</span>
+      <span>Desde ${escapeHtml(promotion.startsAt || "hoy")} ${promotion.endsAt ? `/ Hasta ${escapeHtml(promotion.endsAt)}` : "/ Sin fecha final"}</span>
+    </div>
+    <div class="admin-row-meta">
+      <span class="${active ? "ok-text" : promotion.active ? "warn-text" : "danger-text"}">${active ? "Activa" : promotion.active ? "Programada/vencida" : "Inactiva"}</span>
+      ${can("managePromotions") ? `<button class="ghost-button" type="button" data-toggle-promotion="${promotion.id}">${promotion.active ? "Pausar" : "Activar"}</button><button class="ghost-button danger-action" type="button" data-delete-promotion="${promotion.id}">Eliminar</button>` : ""}
+    </div>
+  </article>`;
+}
+
 function renderAuditEventRow(event) {
   return `<article class="admin-row">
     <div>
@@ -1020,6 +1065,9 @@ function auditActionLabel(action) {
     sale_resume: "Venta recuperada",
     favorite_add: "Favorito POS agregado",
     favorite_remove: "Favorito POS quitado",
+    promotion_create: "Promocion creada",
+    promotion_status: "Estado de promocion",
+    promotion_delete: "Promocion eliminada",
     sale_void: "Venta anulada",
     sale_return: "Devolucion",
     credit_payment: "Cobro de credito",
@@ -1545,7 +1593,7 @@ function renderCartItem(item) {
   const minStock = Number(product?.min_stock || 0);
   const stockClass = stockAfterSale < 0 ? "danger-text" : stockAfterSale <= minStock ? "warn-text" : "ok-text";
   return `<article class="cart-line touch-cart-line">
-    <div class="cart-item-name"><strong>${escapeHtml(item.name)}</strong><span>${money(item.salePrice)} c/u</span><small class="${stockClass}">Stock despues: ${num(stockAfterSale)}</small></div>
+    <div class="cart-item-name"><strong>${escapeHtml(item.name)}</strong><span>${money(item.salePrice)} c/u</span><small class="${stockClass}">Stock despues: ${num(stockAfterSale)}</small>${item.promotionName ? `<small class="ok-text">${escapeHtml(item.promotionName)}</small>` : ""}</div>
     <div class="cart-qty touch-qty"><button class="ghost-button" type="button" data-cart-dec="${item.productId}">-</button><strong>${item.quantity}</strong><button class="ghost-button" type="button" data-cart-inc="${item.productId}">+</button></div>
     <label>Descuento<input type="number" min="0" step="0.01" value="${Number(lineDiscount || 0)}" data-cart-discount="${item.productId}" ${storeSettings.allowDiscounts ? "" : "disabled"} /></label>
     <strong>${money(Math.max(lineSubtotal - lineDiscount, 0))}</strong>
@@ -1794,6 +1842,7 @@ function addToCart(productId, quantity = 1) {
   ventasMessage = `${requestedQuantity} x ${product.name} agregado al carrito.${expiry.level === "warning" ? ` Atencion: ${expiry.label}.` : ""}`;
   if (existing) existing.quantity += requestedQuantity;
   else saleCart.push({ productId, name: product.name, quantity: requestedQuantity, salePrice: Number(product.sale_price || 0), discount: 0 });
+  applyPromotionsToCart();
   if (isMobilePos()) posMobilePanel = "cart";
   productSearch = "";
   renderMain();
@@ -1819,6 +1868,7 @@ function updateCartQuantity(productId, delta) {
       return { ...item, quantity: nextQuantity };
     })
     .filter((item) => item.quantity > 0);
+  applyPromotionsToCart();
   renderMain();
 }
 
@@ -1829,6 +1879,33 @@ function updateCartDiscount(productId, discount) {
   }
   saleCart = saleCart.map((item) => item.productId === productId ? { ...item, discount: Math.max(discount, 0) } : item);
   renderMain();
+}
+
+function applyPromotionsToCart() {
+  if (!storeSettings.allowDiscounts) return;
+  saleCart = saleCart.map((item) => {
+    const promotion = bestPromotionForCartItem(item);
+    if (!promotion) return { ...item, discount: Number(item.discount || 0), promotionId: "" };
+    const lineSubtotal = Number(item.quantity || 0) * Number(item.salePrice || 0);
+    const rawDiscount = promotion.type === "percent" ? lineSubtotal * Number(promotion.value || 0) / 100 : Number(promotion.value || 0) * Number(item.quantity || 0);
+    return {
+      ...item,
+      discount: Math.min(Math.max(rawDiscount, 0), lineSubtotal),
+      promotionId: promotion.id,
+      promotionName: promotion.name
+    };
+  });
+}
+
+function bestPromotionForCartItem(item) {
+  return promotions
+    .filter((promotion) => promotion.productId === item.productId && isPromotionActiveNow(promotion) && Number(item.quantity || 0) >= Number(promotion.minQuantity || 1))
+    .sort((a, b) => promotionDiscountAmount(b, item) - promotionDiscountAmount(a, item))[0];
+}
+
+function promotionDiscountAmount(promotion, item) {
+  const subtotal = Number(item.quantity || 0) * Number(item.salePrice || 0);
+  return promotion.type === "percent" ? subtotal * Number(promotion.value || 0) / 100 : Number(promotion.value || 0) * Number(item.quantity || 0);
 }
 
 function cartTotals() {
@@ -2875,6 +2952,54 @@ async function viewStockHistory(productId) {
   }
 }
 
+async function savePromotion(event) {
+  event.preventDefault();
+  try {
+    await apiRequest("/ventas/promotions", {
+      method: "POST",
+      body: {
+        name: value("#promotionName"),
+        productId: value("#promotionProduct"),
+        type: value("#promotionType"),
+        value: Number(value("#promotionValue")),
+        minQuantity: Number(value("#promotionMinQuantity") || 1),
+        startsAt: value("#promotionStartsAt"),
+        endsAt: value("#promotionEndsAt")
+      }
+    });
+    ventasMessage = "Promocion creada y lista para aplicarse en caja.";
+    await render();
+  } catch (error) {
+    ventasMessage = error.message || "No se pudo crear la promocion.";
+    renderMain();
+  }
+}
+
+async function togglePromotion(id) {
+  const promotion = promotions.find((item) => item.id === id);
+  if (!promotion) return;
+  try {
+    await apiRequest(`/ventas/promotions/${id}`, { method: "PATCH", body: { active: !promotion.active } });
+    ventasMessage = promotion.active ? "Promocion pausada." : "Promocion activada.";
+    await render();
+  } catch (error) {
+    ventasMessage = error.message || "No se pudo actualizar la promocion.";
+    renderMain();
+  }
+}
+
+async function deletePromotion(id) {
+  if (!confirm("Eliminar esta promocion?")) return;
+  try {
+    await apiRequest(`/ventas/promotions/${id}`, { method: "DELETE" });
+    ventasMessage = "Promocion eliminada.";
+    await render();
+  } catch (error) {
+    ventasMessage = error.message || "No se pudo eliminar la promocion.";
+    renderMain();
+  }
+}
+
 async function payReceivable(saleId) {
   const sale = receivables.find((item) => item.id === saleId);
   if (!sale) return;
@@ -3071,6 +3196,16 @@ function purchaseStatusLabel(status) {
 function cashRegisterOptions() {
   const count = Math.min(Math.max(Math.floor(Number(storeSettings.cashRegisterCount || 1)), 1), 20);
   return Array.from({ length: count }, (_, index) => index + 1);
+}
+function todayDate() { return new Date().toISOString().slice(0, 10); }
+function isPromotionActiveNow(promotion) {
+  if (!promotion.active) return false;
+  const today = todayDate();
+  return (!promotion.startsAt || promotion.startsAt <= today) && (!promotion.endsAt || promotion.endsAt >= today);
+}
+function promotionLabel(promotion) {
+  const value = promotion.type === "percent" ? `${Number(promotion.value || 0)}%` : money(promotion.value);
+  return `${value} desde ${num(promotion.minQuantity || 1)} unidad${Number(promotion.minQuantity || 1) === 1 ? "" : "es"}`;
 }
 function preferredCashRegisterNumber() {
   const preferred = Number(currentUser?.cashRegisterNumber || 0);
@@ -3404,6 +3539,20 @@ function normalizeSuspendedSale(sale) {
     createdAt: sale.createdAt || sale.created_at || ""
   };
 }
+function normalizePromotion(promotion) {
+  return {
+    id: promotion.id,
+    name: promotion.name || "Promocion",
+    productId: promotion.productId || promotion.product_id || "",
+    productName: promotion.productName || promotion.product_name || "",
+    type: promotion.type || "percent",
+    value: Number(promotion.value || 0),
+    minQuantity: Number(promotion.minQuantity || promotion.min_quantity || 1),
+    startsAt: String(promotion.startsAt || promotion.starts_at || "").slice(0, 10),
+    endsAt: String(promotion.endsAt || promotion.ends_at || "").slice(0, 10),
+    active: promotion.active !== false && promotion.is_active !== false && promotion.is_active !== 0
+  };
+}
 function canAccessView(view) { return accessibleViewsForRole(currentUser?.role).includes(view); }
 function defaultViewForRole() { return accessibleViewsForRole(currentUser?.role)[0] || "summary"; }
 function canSeeProfit() { return ["admin", "ventas_admin", "supervisor"].includes(currentUser?.role); }
@@ -3416,6 +3565,7 @@ function can(permission) {
     manageInventory: ["admin", "ventas_admin", "almacen"],
     adjustStock: ["admin", "ventas_admin", "almacen"],
     manageFavorites: ["admin", "ventas_admin", "almacen"],
+    managePromotions: ["admin", "ventas_admin", "supervisor"],
     managePurchases: ["admin", "ventas_admin", "almacen"],
     closeCash: ["admin", "ventas_admin", "cajero"],
     cashMovements: ["admin", "ventas_admin", "cajero"],

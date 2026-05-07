@@ -1240,6 +1240,9 @@ app.get("/api/ventas/audit", requireAuth, requireSystemAccess("ventas_almacen"),
     "sale_resume",
     "favorite_add",
     "favorite_remove",
+    "promotion_create",
+    "promotion_status",
+    "promotion_delete",
     "sale_void",
     "sale_return",
     "credit_payment",
@@ -1391,6 +1394,52 @@ app.post("/api/ventas/favorites/:productId", requireAuth, requireSystemAccess("v
     recordAuditEvent({ req, action: "favorite_add", entityType: "product", entityId: product.id, description: `Marco favorito POS: ${product.name}` });
   }
   res.json({ favorites: loadVentasFavorites(req.user.company_id) });
+});
+
+app.get("/api/ventas/promotions", requireAuth, requireSystemAccess("ventas_almacen"), (req, res) => {
+  const rows = db
+    .prepare(
+      `SELECT sales_promotions.*, inventory_products.name AS product_name
+       FROM sales_promotions
+       LEFT JOIN inventory_products ON inventory_products.id = sales_promotions.product_id AND inventory_products.company_id = sales_promotions.company_id
+       WHERE sales_promotions.company_id = ?
+       ORDER BY sales_promotions.is_active DESC, sales_promotions.created_at DESC
+       LIMIT 120`
+    )
+    .all(req.user.company_id);
+  res.json({ promotions: rows.map(mapSalesPromotion) });
+});
+
+app.post("/api/ventas/promotions", requireAuth, requireSystemAccess("ventas_almacen"), requireVentasRole("admin", "ventas_admin", "supervisor"), (req, res) => {
+  const promotion = readPromotionPayload(req.body, req.user.company_id);
+  if (!promotion.productId) return res.status(400).json({ error: "Selecciona un producto" });
+  if (!promotion.name) return res.status(400).json({ error: "Nombre de promocion obligatorio" });
+  if (promotion.value <= 0) return res.status(400).json({ error: "El valor de descuento debe ser mayor a cero" });
+  if (promotion.type === "percent" && promotion.value > 100) return res.status(400).json({ error: "El porcentaje no puede superar 100%" });
+  if (promotion.endsAt && promotion.endsAt < promotion.startsAt) return res.status(400).json({ error: "La fecha final no puede ser menor a la inicial" });
+  db.prepare(
+    `INSERT INTO sales_promotions (id, company_id, name, product_id, type, value, min_quantity, starts_at, ends_at, is_active, created_by, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?)`
+  ).run(promotion.id, req.user.company_id, promotion.name, promotion.productId, promotion.type, promotion.value, promotion.minQuantity, promotion.startsAt, promotion.endsAt, req.user.id, new Date().toISOString(), new Date().toISOString());
+  recordAuditEvent({ req, action: "promotion_create", entityType: "promotion", entityId: promotion.id, description: `Creo promocion: ${promotion.name}` });
+  res.status(201).json({ promotion: mapSalesPromotion(db.prepare("SELECT * FROM sales_promotions WHERE id = ?").get(promotion.id)) });
+});
+
+app.patch("/api/ventas/promotions/:id", requireAuth, requireSystemAccess("ventas_almacen"), requireVentasRole("admin", "ventas_admin", "supervisor"), (req, res) => {
+  const promotion = db.prepare("SELECT * FROM sales_promotions WHERE id = ? AND company_id = ?").get(req.params.id, req.user.company_id);
+  if (!promotion) return res.status(404).json({ error: "Promocion no encontrada" });
+  const active = req.body.active !== false ? 1 : 0;
+  db.prepare("UPDATE sales_promotions SET is_active = ?, updated_at = ? WHERE id = ? AND company_id = ?").run(active, new Date().toISOString(), promotion.id, req.user.company_id);
+  recordAuditEvent({ req, action: "promotion_status", entityType: "promotion", entityId: promotion.id, description: `${active ? "Activo" : "Pauso"} promocion: ${promotion.name}` });
+  res.json({ promotion: mapSalesPromotion(db.prepare("SELECT * FROM sales_promotions WHERE id = ?").get(promotion.id)) });
+});
+
+app.delete("/api/ventas/promotions/:id", requireAuth, requireSystemAccess("ventas_almacen"), requireVentasRole("admin", "ventas_admin", "supervisor"), (req, res) => {
+  const promotion = db.prepare("SELECT * FROM sales_promotions WHERE id = ? AND company_id = ?").get(req.params.id, req.user.company_id);
+  if (!promotion) return res.status(404).json({ error: "Promocion no encontrada" });
+  db.prepare("DELETE FROM sales_promotions WHERE id = ? AND company_id = ?").run(promotion.id, req.user.company_id);
+  recordAuditEvent({ req, action: "promotion_delete", entityType: "promotion", entityId: promotion.id, description: `Elimino promocion: ${promotion.name}` });
+  res.json({ ok: true });
 });
 
 app.patch("/api/ventas/settings", requireAuth, requireSystemAccess("ventas_almacen"), requireVentasRole("admin", "ventas_admin"), (req, res) => {
@@ -2505,6 +2554,36 @@ function loadVentasFavorites(companyId) {
     )
     .all(companyId)
     .map((row) => row.product_id);
+}
+
+function readPromotionPayload(body, companyId) {
+  const productId = String(body.productId || body.product_id || "").trim();
+  const product = productId ? db.prepare("SELECT id FROM inventory_products WHERE id = ? AND company_id = ? AND is_active = 1").get(productId, companyId) : null;
+  return {
+    id: randomUUID(),
+    name: String(body.name || "").trim().slice(0, 140),
+    productId: product?.id || "",
+    type: String(body.type || "percent") === "fixed" ? "fixed" : "percent",
+    value: clampDecimal(body.value, 0, 999999, 0),
+    minQuantity: clampNumber(body.minQuantity ?? body.min_quantity, 1, 9999, 1),
+    startsAt: String(body.startsAt || body.starts_at || new Date().toISOString().slice(0, 10)).trim().slice(0, 10),
+    endsAt: String(body.endsAt || body.ends_at || "").trim().slice(0, 10)
+  };
+}
+
+function mapSalesPromotion(row) {
+  return {
+    id: row.id,
+    name: row.name || "",
+    productId: row.product_id || "",
+    productName: row.product_name || "",
+    type: row.type || "percent",
+    value: Number(row.value || 0),
+    minQuantity: Number(row.min_quantity || 1),
+    startsAt: String(row.starts_at || "").slice(0, 10),
+    endsAt: String(row.ends_at || "").slice(0, 10),
+    active: row.is_active !== 0
+  };
 }
 
 function normalizePaymentDetail(input, total, paymentMethod) {
