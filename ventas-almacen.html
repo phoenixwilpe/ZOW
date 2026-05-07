@@ -3,7 +3,13 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#0f8a5f" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="ZOW Ventas" />
     <title>Zow Ventas-Almacen</title>
+    <link rel="manifest" href="ventas-pwa.webmanifest" />
+    <link rel="apple-touch-icon" href="assets/brand/zow-ventas-almacen-logo.png" />
     <link rel="stylesheet" href="styles.css" />
   </head>
   <body class="app-ventas">
@@ -71,6 +77,7 @@
             <input id="loginPassword" type="password" autocomplete="current-password" required placeholder="Contrasena" />
           </label>
           <button class="primary-button" type="submit">Ingresar</button>
+          <button class="ghost-button pwa-install-button hidden" type="button" id="installVentasApp">Instalar app de caja</button>
           <p id="loginError" class="form-error"></p>
           <p class="copyright-line">&copy; 2026 Wilmar Peinado B. Todos los derechos reservados.</p>
         </form>

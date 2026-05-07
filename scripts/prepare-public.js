@@ -14,7 +14,9 @@ const files = [
   "consulta.html",
   "consulta.js",
   "ventas-almacen.html",
-  "ventas-almacen.js"
+  "ventas-almacen.js",
+  "ventas-pwa.webmanifest",
+  "ventas-sw.js"
 ];
 
 const directories = ["assets"];

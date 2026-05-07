@@ -1,0 +1,40 @@
+{
+  "name": "Zow Ventas-Almacen",
+  "short_name": "ZOW Ventas",
+  "description": "Punto de venta, caja e inventario para empresas.",
+  "start_url": "/ventas-almacen.html",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#07110d",
+  "theme_color": "#0f8a5f",
+  "categories": ["business", "productivity", "shopping"],
+  "icons": [
+    {
+      "src": "/assets/brand/zow-ventas-almacen-logo-transparent.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/assets/brand/zow-ventas-almacen-logo.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Abrir caja",
+      "short_name": "Caja",
+      "url": "/ventas-almacen.html#finance",
+      "description": "Abrir o revisar caja"
+    },
+    {
+      "name": "Vender",
+      "short_name": "POS",
+      "url": "/ventas-almacen.html#sell",
+      "description": "Ir directo al punto de venta"
+    }
+  ]
+}

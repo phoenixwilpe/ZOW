@@ -39,6 +39,7 @@ Avance estimado actual: 99%
 - Manual rapido por rol para encargado, cajero, almacen, supervisor y vendedor.
 - Kit comercial con demos por rubro, checklist de instalacion, guion de presentacion y planes sugeridos.
 - Politicas de seguridad y datos SaaS documentadas, con no-cache aplicado a respuestas API sensibles.
+- Modo PWA instalable para caja tactil con manifest, service worker, icono y guia de instalacion.
 - Reportes CSV: ventas, inventario, clientes y respaldo operativo JSON.
 - Despliegue en Vercel y backend PostgreSQL/Supabase.
 
@@ -47,8 +48,7 @@ Avance estimado actual: 99%
 1. Combos comerciales avanzados: paquetes con varios productos y precio final fijo.
 2. Ajustes finales de experiencia movil.
 3. Importacion Excel directa con libreria dedicada, si el cliente no quiere convertir a CSV.
-4. Modo instalable PWA para caja tactil.
-5. Panel de promociones avanzado con duplicar, editar y reglas por categoria.
+4. Panel de promociones avanzado con duplicar, editar y reglas por categoria.
 
 ## Omitido por ahora
 
@@ -57,7 +57,7 @@ Avance estimado actual: 99%
 ## Despues
 
 - Facturacion o integracion fiscal si el cliente lo requiere.
-- App movil o modo PWA instalable.
+- App movil nativa, si el cliente necesita operacion fuera del navegador.
 - Sucursales y traspasos, cuando decidamos ampliar a mas de un punto.
 - Notificaciones por correo o WhatsApp, cuando se active esa etapa.
 - Modulo de compras avanzado con aprobaciones.

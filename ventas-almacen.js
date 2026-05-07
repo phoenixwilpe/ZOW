@@ -108,8 +108,10 @@ const saleDetailModal = document.querySelector("#saleDetailModal");
 const saleDetailTitle = document.querySelector("#saleDetailTitle");
 const saleDetailContent = document.querySelector("#saleDetailContent");
 const ventasMenuToggle = document.querySelector("#ventasMenuToggle");
+const installVentasAppButton = document.querySelector("#installVentasApp");
 const ventasLoginScene = document.querySelector(".advanced-sales-scene");
 let ventasLoginSceneFrame = 0;
+let ventasInstallPrompt = null;
 
 ventasLoginScene?.addEventListener("pointermove", (event) => {
   if (ventasLoginSceneFrame) return;
@@ -170,6 +172,31 @@ document.querySelectorAll("[data-view]").forEach((button) => {
 ventasMenuToggle?.addEventListener("click", () => {
   const isOpen = appShell.classList.toggle("ventas-menu-open");
   ventasMenuToggle.setAttribute("aria-expanded", String(isOpen));
+});
+
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("/ventas-sw.js").catch(() => {});
+  });
+}
+
+window.addEventListener("beforeinstallprompt", (event) => {
+  event.preventDefault();
+  ventasInstallPrompt = event;
+  installVentasAppButton?.classList.remove("hidden");
+});
+
+installVentasAppButton?.addEventListener("click", async () => {
+  if (!ventasInstallPrompt) return;
+  ventasInstallPrompt.prompt();
+  await ventasInstallPrompt.userChoice.catch(() => null);
+  ventasInstallPrompt = null;
+  installVentasAppButton.classList.add("hidden");
+});
+
+window.addEventListener("appinstalled", () => {
+  ventasInstallPrompt = null;
+  installVentasAppButton?.classList.add("hidden");
 });
 
 document.querySelector("#showProductForm").addEventListener("click", openProductModal);
