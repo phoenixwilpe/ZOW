@@ -374,6 +374,16 @@ create table if not exists inventory_movements (
   created_at timestamptz not null default now()
 );
 
+create table if not exists pos_favorite_products (
+  id text primary key,
+  company_id text not null references companies(id) on delete cascade,
+  product_id text not null references inventory_products(id) on delete cascade,
+  sort_order integer not null default 0,
+  created_by text not null references users(id),
+  created_at timestamptz not null default now(),
+  unique (company_id, product_id)
+);
+
 create index if not exists idx_users_company on users(company_id);
 create index if not exists idx_units_company on units(company_id);
 create index if not exists idx_documents_company on documents(company_id);
@@ -392,6 +402,7 @@ create index if not exists idx_sales_orders_company on sales_orders(company_id, 
 create index if not exists idx_cash_sessions_company on cash_sessions(company_id, status, opened_at);
 create index if not exists idx_cash_movements_session on cash_movements(session_id, created_at);
 create index if not exists idx_inventory_movements_product on inventory_movements(product_id, created_at desc);
+create index if not exists idx_pos_favorites_company on pos_favorite_products(company_id, sort_order, created_at);
 
 alter table companies enable row level security;
 alter table units enable row level security;
@@ -412,6 +423,7 @@ alter table cash_closures enable row level security;
 alter table cash_sessions enable row level security;
 alter table cash_movements enable row level security;
 alter table inventory_movements enable row level security;
+alter table pos_favorite_products enable row level security;
 
 -- El backend de Vercel usara SUPABASE_SERVICE_ROLE_KEY, por eso RLS no bloquea al servidor.
 -- Cuando pasemos auth directa de Supabase al frontend, agregaremos politicas por JWT/company_id.

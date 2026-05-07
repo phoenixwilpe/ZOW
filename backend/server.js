@@ -1238,6 +1238,8 @@ app.get("/api/ventas/audit", requireAuth, requireSystemAccess("ventas_almacen"),
     "sale_create",
     "sale_suspend",
     "sale_resume",
+    "favorite_add",
+    "favorite_remove",
     "sale_void",
     "sale_return",
     "credit_payment",
@@ -1363,6 +1365,32 @@ app.delete("/api/ventas/suspended-sales/:id", requireAuth, requireSystemAccess("
   db.prepare("UPDATE suspended_sales SET status = 'recuperada', updated_at = ? WHERE id = ? AND company_id = ?").run(new Date().toISOString(), sale.id, req.user.company_id);
   recordAuditEvent({ req, action: "sale_resume", entityType: "suspended_sale", entityId: sale.id, description: `Recupero venta suspendida ${sale.title}` });
   res.json({ ok: true });
+});
+
+app.get("/api/ventas/favorites", requireAuth, requireSystemAccess("ventas_almacen"), (req, res) => {
+  res.json({ favorites: loadVentasFavorites(req.user.company_id) });
+});
+
+app.post("/api/ventas/favorites/:productId", requireAuth, requireSystemAccess("ventas_almacen"), requireVentasRole("admin", "ventas_admin", "almacen"), (req, res) => {
+  const product = db
+    .prepare("SELECT id, name FROM inventory_products WHERE id = ? AND company_id = ? AND is_active = 1")
+    .get(req.params.productId, req.user.company_id);
+  if (!product) return res.status(404).json({ error: "Producto no encontrado o inactivo" });
+  const existing = db.prepare("SELECT id FROM pos_favorite_products WHERE company_id = ? AND product_id = ?").get(req.user.company_id, product.id);
+  if (existing) {
+    db.prepare("DELETE FROM pos_favorite_products WHERE id = ? AND company_id = ?").run(existing.id, req.user.company_id);
+    recordAuditEvent({ req, action: "favorite_remove", entityType: "product", entityId: product.id, description: `Quito favorito POS: ${product.name}` });
+  } else {
+    const count = db.prepare("SELECT COUNT(*) AS total FROM pos_favorite_products WHERE company_id = ?").get(req.user.company_id);
+    if (Number(count?.total || 0) >= 12) return res.status(400).json({ error: "Puedes fijar hasta 12 productos favoritos" });
+    const sort = db.prepare("SELECT COALESCE(MAX(sort_order), 0) + 1 AS next_order FROM pos_favorite_products WHERE company_id = ?").get(req.user.company_id);
+    db.prepare(
+      `INSERT INTO pos_favorite_products (id, company_id, product_id, sort_order, created_by, created_at)
+       VALUES (?, ?, ?, ?, ?, ?)`
+    ).run(randomUUID(), req.user.company_id, product.id, Number(sort?.next_order || 1), req.user.id, new Date().toISOString());
+    recordAuditEvent({ req, action: "favorite_add", entityType: "product", entityId: product.id, description: `Marco favorito POS: ${product.name}` });
+  }
+  res.json({ favorites: loadVentasFavorites(req.user.company_id) });
 });
 
 app.patch("/api/ventas/settings", requireAuth, requireSystemAccess("ventas_almacen"), requireVentasRole("admin", "ventas_admin"), (req, res) => {
@@ -2461,6 +2489,22 @@ function mapSuspendedSale(sale) {
     created_at: sale.created_at,
     updated_at: sale.updated_at
   };
+}
+
+function loadVentasFavorites(companyId) {
+  return db
+    .prepare(
+      `SELECT pos_favorite_products.product_id
+       FROM pos_favorite_products
+       JOIN inventory_products ON inventory_products.id = pos_favorite_products.product_id
+        AND inventory_products.company_id = pos_favorite_products.company_id
+        AND inventory_products.is_active = 1
+       WHERE pos_favorite_products.company_id = ?
+       ORDER BY pos_favorite_products.sort_order, pos_favorite_products.created_at
+       LIMIT 12`
+    )
+    .all(companyId)
+    .map((row) => row.product_id);
 }
 
 function normalizePaymentDetail(input, total, paymentMethod) {

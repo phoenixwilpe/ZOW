@@ -276,7 +276,7 @@ async function render() {
   try {
     await assertVentasAccess();
     const canReadPurchases = canAccessView("purchases");
-    const [settingsResponse, summaryResponse, productsResponse, customersResponse, categoriesResponse, salesResponse, cashResponse, cashHistoryResponse, suppliersResponse, purchasesResponse, receivablesResponse, auditResponse, profitResponse, suspendedResponse, usersResponse, unitsResponse] = await Promise.all([
+    const [settingsResponse, summaryResponse, productsResponse, customersResponse, categoriesResponse, salesResponse, cashResponse, cashHistoryResponse, suppliersResponse, purchasesResponse, receivablesResponse, auditResponse, profitResponse, suspendedResponse, favoritesResponse, usersResponse, unitsResponse] = await Promise.all([
       apiRequest("/ventas/settings"),
       apiRequest("/ventas/summary"),
       apiRequest("/ventas/products"),
@@ -291,6 +291,7 @@ async function render() {
       canAccessView("reports") ? apiRequest("/ventas/audit") : Promise.resolve({ events: [] }),
       canAccessView("reports") ? apiRequest(`/ventas/reports/profit${profitReportQuery()}`) : Promise.resolve({ rows: [], totals: {} }),
       apiRequest("/ventas/suspended-sales").catch(() => ({ sales: suspendedSales })),
+      apiRequest("/ventas/favorites").catch(() => ({ favorites: favoriteProducts })),
       currentUser?.role === "admin" ? apiRequest("/users") : Promise.resolve({ users: [] }),
       currentUser?.role === "admin" ? apiRequest("/units") : Promise.resolve({ units: [] })
     ]);
@@ -307,6 +308,7 @@ async function render() {
     profitReport = { rows: profitResponse.rows || [], totals: profitResponse.totals || {} };
     const localSuspended = loadJson(SUSPENDED_SALES_KEY, []).map((sale) => normalizeSuspendedSale({ ...sale, localOnly: true }));
     suspendedSales = [...(suspendedResponse.sales || []).map(normalizeSuspendedSale), ...localSuspended].slice(0, 30);
+    favoriteProducts = Array.isArray(favoritesResponse.favorites) ? favoritesResponse.favorites : favoriteProducts;
     users = (usersResponse.users || []).map(normalizeUser);
     units = (unitsResponse.units || []).map(normalizeUnit);
     cash = cashResponse || { pendingSales: [], total: 0 };
@@ -1016,6 +1018,8 @@ function auditActionLabel(action) {
     sale_create: "Venta registrada",
     sale_suspend: "Venta suspendida",
     sale_resume: "Venta recuperada",
+    favorite_add: "Favorito POS agregado",
+    favorite_remove: "Favorito POS quitado",
     sale_void: "Venta anulada",
     sale_return: "Devolucion",
     credit_payment: "Cobro de credito",
@@ -2845,13 +2849,19 @@ async function saveStockMovement(event) {
   }
 }
 
-function toggleFavoriteProduct(productId) {
-  favoriteProducts = favoriteProducts.includes(productId)
-    ? favoriteProducts.filter((id) => id !== productId)
-    : [productId, ...favoriteProducts].slice(0, 12);
-  persistJson(FAVORITE_PRODUCTS_KEY, favoriteProducts);
-  ventasMessage = favoriteProducts.includes(productId) ? "Producto marcado como favorito del POS." : "Producto quitado de favoritos.";
-  renderMain();
+async function toggleFavoriteProduct(productId) {
+  if (!can("manageFavorites")) return;
+  const wasFavorite = favoriteProducts.includes(productId);
+  try {
+    const response = await apiRequest(`/ventas/favorites/${productId}`, { method: "POST" });
+    favoriteProducts = Array.isArray(response.favorites) ? response.favorites : favoriteProducts;
+    persistJson(FAVORITE_PRODUCTS_KEY, []);
+    ventasMessage = wasFavorite ? "Producto quitado de favoritos del POS." : "Producto marcado como favorito del POS.";
+    renderMain();
+  } catch (error) {
+    ventasMessage = error.message || "No se pudo actualizar favoritos POS.";
+    renderMain();
+  }
 }
 
 async function viewStockHistory(productId) {

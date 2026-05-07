@@ -4,7 +4,7 @@ Este documento sirve para medir cuanto falta para considerar el sistema listo pa
 
 ## Estado general
 
-Avance estimado actual: 92%
+Avance estimado actual: 94%
 
 ## Completado
 
@@ -19,7 +19,7 @@ Avance estimado actual: 92%
 - Caja: apertura, cierre, conteo, movimientos manuales y comprobante de cierre.
 - Historial de ventas, anulacion con devolucion de stock y reimpresion.
 - Clientes, cuentas por cobrar y analisis de riesgo.
-- Inventario: productos, stock, costos, precios, favoritos POS, Kardex y movimientos.
+- Inventario: productos, stock, costos, precios, favoritos POS persistentes por empresa, Kardex y movimientos.
 - Compras: proveedores, entradas de mercaderia, orden imprimible y actualizacion de stock.
 - Ordenes de compra persistentes: pendiente, recibida y cancelada.
 - Alertas de stock minimo, compra sugerida y exportacion de reposicion.
@@ -33,21 +33,21 @@ Avance estimado actual: 92%
 - Auditoria comercial visible: ventas, anulaciones, devoluciones, cobros, caja y stock quedan consultables en reportes.
 - Reporte de utilidad por producto y periodo usando costo historico, venta neta, descuento y margen.
 - Ventas suspendidas en base de datos: se pueden recuperar desde otra sesion/equipo y quedan auditadas.
+- Favoritos POS en base de datos: se comparten entre cajas de la empresa, respetan limite operativo y quedan auditados.
 - Reportes CSV: ventas, inventario, clientes y respaldo operativo JSON.
 - Despliegue en Vercel y backend PostgreSQL/Supabase.
 
 ## Faltante prioritario
 
-1. Favoritos POS configurables por empresa o por caja.
-2. Promociones reales: vigencia, combos, descuento por cantidad y precio especial.
-3. Cierre de caja con desglose imprimible por metodo de pago, devoluciones y creditos cobrados.
-4. Pruebas funcionales documentadas con casos reales.
-5. Ajustes finales de experiencia movil y manuales cortos por rol.
-6. Preparacion comercial: demos, datos de prueba por rubro y checklist de instalacion.
-7. Revision final de seguridad y politicas de datos por empresa.
-8. Importacion Excel directa con libreria dedicada, si el cliente no quiere convertir a CSV.
-9. Modo instalable PWA para caja tactil.
-10. Panel de promociones y combos reales.
+1. Promociones reales: vigencia, combos, descuento por cantidad y precio especial.
+2. Cierre de caja con desglose imprimible por metodo de pago, devoluciones y creditos cobrados.
+3. Pruebas funcionales documentadas con casos reales.
+4. Ajustes finales de experiencia movil y manuales cortos por rol.
+5. Preparacion comercial: demos, datos de prueba por rubro y checklist de instalacion.
+6. Revision final de seguridad y politicas de datos por empresa.
+7. Importacion Excel directa con libreria dedicada, si el cliente no quiere convertir a CSV.
+8. Modo instalable PWA para caja tactil.
+9. Panel de promociones y combos reales.
 
 ## Despues
 

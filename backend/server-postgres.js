@@ -1062,6 +1062,8 @@ app.get("/api/ventas/audit", requireAuth, async (req, res) => {
     "sale_create",
     "sale_suspend",
     "sale_resume",
+    "favorite_add",
+    "favorite_remove",
     "sale_void",
     "sale_return",
     "credit_payment",
@@ -1193,6 +1195,39 @@ app.delete("/api/ventas/suspended-sales/:id", requireAuth, async (req, res) => {
   await pg.run("UPDATE suspended_sales SET status = 'recuperada', updated_at = now() WHERE id = ? AND company_id = ?", [sale.id, req.user.company_id]);
   await recordAuditEvent({ req, action: "sale_resume", entityType: "suspended_sale", entityId: sale.id, description: `Recupero venta suspendida ${sale.title}` });
   res.json({ ok: true });
+});
+
+app.get("/api/ventas/favorites", requireAuth, async (req, res) => {
+  if (!(await requireSystemAccess("ventas_almacen", req, res))) return;
+  await ensureVentasSchema();
+  res.json({ favorites: await loadVentasFavorites(req.user.company_id) });
+});
+
+app.post("/api/ventas/favorites/:productId", requireAuth, async (req, res) => {
+  if (!(await requireSystemAccess("ventas_almacen", req, res))) return;
+  if (!requireVentasRole(req, res, "admin", "ventas_admin", "almacen")) return;
+  await ensureVentasSchema();
+  const product = await pg.get(
+    "SELECT id, name FROM inventory_products WHERE id = ? AND company_id = ? AND is_active = true",
+    [req.params.productId, req.user.company_id]
+  );
+  if (!product) return res.status(404).json({ error: "Producto no encontrado o inactivo" });
+  const existing = await pg.get("SELECT id FROM pos_favorite_products WHERE company_id = ? AND product_id = ?", [req.user.company_id, product.id]);
+  if (existing) {
+    await pg.run("DELETE FROM pos_favorite_products WHERE id = ? AND company_id = ?", [existing.id, req.user.company_id]);
+    await recordAuditEvent({ req, action: "favorite_remove", entityType: "product", entityId: product.id, description: `Quito favorito POS: ${product.name}` });
+  } else {
+    const count = await pg.get("SELECT COUNT(*) AS total FROM pos_favorite_products WHERE company_id = ?", [req.user.company_id]);
+    if (Number(count?.total || 0) >= 12) return res.status(400).json({ error: "Puedes fijar hasta 12 productos favoritos" });
+    const sort = await pg.get("SELECT COALESCE(MAX(sort_order), 0) + 1 AS next_order FROM pos_favorite_products WHERE company_id = ?", [req.user.company_id]);
+    await pg.run(
+      `INSERT INTO pos_favorite_products (id, company_id, product_id, sort_order, created_by, created_at)
+       VALUES (?, ?, ?, ?, ?, now())`,
+      [randomUUID(), req.user.company_id, product.id, Number(sort?.next_order || 1), req.user.id]
+    );
+    await recordAuditEvent({ req, action: "favorite_add", entityType: "product", entityId: product.id, description: `Marco favorito POS: ${product.name}` });
+  }
+  res.json({ favorites: await loadVentasFavorites(req.user.company_id) });
 });
 
 app.get("/api/ventas/settings", requireAuth, async (req, res) => {
@@ -2604,6 +2639,21 @@ function mapSuspendedSale(sale) {
   };
 }
 
+async function loadVentasFavorites(companyId) {
+  const rows = await pg.all(
+    `SELECT pos_favorite_products.product_id
+     FROM pos_favorite_products
+     JOIN inventory_products ON inventory_products.id = pos_favorite_products.product_id
+      AND inventory_products.company_id = pos_favorite_products.company_id
+      AND inventory_products.is_active = true
+     WHERE pos_favorite_products.company_id = ?
+     ORDER BY pos_favorite_products.sort_order, pos_favorite_products.created_at
+     LIMIT 12`,
+    [companyId]
+  );
+  return rows.map((row) => row.product_id);
+}
+
 function normalizePaymentDetail(input, total, paymentMethod) {
   if (paymentMethod !== "mixto") return { detail: {}, serialized: "", totalPaid: Number(total || 0), cash: 0, nonCash: 0 };
   const raw = input && typeof input === "object" ? input : {};
@@ -2776,6 +2826,17 @@ async function ensureVentasSchema() {
         )
       `);
       await pg.run(`
+        CREATE TABLE IF NOT EXISTS pos_favorite_products (
+          id text primary key,
+          company_id text not null references companies(id) on delete cascade,
+          product_id text not null references inventory_products(id) on delete cascade,
+          sort_order integer not null default 0,
+          created_by text not null references users(id),
+          created_at timestamptz not null default now(),
+          unique (company_id, product_id)
+        )
+      `);
+      await pg.run(`
         CREATE TABLE IF NOT EXISTS sales_returns (
           id text primary key,
           company_id text not null references companies(id) on delete cascade,
@@ -2865,6 +2926,7 @@ async function ensureVentasSchema() {
       await pg.run("CREATE INDEX IF NOT EXISTS idx_purchase_suppliers_company ON purchase_suppliers(company_id, name)");
       await pg.run("CREATE INDEX IF NOT EXISTS idx_purchase_orders_company ON purchase_orders(company_id, created_at)");
       await pg.run("CREATE INDEX IF NOT EXISTS idx_suspended_sales_company ON suspended_sales(company_id, status, created_at)");
+      await pg.run("CREATE INDEX IF NOT EXISTS idx_pos_favorites_company ON pos_favorite_products(company_id, sort_order, created_at)");
       await pg.run("ALTER TABLE purchase_orders ADD COLUMN IF NOT EXISTS received_at timestamptz");
       await pg.run("ALTER TABLE purchase_orders ADD COLUMN IF NOT EXISTS cancelled_at timestamptz");
       await pg.run("ALTER TABLE inventory_products ADD COLUMN IF NOT EXISTS batch_number text not null default ''");
