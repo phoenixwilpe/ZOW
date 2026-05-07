@@ -370,6 +370,19 @@ function initDb() {
       FOREIGN KEY (product_id) REFERENCES inventory_products(id)
     );
 
+    CREATE TABLE IF NOT EXISTS suspended_sales (
+      id TEXT PRIMARY KEY,
+      company_id TEXT NOT NULL,
+      title TEXT NOT NULL DEFAULT '',
+      payload TEXT NOT NULL DEFAULT '{}',
+      status TEXT NOT NULL DEFAULT 'pendiente',
+      created_by TEXT NOT NULL,
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TEXT NOT NULL DEFAULT '',
+      FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE,
+      FOREIGN KEY (created_by) REFERENCES users(id)
+    );
+
     CREATE TABLE IF NOT EXISTS sales_returns (
       id TEXT PRIMARY KEY,
       company_id TEXT NOT NULL,
@@ -557,6 +570,7 @@ function migrateSchema() {
   db.prepare("CREATE INDEX IF NOT EXISTS idx_cash_movements_session ON cash_movements(session_id, created_at)").run();
   db.prepare("CREATE INDEX IF NOT EXISTS idx_purchase_suppliers_company ON purchase_suppliers(company_id, name)").run();
   db.prepare("CREATE INDEX IF NOT EXISTS idx_purchase_orders_company ON purchase_orders(company_id, created_at)").run();
+  db.prepare("CREATE INDEX IF NOT EXISTS idx_suspended_sales_company ON suspended_sales(company_id, status, created_at)").run();
   migrateTenantTables();
   db.prepare("UPDATE units SET company_id = COALESCE(NULLIF(company_id, ''), 'company-default')").run();
   db.prepare("UPDATE users SET company_id = COALESCE(NULLIF(company_id, ''), 'company-default')").run();

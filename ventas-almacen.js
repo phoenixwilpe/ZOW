@@ -276,7 +276,7 @@ async function render() {
   try {
     await assertVentasAccess();
     const canReadPurchases = canAccessView("purchases");
-    const [settingsResponse, summaryResponse, productsResponse, customersResponse, categoriesResponse, salesResponse, cashResponse, cashHistoryResponse, suppliersResponse, purchasesResponse, receivablesResponse, auditResponse, profitResponse, usersResponse, unitsResponse] = await Promise.all([
+    const [settingsResponse, summaryResponse, productsResponse, customersResponse, categoriesResponse, salesResponse, cashResponse, cashHistoryResponse, suppliersResponse, purchasesResponse, receivablesResponse, auditResponse, profitResponse, suspendedResponse, usersResponse, unitsResponse] = await Promise.all([
       apiRequest("/ventas/settings"),
       apiRequest("/ventas/summary"),
       apiRequest("/ventas/products"),
@@ -290,6 +290,7 @@ async function render() {
       canAccessView("customers") ? apiRequest("/ventas/receivables") : Promise.resolve({ receivables: [] }),
       canAccessView("reports") ? apiRequest("/ventas/audit") : Promise.resolve({ events: [] }),
       canAccessView("reports") ? apiRequest(`/ventas/reports/profit${profitReportQuery()}`) : Promise.resolve({ rows: [], totals: {} }),
+      apiRequest("/ventas/suspended-sales").catch(() => ({ sales: suspendedSales })),
       currentUser?.role === "admin" ? apiRequest("/users") : Promise.resolve({ users: [] }),
       currentUser?.role === "admin" ? apiRequest("/units") : Promise.resolve({ units: [] })
     ]);
@@ -304,6 +305,8 @@ async function render() {
     receivables = receivablesResponse.receivables || [];
     auditEvents = auditResponse.events || [];
     profitReport = { rows: profitResponse.rows || [], totals: profitResponse.totals || {} };
+    const localSuspended = loadJson(SUSPENDED_SALES_KEY, []).map((sale) => normalizeSuspendedSale({ ...sale, localOnly: true }));
+    suspendedSales = [...(suspendedResponse.sales || []).map(normalizeSuspendedSale), ...localSuspended].slice(0, 30);
     users = (usersResponse.users || []).map(normalizeUser);
     units = (unitsResponse.units || []).map(normalizeUnit);
     cash = cashResponse || { pendingSales: [], total: 0 };
@@ -1011,6 +1014,8 @@ function renderAuditEventRow(event) {
 function auditActionLabel(action) {
   return {
     sale_create: "Venta registrada",
+    sale_suspend: "Venta suspendida",
+    sale_resume: "Venta recuperada",
     sale_void: "Venta anulada",
     sale_return: "Devolucion",
     credit_payment: "Cobro de credito",
@@ -1892,19 +1897,31 @@ function cancelCurrentSale() {
   renderMain();
 }
 
-function suspendCurrentSale() {
+async function suspendCurrentSale() {
   if (!saleCart.length) return;
-  suspendedSales = [{ id: crypto.randomUUID(), items: saleCart, customerId: saleCustomerId, globalDiscount: saleGlobalDiscount, note: saleNote, createdAt: new Date().toISOString() }, ...suspendedSales].slice(0, 10);
-  persistJson(SUSPENDED_SALES_KEY, suspendedSales);
-  saleCart = [];
-  saleCustomerId = "";
-  saleGlobalDiscount = 0;
-  saleNote = "";
-  ventasMessage = "Venta suspendida.";
-  renderMain();
+  const payload = { items: saleCart, customerId: saleCustomerId, globalDiscount: saleGlobalDiscount, note: saleNote };
+  try {
+    await apiRequest("/ventas/suspended-sales", { method: "POST", body: payload });
+    persistJson(SUSPENDED_SALES_KEY, []);
+    saleCart = [];
+    saleCustomerId = "";
+    saleGlobalDiscount = 0;
+    saleNote = "";
+    ventasMessage = "Venta suspendida y guardada en la nube.";
+    await render();
+  } catch (error) {
+    suspendedSales = [{ id: crypto.randomUUID(), ...payload, createdAt: new Date().toISOString() }, ...suspendedSales].slice(0, 10);
+    persistJson(SUSPENDED_SALES_KEY, suspendedSales);
+    saleCart = [];
+    saleCustomerId = "";
+    saleGlobalDiscount = 0;
+    saleNote = "";
+    ventasMessage = error.message || "Venta suspendida localmente. Revisa conexion para guardarla en la nube.";
+    renderMain();
+  }
 }
 
-function recoverSuspendedSale() {
+async function recoverSuspendedSale() {
   if (!suspendedSales.length) return;
   const recovered = suspendedSales.shift();
   saleCart = recovered.items || [];
@@ -1912,7 +1929,17 @@ function recoverSuspendedSale() {
   saleGlobalDiscount = Number(recovered.globalDiscount || 0);
   saleNote = recovered.note || "";
   posMobilePanel = "cart";
-  persistJson(SUSPENDED_SALES_KEY, suspendedSales);
+  if (recovered.id && !recovered.localOnly) {
+    try {
+      await apiRequest(`/ventas/suspended-sales/${recovered.id}`, { method: "DELETE" });
+    } catch {
+      suspendedSales = [recovered, ...suspendedSales];
+      ventasMessage = "No se pudo retirar la venta suspendida de la nube. Intenta nuevamente.";
+      return renderMain();
+    }
+  } else {
+    persistJson(SUSPENDED_SALES_KEY, suspendedSales);
+  }
   ventasMessage = "Venta recuperada.";
   renderMain();
 }
@@ -3348,6 +3375,23 @@ function normalizeCashClosure(closure) {
     differenceAmount: Number(closure.difference_amount ?? closure.differenceAmount ?? 0),
     saleCount: Number(closure.sale_count ?? closure.saleCount ?? 0),
     createdAt: closure.created_at || closure.createdAt || ""
+  };
+}
+function normalizeSuspendedSale(sale) {
+  if (sale.payload && typeof sale.payload === "object") {
+    return {
+      id: sale.id,
+      items: sale.payload.items || [],
+      customerId: sale.payload.customerId || "",
+      globalDiscount: Number(sale.payload.globalDiscount || 0),
+      note: sale.payload.note || "",
+      createdAt: sale.created_at || sale.createdAt || ""
+    };
+  }
+  return {
+    ...sale,
+    localOnly: !sale.id,
+    createdAt: sale.createdAt || sale.created_at || ""
   };
 }
 function canAccessView(view) { return accessibleViewsForRole(currentUser?.role).includes(view); }

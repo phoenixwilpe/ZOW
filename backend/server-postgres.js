@@ -1060,6 +1060,8 @@ app.get("/api/ventas/audit", requireAuth, async (req, res) => {
   await ensureAuditSchema();
   const actions = [
     "sale_create",
+    "sale_suspend",
+    "sale_resume",
     "sale_void",
     "sale_return",
     "credit_payment",
@@ -1141,6 +1143,56 @@ app.get("/api/ventas/reports/profit", requireAuth, async (req, res) => {
     })),
     totals
   });
+});
+
+app.get("/api/ventas/suspended-sales", requireAuth, async (req, res) => {
+  if (!(await requireSystemAccess("ventas_almacen", req, res))) return;
+  await ensureVentasSchema();
+  const ownOnly = ventasOwnOnly(req.user.role);
+  const rows = await pg.all(
+    `SELECT suspended_sales.*, users.name AS created_by_name
+     FROM suspended_sales
+     LEFT JOIN users ON users.id = suspended_sales.created_by
+     WHERE suspended_sales.company_id = ? AND suspended_sales.status = 'pendiente' ${ownOnly ? "AND suspended_sales.created_by = ?" : ""}
+     ORDER BY suspended_sales.created_at DESC
+     LIMIT 30`,
+    ownOnly ? [req.user.company_id, req.user.id] : [req.user.company_id]
+  );
+  res.json({ sales: rows.map(mapSuspendedSale) });
+});
+
+app.post("/api/ventas/suspended-sales", requireAuth, async (req, res) => {
+  if (!(await requireSystemAccess("ventas_almacen", req, res))) return;
+  if (!requireVentasRole(req, res, "admin", "ventas_admin", "cajero", "vendedor")) return;
+  await ensureVentasSchema();
+  const items = Array.isArray(req.body.items) ? req.body.items : [];
+  if (!items.length) return res.status(400).json({ error: "Agrega productos antes de suspender la venta" });
+  const suspendedId = randomUUID();
+  const payload = {
+    items,
+    customerId: String(req.body.customerId || "").trim(),
+    globalDiscount: Number(req.body.globalDiscount || 0),
+    note: String(req.body.note || "").trim().slice(0, 500)
+  };
+  const title = items.slice(0, 2).map((item) => item.name).filter(Boolean).join(", ") || `${items.length} producto(s)`;
+  await pg.run(
+    `INSERT INTO suspended_sales (id, company_id, title, payload, status, created_by, created_at, updated_at)
+     VALUES (?, ?, ?, ?, 'pendiente', ?, now(), now())`,
+    [suspendedId, req.user.company_id, title, JSON.stringify(payload), req.user.id]
+  );
+  await recordAuditEvent({ req, action: "sale_suspend", entityType: "suspended_sale", entityId: suspendedId, description: `Suspendio venta: ${title}` });
+  res.status(201).json({ sale: mapSuspendedSale(await pg.get("SELECT * FROM suspended_sales WHERE id = ?", [suspendedId])) });
+});
+
+app.delete("/api/ventas/suspended-sales/:id", requireAuth, async (req, res) => {
+  if (!(await requireSystemAccess("ventas_almacen", req, res))) return;
+  await ensureVentasSchema();
+  const sale = await pg.get("SELECT * FROM suspended_sales WHERE id = ? AND company_id = ? AND status = 'pendiente'", [req.params.id, req.user.company_id]);
+  if (!sale) return res.status(404).json({ error: "Venta suspendida no encontrada" });
+  if (ventasOwnOnly(req.user.role) && sale.created_by !== req.user.id) return res.status(403).json({ error: "Permiso insuficiente" });
+  await pg.run("UPDATE suspended_sales SET status = 'recuperada', updated_at = now() WHERE id = ? AND company_id = ?", [sale.id, req.user.company_id]);
+  await recordAuditEvent({ req, action: "sale_resume", entityType: "suspended_sale", entityId: sale.id, description: `Recupero venta suspendida ${sale.title}` });
+  res.json({ ok: true });
 });
 
 app.get("/api/ventas/settings", requireAuth, async (req, res) => {
@@ -2539,6 +2591,19 @@ function parsePaymentDetail(value) {
   }
 }
 
+function mapSuspendedSale(sale) {
+  return {
+    id: sale.id,
+    title: sale.title || "",
+    payload: parsePaymentDetail(sale.payload),
+    status: sale.status || "pendiente",
+    createdBy: sale.created_by,
+    createdByName: sale.created_by_name || "",
+    created_at: sale.created_at,
+    updated_at: sale.updated_at
+  };
+}
+
 function normalizePaymentDetail(input, total, paymentMethod) {
   if (paymentMethod !== "mixto") return { detail: {}, serialized: "", totalPaid: Number(total || 0), cash: 0, nonCash: 0 };
   const raw = input && typeof input === "object" ? input : {};
@@ -2699,6 +2764,18 @@ async function ensureVentasSchema() {
         )
       `);
       await pg.run(`
+        CREATE TABLE IF NOT EXISTS suspended_sales (
+          id text primary key,
+          company_id text not null references companies(id) on delete cascade,
+          title text not null default '',
+          payload text not null default '{}',
+          status text not null default 'pendiente',
+          created_by text not null references users(id),
+          created_at timestamptz not null default now(),
+          updated_at timestamptz
+        )
+      `);
+      await pg.run(`
         CREATE TABLE IF NOT EXISTS sales_returns (
           id text primary key,
           company_id text not null references companies(id) on delete cascade,
@@ -2787,6 +2864,7 @@ async function ensureVentasSchema() {
       await pg.run("CREATE INDEX IF NOT EXISTS idx_cash_movements_session ON cash_movements(session_id, created_at)");
       await pg.run("CREATE INDEX IF NOT EXISTS idx_purchase_suppliers_company ON purchase_suppliers(company_id, name)");
       await pg.run("CREATE INDEX IF NOT EXISTS idx_purchase_orders_company ON purchase_orders(company_id, created_at)");
+      await pg.run("CREATE INDEX IF NOT EXISTS idx_suspended_sales_company ON suspended_sales(company_id, status, created_at)");
       await pg.run("ALTER TABLE purchase_orders ADD COLUMN IF NOT EXISTS received_at timestamptz");
       await pg.run("ALTER TABLE purchase_orders ADD COLUMN IF NOT EXISTS cancelled_at timestamptz");
       await pg.run("ALTER TABLE inventory_products ADD COLUMN IF NOT EXISTS batch_number text not null default ''");

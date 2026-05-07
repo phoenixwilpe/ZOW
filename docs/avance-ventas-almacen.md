@@ -4,7 +4,7 @@ Este documento sirve para medir cuanto falta para considerar el sistema listo pa
 
 ## Estado general
 
-Avance estimado actual: 90%
+Avance estimado actual: 92%
 
 ## Completado
 
@@ -32,21 +32,22 @@ Avance estimado actual: 90%
 - Venta con datos historicos por item: descuento, subtotal y costo al momento de vender para utilidad real.
 - Auditoria comercial visible: ventas, anulaciones, devoluciones, cobros, caja y stock quedan consultables en reportes.
 - Reporte de utilidad por producto y periodo usando costo historico, venta neta, descuento y margen.
+- Ventas suspendidas en base de datos: se pueden recuperar desde otra sesion/equipo y quedan auditadas.
 - Reportes CSV: ventas, inventario, clientes y respaldo operativo JSON.
 - Despliegue en Vercel y backend PostgreSQL/Supabase.
 
 ## Faltante prioritario
 
-1. Suspender/recuperar ventas en base de datos, no solo en el navegador.
-2. Favoritos POS configurables por empresa o por caja.
-3. Promociones reales: vigencia, combos, descuento por cantidad y precio especial.
-4. Cierre de caja con desglose imprimible por metodo de pago, devoluciones y creditos cobrados.
-5. Pruebas funcionales documentadas con casos reales.
-6. Ajustes finales de experiencia movil y manuales cortos por rol.
-7. Preparacion comercial: demos, datos de prueba por rubro y checklist de instalacion.
-8. Revision final de seguridad y politicas de datos por empresa.
-9. Importacion Excel directa con libreria dedicada, si el cliente no quiere convertir a CSV.
-10. Modo instalable PWA para caja tactil.
+1. Favoritos POS configurables por empresa o por caja.
+2. Promociones reales: vigencia, combos, descuento por cantidad y precio especial.
+3. Cierre de caja con desglose imprimible por metodo de pago, devoluciones y creditos cobrados.
+4. Pruebas funcionales documentadas con casos reales.
+5. Ajustes finales de experiencia movil y manuales cortos por rol.
+6. Preparacion comercial: demos, datos de prueba por rubro y checklist de instalacion.
+7. Revision final de seguridad y politicas de datos por empresa.
+8. Importacion Excel directa con libreria dedicada, si el cliente no quiere convertir a CSV.
+9. Modo instalable PWA para caja tactil.
+10. Panel de promociones y combos reales.
 
 ## Despues
 

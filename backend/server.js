@@ -1236,6 +1236,8 @@ app.get("/api/ventas/settings", requireAuth, requireSystemAccess("ventas_almacen
 app.get("/api/ventas/audit", requireAuth, requireSystemAccess("ventas_almacen"), requireVentasRole("admin", "ventas_admin", "supervisor"), (req, res) => {
   const actions = [
     "sale_create",
+    "sale_suspend",
+    "sale_resume",
     "sale_void",
     "sale_return",
     "credit_payment",
@@ -1317,6 +1319,50 @@ app.get("/api/ventas/reports/profit", requireAuth, requireSystemAccess("ventas_a
     })),
     totals
   });
+});
+
+app.get("/api/ventas/suspended-sales", requireAuth, requireSystemAccess("ventas_almacen"), (req, res) => {
+  const ownOnly = ventasOwnOnly(req.user.role);
+  const rows = db
+    .prepare(
+      `SELECT suspended_sales.*, users.name AS created_by_name
+       FROM suspended_sales
+       LEFT JOIN users ON users.id = suspended_sales.created_by
+       WHERE suspended_sales.company_id = ? AND suspended_sales.status = 'pendiente' ${ownOnly ? "AND suspended_sales.created_by = ?" : ""}
+       ORDER BY suspended_sales.created_at DESC
+       LIMIT 30`
+    )
+    .all(...(ownOnly ? [req.user.company_id, req.user.id] : [req.user.company_id]));
+  res.json({ sales: rows.map(mapSuspendedSale) });
+});
+
+app.post("/api/ventas/suspended-sales", requireAuth, requireSystemAccess("ventas_almacen"), requireVentasRole("admin", "ventas_admin", "cajero", "vendedor"), (req, res) => {
+  const items = Array.isArray(req.body.items) ? req.body.items : [];
+  if (!items.length) return res.status(400).json({ error: "Agrega productos antes de suspender la venta" });
+  const suspendedId = randomUUID();
+  const now = new Date().toISOString();
+  const payload = {
+    items,
+    customerId: String(req.body.customerId || "").trim(),
+    globalDiscount: Number(req.body.globalDiscount || 0),
+    note: String(req.body.note || "").trim().slice(0, 500)
+  };
+  const title = items.slice(0, 2).map((item) => item.name).filter(Boolean).join(", ") || `${items.length} producto(s)`;
+  db.prepare(
+    `INSERT INTO suspended_sales (id, company_id, title, payload, status, created_by, created_at, updated_at)
+     VALUES (?, ?, ?, ?, 'pendiente', ?, ?, ?)`
+  ).run(suspendedId, req.user.company_id, title, JSON.stringify(payload), req.user.id, now, now);
+  recordAuditEvent({ req, action: "sale_suspend", entityType: "suspended_sale", entityId: suspendedId, description: `Suspendio venta: ${title}` });
+  res.status(201).json({ sale: mapSuspendedSale(db.prepare("SELECT * FROM suspended_sales WHERE id = ?").get(suspendedId)) });
+});
+
+app.delete("/api/ventas/suspended-sales/:id", requireAuth, requireSystemAccess("ventas_almacen"), (req, res) => {
+  const sale = db.prepare("SELECT * FROM suspended_sales WHERE id = ? AND company_id = ? AND status = 'pendiente'").get(req.params.id, req.user.company_id);
+  if (!sale) return res.status(404).json({ error: "Venta suspendida no encontrada" });
+  if (ventasOwnOnly(req.user.role) && sale.created_by !== req.user.id) return res.status(403).json({ error: "Permiso insuficiente" });
+  db.prepare("UPDATE suspended_sales SET status = 'recuperada', updated_at = ? WHERE id = ? AND company_id = ?").run(new Date().toISOString(), sale.id, req.user.company_id);
+  recordAuditEvent({ req, action: "sale_resume", entityType: "suspended_sale", entityId: sale.id, description: `Recupero venta suspendida ${sale.title}` });
+  res.json({ ok: true });
 });
 
 app.patch("/api/ventas/settings", requireAuth, requireSystemAccess("ventas_almacen"), requireVentasRole("admin", "ventas_admin"), (req, res) => {
@@ -2402,6 +2448,19 @@ function parsePaymentDetail(value) {
   } catch {
     return {};
   }
+}
+
+function mapSuspendedSale(sale) {
+  return {
+    id: sale.id,
+    title: sale.title || "",
+    payload: parsePaymentDetail(sale.payload),
+    status: sale.status || "pendiente",
+    createdBy: sale.created_by,
+    createdByName: sale.created_by_name || "",
+    created_at: sale.created_at,
+    updated_at: sale.updated_at
+  };
 }
 
 function normalizePaymentDetail(input, total, paymentMethod) {
