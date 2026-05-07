@@ -1349,6 +1349,8 @@ app.post("/api/ventas/purchases", requireAuth, async (req, res) => {
   if (!items.length) return res.status(400).json({ error: "Agrega al menos un producto a la compra" });
   const purchaseId = randomUUID();
   const supplierId = String(req.body.supplierId || "").trim();
+  const requestedStatus = String(req.body.status || "confirmada").trim();
+  const status = requestedStatus === "pendiente" ? "pendiente" : "confirmada";
   try {
     const result = await pg.tx(async (client) => {
       const purchaseCode = await buildNextPurchaseCode(req.user.company_id, new Date().toISOString(), client);
@@ -1365,8 +1367,8 @@ app.post("/api/ventas/purchases", requireAuth, async (req, res) => {
       const total = preparedItems.reduce((sum, item) => sum + item.total, 0);
       await client.run(
         `INSERT INTO purchase_orders (id, company_id, code, supplier_id, supplier_name, invoice_number, note, total, status, created_by, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'confirmada', ?, now())`,
-        [purchaseId, req.user.company_id, purchaseCode, supplier?.id || null, supplierName, String(req.body.invoiceNumber || "").trim(), String(req.body.note || "").trim(), total, req.user.id]
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, now())`,
+        [purchaseId, req.user.company_id, purchaseCode, supplier?.id || null, supplierName, String(req.body.invoiceNumber || "").trim(), String(req.body.note || "").trim(), total, status, req.user.id]
       );
       for (const item of preparedItems) {
         await client.run(
@@ -1374,17 +1376,19 @@ app.post("/api/ventas/purchases", requireAuth, async (req, res) => {
            VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
           [randomUUID(), req.user.company_id, purchaseId, item.product.id, item.product.name, item.quantity, item.unitCost, item.total]
         );
-        await client.run(
-          `INSERT INTO inventory_movements (id, company_id, product_id, type, quantity, reference, note, created_by, created_at)
-           VALUES (?, ?, ?, 'entrada', ?, ?, ?, ?, now())`,
-          [randomUUID(), req.user.company_id, item.product.id, item.quantity, purchaseCode, `Compra confirmada: ${supplierName}`, req.user.id]
-        );
-        await client.run("UPDATE inventory_products SET stock = stock + ?, cost_price = ?, updated_at = now() WHERE id = ? AND company_id = ?", [
-          item.quantity,
-          item.unitCost,
-          item.product.id,
-          req.user.company_id
-        ]);
+        if (status === "confirmada") {
+          await client.run(
+            `INSERT INTO inventory_movements (id, company_id, product_id, type, quantity, reference, note, created_by, created_at)
+             VALUES (?, ?, ?, 'entrada', ?, ?, ?, ?, now())`,
+            [randomUUID(), req.user.company_id, item.product.id, item.quantity, purchaseCode, `Compra confirmada: ${supplierName}`, req.user.id]
+          );
+          await client.run("UPDATE inventory_products SET stock = stock + ?, cost_price = ?, updated_at = now() WHERE id = ? AND company_id = ?", [
+            item.quantity,
+            item.unitCost,
+            item.product.id,
+            req.user.company_id
+          ]);
+        }
       }
       return { purchaseCode };
     });
@@ -1396,6 +1400,45 @@ app.post("/api/ventas/purchases", requireAuth, async (req, res) => {
   } catch (error) {
     res.status(400).json({ error: error.message || "No se pudo registrar la compra" });
   }
+});
+
+app.patch("/api/ventas/purchases/:id/receive", requireAuth, async (req, res) => {
+  if (!(await requireSystemAccess("ventas_almacen", req, res))) return;
+  if (!requireVentasRole(req, res, "admin", "ventas_admin", "almacen")) return;
+  await ensureVentasSchema();
+  const purchase = await pg.get("SELECT * FROM purchase_orders WHERE id = ? AND company_id = ?", [req.params.id, req.user.company_id]);
+  if (!purchase) return res.status(404).json({ error: "Orden de compra no encontrada" });
+  if (purchase.status !== "pendiente") return res.status(400).json({ error: "Solo se pueden recibir ordenes pendientes" });
+  const items = await pg.all("SELECT * FROM purchase_order_items WHERE purchase_id = ? AND company_id = ?", [purchase.id, req.user.company_id]);
+  if (!items.length) return res.status(400).json({ error: "La orden no tiene productos" });
+  await pg.tx(async (client) => {
+    for (const item of items) {
+      await client.run(
+        `INSERT INTO inventory_movements (id, company_id, product_id, type, quantity, reference, note, created_by, created_at)
+         VALUES (?, ?, ?, 'entrada', ?, ?, ?, ?, now())`,
+        [randomUUID(), req.user.company_id, item.product_id, Number(item.quantity || 0), purchase.code, `Recepcion de orden: ${purchase.supplier_name || "Proveedor"}`, req.user.id]
+      );
+      await client.run("UPDATE inventory_products SET stock = stock + ?, cost_price = ?, updated_at = now() WHERE id = ? AND company_id = ?", [
+        Number(item.quantity || 0),
+        Number(item.unit_cost || 0),
+        item.product_id,
+        req.user.company_id
+      ]);
+    }
+    await client.run("UPDATE purchase_orders SET status = 'recibida', received_at = now() WHERE id = ? AND company_id = ?", [purchase.id, req.user.company_id]);
+  });
+  res.json({ purchase: await pg.get("SELECT * FROM purchase_orders WHERE id = ? AND company_id = ?", [purchase.id, req.user.company_id]) });
+});
+
+app.patch("/api/ventas/purchases/:id/cancel", requireAuth, async (req, res) => {
+  if (!(await requireSystemAccess("ventas_almacen", req, res))) return;
+  if (!requireVentasRole(req, res, "admin", "ventas_admin", "almacen")) return;
+  await ensureVentasSchema();
+  const purchase = await pg.get("SELECT * FROM purchase_orders WHERE id = ? AND company_id = ?", [req.params.id, req.user.company_id]);
+  if (!purchase) return res.status(404).json({ error: "Orden de compra no encontrada" });
+  if (purchase.status !== "pendiente") return res.status(400).json({ error: "Solo se pueden cancelar ordenes pendientes" });
+  await pg.run("UPDATE purchase_orders SET status = 'cancelada', cancelled_at = now() WHERE id = ? AND company_id = ?", [purchase.id, req.user.company_id]);
+  res.json({ purchase: await pg.get("SELECT * FROM purchase_orders WHERE id = ? AND company_id = ?", [purchase.id, req.user.company_id]) });
 });
 
 app.get("/api/ventas/sales", requireAuth, async (req, res) => {
@@ -2328,6 +2371,8 @@ async function ensureVentasSchema() {
           status text not null default 'confirmada',
           created_by text not null references users(id),
           created_at timestamptz not null default now(),
+          received_at timestamptz,
+          cancelled_at timestamptz,
           unique (company_id, code)
         )
       `);
@@ -2443,6 +2488,8 @@ async function ensureVentasSchema() {
       await pg.run("CREATE INDEX IF NOT EXISTS idx_cash_movements_session ON cash_movements(session_id, created_at)");
       await pg.run("CREATE INDEX IF NOT EXISTS idx_purchase_suppliers_company ON purchase_suppliers(company_id, name)");
       await pg.run("CREATE INDEX IF NOT EXISTS idx_purchase_orders_company ON purchase_orders(company_id, created_at)");
+      await pg.run("ALTER TABLE purchase_orders ADD COLUMN IF NOT EXISTS received_at timestamptz");
+      await pg.run("ALTER TABLE purchase_orders ADD COLUMN IF NOT EXISTS cancelled_at timestamptz");
       await pg.run("ALTER TABLE inventory_products ADD COLUMN IF NOT EXISTS batch_number text not null default ''");
       await pg.run("ALTER TABLE inventory_products ADD COLUMN IF NOT EXISTS expires_at text not null default ''");
       await pg.run("ALTER TABLE cash_closures ADD COLUMN IF NOT EXISTS opening_amount numeric not null default 0");

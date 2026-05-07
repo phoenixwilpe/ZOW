@@ -4,7 +4,7 @@ Este documento sirve para medir cuanto falta para considerar el sistema listo pa
 
 ## Estado general
 
-Avance estimado actual: 68%
+Avance estimado actual: 72%
 
 ## Completado
 
@@ -21,6 +21,7 @@ Avance estimado actual: 68%
 - Clientes, cuentas por cobrar y analisis de riesgo.
 - Inventario: productos, stock, costos, precios, favoritos POS, Kardex y movimientos.
 - Compras: proveedores, entradas de mercaderia, orden imprimible y actualizacion de stock.
+- Ordenes de compra persistentes: pendiente, recibida y cancelada.
 - Alertas de stock minimo, compra sugerida y exportacion de reposicion.
 - Lotes y vencimientos: alerta, bloqueo de venta vencida y aviso de productos por vencer.
 - Reportes CSV: ventas, inventario, clientes y respaldo operativo JSON.
@@ -28,16 +29,16 @@ Avance estimado actual: 68%
 
 ## Faltante prioritario
 
-1. Ordenes de compra persistentes: guardar orden pendiente, recibida, cancelada y convertirla en compra.
-2. Devoluciones de clientes: registrar devolucion parcial o total y afectar caja/stock.
-3. Permisos finos por rol: definir acciones exactas por pantalla y bloquear botones no autorizados.
-4. Importacion masiva de productos desde CSV/Excel.
-5. Busqueda por codigo de barras real con foco automatico para lector USB.
-6. Auditoria visible: quien cambio precio, stock, usuario, caja o configuracion.
-7. Reporte de utilidad por producto y por periodo con costo historico.
-8. Dashboard de ventas del dia para encargado.
-9. Respaldo/restauracion guiada por empresa.
-10. Pruebas funcionales documentadas con casos reales.
+1. Devoluciones de clientes: registrar devolucion parcial o total y afectar caja/stock.
+2. Permisos finos por rol: definir acciones exactas por pantalla y bloquear botones no autorizados.
+3. Importacion masiva de productos desde CSV/Excel.
+4. Busqueda por codigo de barras real con foco automatico para lector USB.
+5. Auditoria visible: quien cambio precio, stock, usuario, caja o configuracion.
+6. Reporte de utilidad por producto y por periodo con costo historico.
+7. Dashboard de ventas del dia para encargado.
+8. Respaldo/restauracion guiada por empresa.
+9. Pruebas funcionales documentadas con casos reales.
+10. Ajustes finales de experiencia movil y manuales cortos por rol.
 
 ## Despues
 

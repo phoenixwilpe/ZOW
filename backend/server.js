@@ -1508,6 +1508,8 @@ app.post("/api/ventas/purchases", requireAuth, requireSystemAccess("ventas_almac
   const purchaseId = randomUUID();
   const purchaseCode = buildNextPurchaseCode(req.user.company_id, now);
   const supplierId = String(req.body.supplierId || "").trim();
+  const requestedStatus = String(req.body.status || "confirmada").trim();
+  const status = requestedStatus === "pendiente" ? "pendiente" : "confirmada";
   const supplier = supplierId ? db.prepare("SELECT * FROM purchase_suppliers WHERE id = ? AND company_id = ?").get(supplierId, req.user.company_id) : null;
   const supplierName = supplier?.name || String(req.body.supplierName || "Proveedor sin registrar").trim();
 
@@ -1529,8 +1531,8 @@ app.post("/api/ventas/purchases", requireAuth, requireSystemAccess("ventas_almac
   try {
     db.prepare(
       `INSERT INTO purchase_orders (id, company_id, code, supplier_id, supplier_name, invoice_number, note, total, status, created_by, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'confirmada', ?, ?)`
-    ).run(purchaseId, req.user.company_id, purchaseCode, supplier?.id || null, supplierName, String(req.body.invoiceNumber || "").trim(), String(req.body.note || "").trim(), total, req.user.id, now);
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    ).run(purchaseId, req.user.company_id, purchaseCode, supplier?.id || null, supplierName, String(req.body.invoiceNumber || "").trim(), String(req.body.note || "").trim(), total, status, req.user.id, now);
     const insertItem = db.prepare(
       `INSERT INTO purchase_order_items (id, company_id, purchase_id, product_id, product_name, quantity, unit_cost, total)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
@@ -1542,8 +1544,10 @@ app.post("/api/ventas/purchases", requireAuth, requireSystemAccess("ventas_almac
     const updateProduct = db.prepare("UPDATE inventory_products SET stock = stock + ?, cost_price = ?, updated_at = ? WHERE id = ? AND company_id = ?");
     preparedItems.forEach((item) => {
       insertItem.run(randomUUID(), req.user.company_id, purchaseId, item.product.id, item.product.name, item.quantity, item.unitCost, item.total);
-      insertMovement.run(randomUUID(), req.user.company_id, item.product.id, item.quantity, purchaseCode, `Compra confirmada: ${supplierName}`, req.user.id, now);
-      updateProduct.run(item.quantity, item.unitCost, now, item.product.id, req.user.company_id);
+      if (status === "confirmada") {
+        insertMovement.run(randomUUID(), req.user.company_id, item.product.id, item.quantity, purchaseCode, `Compra confirmada: ${supplierName}`, req.user.id, now);
+        updateProduct.run(item.quantity, item.unitCost, now, item.product.id, req.user.company_id);
+      }
     });
     db.exec("COMMIT");
   } catch (error) {
@@ -1554,6 +1558,41 @@ app.post("/api/ventas/purchases", requireAuth, requireSystemAccess("ventas_almac
     purchase: db.prepare("SELECT * FROM purchase_orders WHERE id = ? AND company_id = ?").get(purchaseId, req.user.company_id),
     items: db.prepare("SELECT * FROM purchase_order_items WHERE purchase_id = ? AND company_id = ?").all(purchaseId, req.user.company_id)
   });
+});
+
+app.patch("/api/ventas/purchases/:id/receive", requireAuth, requireSystemAccess("ventas_almacen"), requireVentasRole("admin", "ventas_admin", "almacen"), (req, res) => {
+  const purchase = db.prepare("SELECT * FROM purchase_orders WHERE id = ? AND company_id = ?").get(req.params.id, req.user.company_id);
+  if (!purchase) return res.status(404).json({ error: "Orden de compra no encontrada" });
+  if (purchase.status !== "pendiente") return res.status(400).json({ error: "Solo se pueden recibir ordenes pendientes" });
+  const items = db.prepare("SELECT * FROM purchase_order_items WHERE purchase_id = ? AND company_id = ?").all(purchase.id, req.user.company_id);
+  if (!items.length) return res.status(400).json({ error: "La orden no tiene productos" });
+  const now = new Date().toISOString();
+  db.exec("BEGIN");
+  try {
+    const insertMovement = db.prepare(
+      `INSERT INTO inventory_movements (id, company_id, product_id, type, quantity, reference, note, created_by, created_at)
+       VALUES (?, ?, ?, 'entrada', ?, ?, ?, ?, ?)`
+    );
+    const updateProduct = db.prepare("UPDATE inventory_products SET stock = stock + ?, cost_price = ?, updated_at = ? WHERE id = ? AND company_id = ?");
+    items.forEach((item) => {
+      insertMovement.run(randomUUID(), req.user.company_id, item.product_id, Number(item.quantity || 0), purchase.code, `Recepcion de orden: ${purchase.supplier_name || "Proveedor"}`, req.user.id, now);
+      updateProduct.run(Number(item.quantity || 0), Number(item.unit_cost || 0), now, item.product_id, req.user.company_id);
+    });
+    db.prepare("UPDATE purchase_orders SET status = 'recibida', received_at = ? WHERE id = ? AND company_id = ?").run(now, purchase.id, req.user.company_id);
+    db.exec("COMMIT");
+  } catch (error) {
+    db.exec("ROLLBACK");
+    return res.status(400).json({ error: error.message || "No se pudo recibir la orden" });
+  }
+  res.json({ purchase: db.prepare("SELECT * FROM purchase_orders WHERE id = ? AND company_id = ?").get(purchase.id, req.user.company_id) });
+});
+
+app.patch("/api/ventas/purchases/:id/cancel", requireAuth, requireSystemAccess("ventas_almacen"), requireVentasRole("admin", "ventas_admin", "almacen"), (req, res) => {
+  const purchase = db.prepare("SELECT * FROM purchase_orders WHERE id = ? AND company_id = ?").get(req.params.id, req.user.company_id);
+  if (!purchase) return res.status(404).json({ error: "Orden de compra no encontrada" });
+  if (purchase.status !== "pendiente") return res.status(400).json({ error: "Solo se pueden cancelar ordenes pendientes" });
+  db.prepare("UPDATE purchase_orders SET status = 'cancelada', cancelled_at = ? WHERE id = ? AND company_id = ?").run(new Date().toISOString(), purchase.id, req.user.company_id);
+  res.json({ purchase: db.prepare("SELECT * FROM purchase_orders WHERE id = ? AND company_id = ?").get(purchase.id, req.user.company_id) });
 });
 
 app.get("/api/ventas/sales", requireAuth, requireSystemAccess("ventas_almacen"), (req, res) => {

@@ -298,6 +298,8 @@ function initDb() {
       status TEXT NOT NULL DEFAULT 'confirmada',
       created_by TEXT NOT NULL,
       created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      received_at TEXT NOT NULL DEFAULT '',
+      cancelled_at TEXT NOT NULL DEFAULT '',
       UNIQUE (company_id, code),
       FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE,
       FOREIGN KEY (supplier_id) REFERENCES purchase_suppliers(id),
@@ -463,6 +465,8 @@ function migrateSchema() {
   ensureColumn("users", "cash_register_number", "INTEGER NOT NULL DEFAULT 0");
   ensureColumn("inventory_products", "batch_number", "TEXT NOT NULL DEFAULT ''");
   ensureColumn("inventory_products", "expires_at", "TEXT NOT NULL DEFAULT ''");
+  ensureColumn("purchase_orders", "received_at", "TEXT NOT NULL DEFAULT ''");
+  ensureColumn("purchase_orders", "cancelled_at", "TEXT NOT NULL DEFAULT ''");
   ensureColumn("documents", "applicant_name", "TEXT NOT NULL DEFAULT ''");
   ensureColumn("documents", "applicant_ci", "TEXT NOT NULL DEFAULT ''");
   ensureColumn("documents", "applicant_phone", "TEXT NOT NULL DEFAULT ''");

@@ -1085,6 +1085,7 @@ function renderPurchases() {
           </div>
           <div class="modal-actions">
             <button class="ghost-button" type="button" id="addPurchaseLine" ${activeProducts.length ? "" : "disabled"}>Agregar linea</button>
+            <button class="ghost-button" type="button" id="savePendingPurchase" ${activeProducts.length ? "" : "disabled"}>Guardar orden pendiente</button>
             <button class="primary-button" type="submit" ${activeProducts.length ? "" : "disabled"}>Registrar compra y sumar stock</button>
           </div>
         </form>
@@ -1112,6 +1113,7 @@ function renderPurchases() {
   `;
   document.querySelector("#supplierForm")?.addEventListener("submit", saveSupplier);
   document.querySelector("#purchaseForm")?.addEventListener("submit", savePurchase);
+  document.querySelector("#savePendingPurchase")?.addEventListener("click", () => savePurchase(null, "pendiente"));
   document.querySelector("#prepareSuggestedPurchaseFromPurchases")?.addEventListener("click", prepareSuggestedPurchase);
   document.querySelector("#addPurchaseLine")?.addEventListener("click", addPurchaseLine);
   document.querySelector("#printPurchaseOrder")?.addEventListener("click", printPurchaseOrder);
@@ -1120,6 +1122,12 @@ function renderPurchases() {
     purchaseCart = purchaseCart.filter((item) => item.id !== button.dataset.removePurchaseLine);
     renderMain();
   }));
+  document.querySelectorAll("[data-receive-purchase]").forEach((button) => {
+    button.addEventListener("click", () => receivePurchaseOrder(button.dataset.receivePurchase));
+  });
+  document.querySelectorAll("[data-cancel-purchase]").forEach((button) => {
+    button.addEventListener("click", () => cancelPurchaseOrder(button.dataset.cancelPurchase));
+  });
   document.querySelector("#purchaseProduct")?.addEventListener("change", updatePurchaseCostFromProduct);
   updatePurchaseCostFromProduct();
 }
@@ -1183,7 +1191,9 @@ function renderPurchaseCartRow(item) {
 }
 
 function renderPurchaseRow(purchase) {
-  return `<article class="admin-row"><div><strong>${escapeHtml(purchase.code)}</strong><span>${escapeHtml(purchase.supplier_name || "Proveedor sin registrar")} / ${escapeHtml(purchase.invoice_number || "Sin factura")}</span><span>${formatDateTime(purchase.created_at)} / ${escapeHtml(purchase.created_by_name || "Usuario")}</span></div><div class="admin-row-meta"><span>Total ${money(purchase.total)}</span><span class="ok-text">${escapeHtml(purchase.status || "confirmada")}</span></div></article>`;
+  const status = purchase.status || "confirmada";
+  const statusClass = status === "pendiente" ? "warn-text" : status === "cancelada" ? "danger-text" : "ok-text";
+  return `<article class="admin-row"><div><strong>${escapeHtml(purchase.code)}</strong><span>${escapeHtml(purchase.supplier_name || "Proveedor sin registrar")} / ${escapeHtml(purchase.invoice_number || "Sin factura")}</span><span>${formatDateTime(purchase.created_at)} / ${escapeHtml(purchase.created_by_name || "Usuario")}</span></div><div class="admin-row-meta"><span>Total ${money(purchase.total)}</span><span class="${statusClass}">${escapeHtml(purchaseStatusLabel(status))}</span>${status === "pendiente" ? `<button class="primary-button" type="button" data-receive-purchase="${purchase.id}">Recibir</button><button class="ghost-button danger-action" type="button" data-cancel-purchase="${purchase.id}">Cancelar</button>` : ""}</div></article>`;
 }
 
 function renderSupplierRow(supplier) {
@@ -2376,8 +2386,8 @@ async function saveSupplier(event) {
   }
 }
 
-async function savePurchase(event) {
-  event.preventDefault();
+async function savePurchase(event, status = "confirmada") {
+  event?.preventDefault();
   if (!purchaseCart.length) addPurchaseLine();
   if (!purchaseCart.length) return;
   try {
@@ -2387,15 +2397,46 @@ async function savePurchase(event) {
         supplierId: value("#purchaseSupplier"),
         invoiceNumber: value("#purchaseInvoice"),
         note: value("#purchaseNote"),
+        status,
         items: purchaseCart.map((item) => ({ productId: item.productId, quantity: item.quantity, unitCost: item.unitCost }))
       }
     });
     purchaseCart = [];
-    ventasMessage = "Compra registrada. El stock fue actualizado y quedo en Kardex.";
+    ventasMessage = status === "pendiente"
+      ? "Orden de compra guardada como pendiente. El stock se actualizara al recibirla."
+      : "Compra registrada. El stock fue actualizado y quedo en Kardex.";
     activeView = "purchases";
     await render();
   } catch (error) {
     ventasMessage = error.message || "No se pudo registrar la compra.";
+    renderMain();
+  }
+}
+
+async function receivePurchaseOrder(purchaseId) {
+  const purchase = purchases.find((item) => item.id === purchaseId);
+  if (!purchase || !confirm(`Recibir la orden ${purchase.code}? Esto sumara los productos al stock.`)) return;
+  try {
+    await apiRequest(`/ventas/purchases/${purchaseId}/receive`, { method: "PATCH" });
+    ventasMessage = `Orden ${purchase.code} recibida. Stock actualizado y movimiento registrado en Kardex.`;
+    activeView = "purchases";
+    await render();
+  } catch (error) {
+    ventasMessage = error.message || "No se pudo recibir la orden.";
+    renderMain();
+  }
+}
+
+async function cancelPurchaseOrder(purchaseId) {
+  const purchase = purchases.find((item) => item.id === purchaseId);
+  if (!purchase || !confirm(`Cancelar la orden pendiente ${purchase.code}?`)) return;
+  try {
+    await apiRequest(`/ventas/purchases/${purchaseId}/cancel`, { method: "PATCH" });
+    ventasMessage = `Orden ${purchase.code} cancelada. No afecto inventario.`;
+    activeView = "purchases";
+    await render();
+  } catch (error) {
+    ventasMessage = error.message || "No se pudo cancelar la orden.";
     renderMain();
   }
 }
@@ -2756,6 +2797,9 @@ function availablePaymentMethods() {
   return paymentMethods().filter((method) => storeSettings.allowCredit || method.id !== "credito");
 }
 function paymentLabel(id) { return paymentMethods().find((method) => method.id === id)?.label || "Efectivo"; }
+function purchaseStatusLabel(status) {
+  return { pendiente: "Pendiente", confirmada: "Recibida", recibida: "Recibida", cancelada: "Cancelada" }[status] || status;
+}
 function cashRegisterOptions() {
   const count = Math.min(Math.max(Math.floor(Number(storeSettings.cashRegisterCount || 1)), 1), 20);
   return Array.from({ length: count }, (_, index) => index + 1);
