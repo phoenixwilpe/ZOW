@@ -2894,6 +2894,24 @@ body.app-correspondencia .metrics article:hover {
   line-height: 1.45;
 }
 
+.report-risk-columns {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.report-risk-columns > div {
+  min-width: 0;
+  display: grid;
+  gap: 10px;
+}
+
+.report-risk-columns > div > strong {
+  color: var(--accent-dark);
+  font-size: 0.88rem;
+  text-transform: uppercase;
+}
+
 .price-list {
   display: grid;
   gap: 10px;
@@ -9381,6 +9399,7 @@ body.system-zow-site .site-footer {
   .route-grid,
   .report-grid,
   .report-actions,
+  .report-risk-columns,
   .service-strip,
   .operation-model-grid,
   .role-template-grid {
@@ -9659,6 +9678,7 @@ body.system-zow-site .site-footer {
   .route-grid,
   .report-grid,
   .report-actions,
+  .report-risk-columns,
   .service-strip,
   .operation-model-grid,
   .role-template-grid {

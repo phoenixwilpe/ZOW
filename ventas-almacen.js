@@ -882,6 +882,8 @@ function renderPromotions() {
 function renderReports() {
   const filteredSales = sales.filter(isSaleInsideReportFilter);
   const confirmedSales = filteredSales.filter((sale) => sale.status !== "anulada");
+  const stockRisks = products.filter((product) => isProductActive(product) && Number(product.stock || 0) <= Number(product.min_stock || 0));
+  const expiryRisks = products.filter((product) => isProductActive(product) && ["danger", "warning"].includes(expiryStatus(product).level));
   const totalIncome = confirmedSales.reduce((sum, sale) => sum + Number(sale.amount_paid || sale.cash_received || sale.total || 0), 0);
   const totalSold = confirmedSales.reduce((sum, sale) => sum + Number(sale.total || 0), 0);
   const pendingTotal = receivables.reduce((sum, sale) => sum + Number(sale.balance_due || 0), 0);
@@ -930,7 +932,16 @@ function renderReports() {
     </section>
     <section class="admin-panel">
       <div class="admin-panel-head"><div><p class="eyebrow">Control</p><h3>Productos que requieren accion</h3></div></div>
-      <div class="admin-list">${products.filter((product) => isProductActive(product) && Number(product.stock || 0) <= Number(product.min_stock || 0)).map(renderProductRow).join("") || empty("Sin riesgos de inventario")}</div>
+      <div class="report-risk-columns">
+        <div>
+          <strong>Stock minimo</strong>
+          <div class="admin-list">${stockRisks.map(renderProductRow).join("") || empty("Sin riesgos de stock")}</div>
+        </div>
+        <div>
+          <strong>Vencimiento</strong>
+          <div class="admin-list">${expiryRisks.map(renderProductRow).join("") || empty("Sin productos vencidos o por vencer")}</div>
+        </div>
+      </div>
     </section>
   `;
   document.querySelector("#reportDateFrom")?.addEventListener("change", (event) => { reportFilter.from = event.target.value; renderMain(); });
@@ -2871,6 +2882,9 @@ function exportInventoryCsv() {
       producto: product.name,
       categoria: product.category || "",
       unidad: product.unit || "",
+      lote: product.batch_number || "",
+      vencimiento: product.expires_at || "",
+      alerta_vencimiento: expiryStatus(product).label || "",
       stock: stock.toFixed(2),
       minimo: Number(product.min_stock || product.minStock || 0).toFixed(2),
       costo: cost.toFixed(2),
