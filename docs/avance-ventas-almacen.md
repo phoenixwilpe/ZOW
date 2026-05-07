@@ -4,7 +4,7 @@ Este documento sirve para medir cuanto falta para considerar el sistema listo pa
 
 ## Estado general
 
-Avance estimado actual: 98%
+Avance estimado actual: 99%
 
 ## Completado
 
@@ -38,6 +38,7 @@ Avance estimado actual: 98%
 - Plan de pruebas funcionales con casos reales por rol, flujo y evidencia esperada.
 - Manual rapido por rol para encargado, cajero, almacen, supervisor y vendedor.
 - Kit comercial con demos por rubro, checklist de instalacion, guion de presentacion y planes sugeridos.
+- Politicas de seguridad y datos SaaS documentadas, con no-cache aplicado a respuestas API sensibles.
 - Reportes CSV: ventas, inventario, clientes y respaldo operativo JSON.
 - Despliegue en Vercel y backend PostgreSQL/Supabase.
 
@@ -45,10 +46,9 @@ Avance estimado actual: 98%
 
 1. Combos comerciales avanzados: paquetes con varios productos y precio final fijo.
 2. Ajustes finales de experiencia movil.
-3. Revision final de seguridad y politicas de datos por empresa.
-4. Importacion Excel directa con libreria dedicada, si el cliente no quiere convertir a CSV.
-5. Modo instalable PWA para caja tactil.
-6. Panel de promociones avanzado con duplicar, editar y reglas por categoria.
+3. Importacion Excel directa con libreria dedicada, si el cliente no quiere convertir a CSV.
+4. Modo instalable PWA para caja tactil.
+5. Panel de promociones avanzado con duplicar, editar y reglas por categoria.
 
 ## Omitido por ahora
 

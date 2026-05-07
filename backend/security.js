@@ -35,6 +35,11 @@ function applySecurity(app, express) {
     if (req.secure || req.headers["x-forwarded-proto"] === "https") {
       res.setHeader("Strict-Transport-Security", "max-age=15552000; includeSubDomains");
     }
+    if (req.path.startsWith("/api/")) {
+      res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, private");
+      res.setHeader("Pragma", "no-cache");
+      res.setHeader("Expires", "0");
+    }
     next();
   });
 
