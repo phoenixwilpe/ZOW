@@ -10845,3 +10845,351 @@ body.system-zow-site .site-footer {
   }
 }
 
+/* POS tactile modal polish: payment, stock, customers and sale details. */
+body.app-ventas dialog {
+  width: min(840px, calc(100vw - 24px));
+  border-radius: 22px;
+  background:
+    linear-gradient(180deg, rgb(255 255 255 / 96%), rgb(245 252 249 / 94%)),
+    radial-gradient(circle at 96% 0%, rgb(16 185 129 / 18%), transparent 34%);
+  box-shadow:
+    0 36px 110px rgb(7 18 17 / 28%),
+    inset 0 1px 0 rgb(255 255 255 / 92%);
+  overflow: hidden;
+}
+
+body.app-ventas dialog::backdrop {
+  background:
+    radial-gradient(circle at 50% 24%, rgb(16 185 129 / 14%), transparent 34%),
+    rgb(5 15 14 / 58%);
+  backdrop-filter: blur(8px);
+}
+
+body.app-ventas .modal-body {
+  position: relative;
+  padding: clamp(16px, 2.4vw, 26px);
+}
+
+body.app-ventas .modal-body::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    linear-gradient(115deg, transparent 0 52%, rgb(255 255 255 / 36%) 53%, transparent 55% 100%),
+    repeating-linear-gradient(90deg, transparent 0 46px, rgb(15 118 110 / 4%) 46px 47px);
+  opacity: 0.44;
+}
+
+body.app-ventas .modal-body > * {
+  position: relative;
+  z-index: 1;
+}
+
+body.app-ventas .modal-header {
+  align-items: center;
+  margin: calc(clamp(16px, 2.4vw, 26px) * -1) calc(clamp(16px, 2.4vw, 26px) * -1) 18px;
+  padding: clamp(16px, 2vw, 22px) clamp(16px, 2.4vw, 26px);
+  border-bottom: 1px solid rgb(15 118 110 / 12%);
+  background:
+    radial-gradient(circle at 12% 18%, rgb(82 255 193 / 18%), transparent 28%),
+    linear-gradient(135deg, #071613, #10251f 56%, #0f766e);
+  color: white;
+}
+
+body.app-ventas .modal-header .eyebrow,
+body.app-ventas .modal-header h2 {
+  color: white;
+}
+
+body.app-ventas .modal-header h2 {
+  margin-top: 2px;
+  font-size: clamp(1.22rem, 2.2vw, 1.8rem);
+}
+
+body.app-ventas .modal-header .icon-button {
+  border-color: rgb(255 255 255 / 18%);
+  background: rgb(255 255 255 / 12%);
+  color: white;
+}
+
+body.app-ventas .modal-header .icon-button:hover {
+  transform: translateY(-1px);
+  background: rgb(255 255 255 / 20%);
+}
+
+body.app-ventas .modal-body .form-grid {
+  align-items: end;
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid rgb(15 118 110 / 10%);
+  border-radius: 18px;
+  background: rgb(255 255 255 / 64%);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 84%);
+}
+
+body.app-ventas .modal-body label {
+  color: #10251f;
+  font-weight: 900;
+}
+
+body.app-ventas .modal-body input,
+body.app-ventas .modal-body select,
+body.app-ventas .modal-body textarea {
+  border-color: rgb(15 118 110 / 16%);
+  border-radius: 14px;
+  background: rgb(255 255 255 / 94%);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 90%);
+}
+
+body.app-ventas .modal-body input:focus,
+body.app-ventas .modal-body select:focus,
+body.app-ventas .modal-body textarea:focus {
+  border-color: #10b981;
+  box-shadow: 0 0 0 4px rgb(16 185 129 / 12%);
+}
+
+body.app-ventas .modal-actions {
+  align-items: center;
+  padding-top: 14px;
+  border-top: 1px solid rgb(15 118 110 / 10%);
+}
+
+body.app-ventas .modal-actions .ghost-button,
+body.app-ventas .modal-actions .primary-button {
+  min-height: 52px;
+  border-radius: 14px;
+}
+
+body.app-ventas .payment-modal-body {
+  width: min(920px, calc(100vw - 24px));
+  max-height: min(92dvh, 860px);
+}
+
+body.app-ventas .touch-payment-layout {
+  gap: 16px;
+}
+
+body.app-ventas .touch-payment-total {
+  position: relative;
+  overflow: hidden;
+  min-height: 138px;
+  border-radius: 22px;
+  padding: clamp(18px, 3vw, 28px);
+  background:
+    radial-gradient(circle at 88% 18%, rgb(245 158 11 / 24%), transparent 34%),
+    radial-gradient(circle at 12% 24%, rgb(82 255 193 / 22%), transparent 32%),
+    linear-gradient(135deg, #071613, #10251f 52%, #0f766e);
+  box-shadow:
+    0 24px 60px rgb(15 118 110 / 22%),
+    inset 0 1px 0 rgb(255 255 255 / 16%);
+}
+
+body.app-ventas .touch-payment-total::after {
+  content: "";
+  position: absolute;
+  right: 18px;
+  bottom: 18px;
+  width: 116px;
+  aspect-ratio: 1;
+  border: 1px solid rgb(255 255 255 / 16%);
+  border-radius: 28px;
+  background:
+    linear-gradient(135deg, rgb(255 255 255 / 10%), transparent),
+    repeating-linear-gradient(90deg, rgb(255 255 255 / 12%) 0 2px, transparent 2px 14px);
+  transform: rotate(10deg);
+}
+
+body.app-ventas .touch-payment-total strong {
+  line-height: 1;
+  text-shadow: 0 14px 34px rgb(0 0 0 / 24%);
+}
+
+body.app-ventas .touch-payment-methods {
+  grid-template-columns: repeat(auto-fit, minmax(118px, 1fr));
+  gap: 10px;
+}
+
+body.app-ventas .touch-payment-methods button,
+body.app-ventas .quick-cash-grid button {
+  position: relative;
+  overflow: hidden;
+  min-height: 78px;
+  border-radius: 18px;
+  border-color: rgb(15 118 110 / 12%);
+  background:
+    linear-gradient(145deg, rgb(255 255 255 / 96%), rgb(236 253 245 / 78%));
+  box-shadow:
+    0 14px 30px rgb(8 30 26 / 8%),
+    inset 0 1px 0 rgb(255 255 255 / 86%);
+  transition: transform 150ms ease, box-shadow 150ms ease, border-color 150ms ease;
+}
+
+body.app-ventas .touch-payment-methods button:hover,
+body.app-ventas .quick-cash-grid button:hover {
+  transform: translateY(-2px);
+  border-color: rgb(16 185 129 / 42%);
+  box-shadow:
+    0 20px 44px rgb(8 30 26 / 12%),
+    0 0 0 5px rgb(16 185 129 / 8%);
+}
+
+body.app-ventas .touch-payment-methods button.is-active {
+  border-color: transparent;
+  background: linear-gradient(135deg, #10b981, #0f766e 58%, #f59e0b);
+  color: white;
+}
+
+body.app-ventas .touch-payment-methods button span {
+  min-width: 42px;
+  min-height: 34px;
+  background: rgb(16 185 129 / 12%);
+}
+
+body.app-ventas .quick-cash-grid {
+  gap: 10px;
+}
+
+body.app-ventas .quick-cash-grid button {
+  color: #10251f;
+  font-size: 1.04rem;
+}
+
+body.app-ventas .touch-payment-fields {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+body.app-ventas .touch-payment-fields input {
+  min-height: 64px;
+  width: 100%;
+  min-width: 0;
+  font-size: clamp(1.05rem, 2vw, 1.42rem);
+  font-weight: 950;
+}
+
+body.app-ventas #paymentReceived,
+body.app-ventas #paymentResultValue {
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0;
+}
+
+body.app-ventas .touch-payment-actions {
+  gap: 10px;
+  grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr);
+}
+
+body.app-ventas .touch-payment-actions button {
+  min-height: 70px;
+  font-size: 1.04rem;
+}
+
+body.app-ventas .touch-payment-actions .primary-button {
+  background: linear-gradient(135deg, #10b981, #0f766e 58%, #f59e0b);
+}
+
+body.app-ventas .sale-detail-modal {
+  width: min(900px, calc(100vw - 24px));
+}
+
+body.app-ventas .sale-detail-summary {
+  gap: 12px;
+}
+
+body.app-ventas .sale-detail-summary article,
+body.app-ventas .sale-detail-card,
+body.app-ventas .sale-detail-items article,
+body.app-ventas .receivable-payment-card div,
+body.app-ventas .stock-movement-product {
+  border-radius: 16px;
+  border-color: rgb(15 118 110 / 12%);
+  background:
+    linear-gradient(145deg, rgb(255 255 255 / 94%), rgb(236 253 245 / 76%)),
+    radial-gradient(circle at 92% 12%, rgb(245 158 11 / 10%), transparent 34%);
+  box-shadow: 0 14px 32px rgb(8 30 26 / 7%);
+}
+
+body.app-ventas .sale-detail-summary article {
+  min-height: 82px;
+}
+
+body.app-ventas .sale-detail-items {
+  padding: 4px;
+}
+
+body.app-ventas .sale-detail-items article {
+  align-items: flex-start;
+  padding: 12px 14px;
+}
+
+body.app-ventas .cloud-safe-note {
+  border-radius: 16px;
+}
+
+@media (max-width: 760px) {
+  body.app-ventas dialog {
+    width: calc(100vw - 12px);
+    max-height: calc(100dvh - 12px);
+    border-radius: 18px;
+  }
+
+  body.app-ventas .modal-body,
+  body.app-ventas .payment-modal-body {
+    max-height: calc(100dvh - 12px);
+    overflow: auto;
+    padding: 14px;
+  }
+
+  body.app-ventas .modal-header {
+    margin: -14px -14px 14px;
+    padding: 14px;
+  }
+
+  body.app-ventas .modal-header {
+    align-items: flex-start;
+  }
+
+  body.app-ventas .modal-body .form-grid,
+  body.app-ventas .touch-payment-fields,
+  body.app-ventas .touch-payment-actions,
+  body.app-ventas .sale-detail-card,
+  body.app-ventas .sale-detail-summary,
+  body.app-ventas .receivable-payment-card {
+    grid-template-columns: 1fr;
+  }
+
+  body.app-ventas .touch-payment-total {
+    min-height: 118px;
+    border-radius: 18px;
+  }
+
+  body.app-ventas .touch-payment-methods,
+  body.app-ventas .quick-cash-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  body.app-ventas .touch-payment-methods button,
+  body.app-ventas .quick-cash-grid button {
+    min-height: 66px;
+  }
+
+  body.app-ventas .modal-actions {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  body.app-ventas .modal-actions > * {
+    width: 100%;
+  }
+}
+
+@media (max-width: 430px) {
+  body.app-ventas .touch-payment-methods,
+  body.app-ventas .quick-cash-grid {
+    grid-template-columns: 1fr;
+  }
+
+  body.app-ventas .touch-payment-total strong {
+    font-size: 2.2rem;
+  }
+}
+
