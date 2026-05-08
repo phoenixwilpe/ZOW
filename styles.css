@@ -4886,6 +4886,235 @@ body.app-ventas .business-health-grid article {
   box-shadow: 0 14px 34px rgb(8 30 26 / 7%);
 }
 
+@media (min-width: 1280px) {
+  body.app-ventas .touch-pos-shell {
+    grid-template-columns: minmax(620px, 1.45fr) minmax(390px, 0.82fr);
+  }
+
+  body.app-ventas .touch-product-grid {
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  }
+
+  body.app-ventas .touch-cart-panel .pos-cart-list {
+    max-height: clamp(260px, 32dvh, 440px);
+  }
+}
+
+@media (max-width: 1180px) {
+  body.app-ventas .ventas-touch-shell {
+    padding: 12px;
+  }
+
+  body.app-ventas .ventas-touch-shell .topbar {
+    min-height: auto;
+  }
+
+  body.app-ventas .touch-pos-shell {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  body.app-ventas .touch-cart-panel {
+    position: static;
+  }
+
+  body.app-ventas .touch-cart-panel .pos-cart-list {
+    max-height: none;
+  }
+
+  body.app-ventas .touch-product-card {
+    min-height: 152px;
+  }
+}
+
+@media (max-width: 760px) {
+  body.app-ventas {
+    background:
+      radial-gradient(circle at 18% 8%, rgb(20 184 166 / 14%), transparent 42vw),
+      radial-gradient(circle at 92% 90%, rgb(245 158 11 / 12%), transparent 46vw),
+      #f6faf8;
+  }
+
+  body.app-ventas .ventas-touch-shell {
+    width: 100% !important;
+    padding: 8px;
+  }
+
+  body.app-ventas .ventas-touch-shell::before,
+  body.app-ventas .ventas-touch-shell::after {
+    display: none;
+  }
+
+  body.app-ventas .ventas-touch-shell .topbar {
+    gap: 10px;
+    align-items: stretch;
+    flex-direction: column;
+    padding: 12px;
+    border-radius: 16px;
+  }
+
+  body.app-ventas .ventas-touch-shell .topbar h1 {
+    font-size: 1.22rem;
+  }
+
+  body.app-ventas .topbar-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    width: 100%;
+  }
+
+  body.app-ventas .topbar-actions > * {
+    justify-content: center;
+    width: 100%;
+    min-width: 0;
+  }
+
+  body.app-ventas .topbar-actions .user-badge {
+    grid-column: 1 / -1;
+  }
+
+  body.app-ventas .metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  body.app-ventas .ventas-menu-toggle {
+    border-radius: 16px;
+    background:
+      linear-gradient(135deg, #071613, #0f766e);
+  }
+
+  body.app-ventas .ventas-tabs {
+    border-radius: 16px;
+  }
+
+  body.app-ventas .touch-panel,
+  body.app-ventas .touch-cart-panel {
+    border-radius: 16px;
+    padding: 12px;
+  }
+
+  body.app-ventas .touch-pos-head,
+  body.app-ventas .touch-cart-head {
+    min-height: auto;
+  }
+
+  body.app-ventas .touch-shortcuts {
+    justify-content: flex-start;
+  }
+
+  body.app-ventas .pos-quick-status {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  body.app-ventas .pos-search-row,
+  body.app-ventas .pos-customer-row,
+  body.app-ventas .pos-sale-options {
+    grid-template-columns: 1fr;
+  }
+
+  body.app-ventas .touch-action,
+  body.app-ventas .pos-customer-row .ghost-button {
+    width: 100%;
+    min-height: 54px;
+  }
+
+  body.app-ventas .scanner-status,
+  body.app-ventas .pos-input-hint {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  body.app-ventas .pos-section-block {
+    padding: 10px;
+  }
+
+  body.app-ventas .pos-section-title {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 3px;
+  }
+
+  body.app-ventas .touch-product-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+  }
+
+  body.app-ventas .touch-product-card {
+    min-height: 138px;
+    padding: 12px;
+  }
+
+  body.app-ventas .touch-product-card b {
+    font-size: 0.96rem;
+  }
+
+  body.app-ventas .touch-product-card::after {
+    width: 34px;
+  }
+
+  body.app-ventas .touch-cart-head > strong {
+    width: 100%;
+    text-align: center;
+  }
+
+  body.app-ventas .touch-qty {
+    grid-template-columns: 52px 1fr 52px;
+  }
+
+  body.app-ventas .touch-charge-button {
+    min-height: 62px;
+  }
+
+  body.app-ventas .combo-builder-grid,
+  body.app-ventas .customer-workspace-grid,
+  body.app-ventas .collection-plan-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 430px) {
+  body.app-ventas .ventas-touch-shell {
+    padding: 6px;
+  }
+
+  body.app-ventas .topbar-actions {
+    grid-template-columns: 1fr;
+  }
+
+  body.app-ventas .metrics,
+  body.app-ventas .pos-quick-status {
+    grid-template-columns: 1fr;
+  }
+
+  body.app-ventas .touch-product-grid {
+    grid-template-columns: 1fr;
+  }
+
+  body.app-ventas .touch-product-card {
+    min-height: 122px;
+  }
+
+  body.app-ventas .touch-sale-actions {
+    grid-template-columns: 1fr;
+  }
+
+  body.app-ventas .payment-method-grid,
+  body.app-ventas .quick-cash-grid,
+  body.app-ventas .touch-payment-methods {
+    grid-template-columns: 1fr;
+  }
+
+  body.app-ventas .admin-row,
+  body.app-ventas .cash-closure-row {
+    grid-template-columns: 1fr;
+  }
+
+  body.app-ventas .admin-row-meta {
+    align-items: flex-start;
+    justify-content: flex-start;
+  }
+}
+
 .receivable-payment-card {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
