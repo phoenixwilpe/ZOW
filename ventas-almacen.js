@@ -246,13 +246,26 @@ productForm.addEventListener("submit", async (event) => {
     minStock: Number(value("#productMin"))
   };
   if (!editingProductId) productPayload.stock = Number(value("#productStock"));
-  await apiRequest(editingProductId ? `/ventas/products/${editingProductId}` : "/ventas/products", {
-    method: editingProductId ? "PATCH" : "POST",
-    body: productPayload
-  });
-  editingProductId = "";
-  productModal.close();
-  await render();
+  const validation = validateProductPayload(productPayload, Boolean(editingProductId));
+  if (validation) {
+    ventasMessage = validation;
+    productModal.close();
+    return renderMain();
+  }
+  try {
+    await apiRequest(editingProductId ? `/ventas/products/${editingProductId}` : "/ventas/products", {
+      method: editingProductId ? "PATCH" : "POST",
+      body: productPayload
+    });
+    ventasMessage = editingProductId ? "Producto actualizado correctamente." : "Producto registrado correctamente.";
+    editingProductId = "";
+    productModal.close();
+    await render();
+  } catch (error) {
+    ventasMessage = error.message || "No se pudo guardar el producto.";
+    productModal.close();
+    renderMain();
+  }
 });
 
 productModal.addEventListener("close", () => {
@@ -1501,6 +1514,7 @@ function renderUsers() {
 function renderSettings() {
   setCount("Tienda");
   mainList().innerHTML = `
+    ${renderSetupAssistant()}
     <section class="admin-panel">
       <div class="admin-panel-head"><div><p class="eyebrow">Empresa</p><h3>Datos para ventas e impresion</h3></div></div>
       <form class="admin-form" id="storeSettingsForm">
@@ -1531,6 +1545,27 @@ function renderSettings() {
     </section>
   `;
   document.querySelector("#storeSettingsForm")?.addEventListener("submit", saveStoreSettings);
+}
+
+function renderSetupAssistant() {
+  const checks = [
+    { label: "Datos de empresa", done: Boolean((storeSettings.companyName || currentUser.companyName || "").trim() && (storeSettings.currency || "").trim()) },
+    { label: "Cajas configuradas", done: Number(storeSettings.cashRegisterCount || 0) >= 1 },
+    { label: "Usuarios creados", done: users.length > 1 },
+    { label: "Productos cargados", done: products.filter(isProductActive).length > 0 },
+    { label: "Clientes opcionales", done: customers.length > 0 || !storeSettings.requireCustomerForSale },
+    { label: "Caja de prueba", done: cashSession?.status === "abierta" || cashClosures.length > 0 || sales.length > 0 }
+  ];
+  const completed = checks.filter((item) => item.done).length;
+  const percent = Math.round((completed / checks.length) * 100);
+  return `<section class="admin-panel setup-assistant-panel">
+    <div class="admin-panel-head"><div><p class="eyebrow">Configuracion inicial</p><h3>Listo para operar al ${percent}%</h3></div><span>${completed}/${checks.length}</span></div>
+    <div class="setup-progress"><span style="width:${percent}%"></span></div>
+    <div class="setup-check-grid">
+      ${checks.map((item) => `<article class="${item.done ? "is-done" : "is-pending"}"><strong>${item.done ? "Listo" : "Pendiente"}</strong><span>${escapeHtml(item.label)}</span></article>`).join("")}
+    </div>
+    <p class="setup-hint">Recomendacion: completa estos puntos antes de entregar el acceso a cajeros o almacen.</p>
+  </section>`;
 }
 
 function renderProductRow(product) {
@@ -1676,6 +1711,39 @@ function productInventoryInsight(product) {
     marginPercent: Math.round(marginPercent),
     className: inventoryClass(product)
   };
+}
+
+function validateProductPayload(product, isEditing) {
+  const code = String(product.code || "").trim();
+  const name = String(product.name || "").trim();
+  const cost = Number(product.costPrice || 0);
+  const price = Number(product.salePrice || 0);
+  const minStock = Number(product.minStock || 0);
+  const stock = Number(product.stock || 0);
+  if (!code) return "El codigo del producto es obligatorio.";
+  if (code.length < 2 || code.length > 40) return "El codigo debe tener entre 2 y 40 caracteres.";
+  if (!name) return "El nombre del producto es obligatorio.";
+  if (!Number.isFinite(cost) || cost < 0) return "El costo no puede ser negativo.";
+  if (!Number.isFinite(price) || price <= 0) return "El precio de venta debe ser mayor a cero.";
+  if (price < cost) return "El precio de venta esta por debajo del costo. Revisa el margen antes de guardar.";
+  if (!Number.isFinite(minStock) || minStock < 0) return "El stock minimo no puede ser negativo.";
+  if (!isEditing && (!Number.isFinite(stock) || stock < 0)) return "El stock inicial no puede ser negativo.";
+  const duplicate = products.find((item) => String(item.code || "").trim().toUpperCase() === code.toUpperCase() && item.id !== editingProductId);
+  if (duplicate) return `Ya existe un producto con el codigo ${code}.`;
+  const barcode = String(product.barcode || "").trim();
+  if (barcode) {
+    const duplicateBarcode = products.find((item) => String(item.barcode || "").trim().toLowerCase() === barcode.toLowerCase() && item.id !== editingProductId);
+    if (duplicateBarcode) return "El codigo de barras ya esta asignado a otro producto.";
+  }
+  return "";
+}
+
+function validateStoreSettingsPayload(settings) {
+  if (!settings.companyName) return "El nombre legal de la empresa es obligatorio.";
+  if (!settings.currency || settings.currency.length < 2) return "La moneda debe tener al menos 2 caracteres. Ej: BOB, USD.";
+  if (!Number.isFinite(settings.cashRegisterCount) || settings.cashRegisterCount < 1 || settings.cashRegisterCount > 20) return "La cantidad de cajas debe estar entre 1 y 20.";
+  if (!Number.isFinite(settings.taxRate) || settings.taxRate < 0 || settings.taxRate > 100) return "El impuesto debe estar entre 0 y 100%.";
+  return "";
 }
 
 function inventoryClass(product) {
@@ -2774,25 +2842,34 @@ async function submitVoidSale(event) {
 
 async function saveStoreSettings(event) {
   event.preventDefault();
-  const response = await apiRequest("/ventas/settings", {
-    method: "PATCH",
-    body: {
-      companyName: value("#storeCompanyName"),
-      storeName: value("#storeName"),
-      currency: value("#storeCurrency"),
-      taxId: value("#storeTaxId"),
-      phone: value("#storePhone"),
-      address: value("#storeAddress"),
-      ticketNote: value("#storeTicketNote"),
-      cashRegisterCount: Number(value("#storeCashRegisterCount") || 1),
-      taxRate: Number(value("#storeTaxRate") || 0),
-      allowCredit: Boolean(document.querySelector("#storeAllowCredit")?.checked),
-      allowDiscounts: Boolean(document.querySelector("#storeAllowDiscounts")?.checked),
-      requireCustomerForSale: Boolean(document.querySelector("#storeRequireCustomerForSale")?.checked)
-    }
-  });
-  storeSettings = response.settings;
-  await render();
+  const payload = {
+    companyName: value("#storeCompanyName").trim(),
+    storeName: value("#storeName").trim(),
+    currency: value("#storeCurrency").trim().toUpperCase(),
+    taxId: value("#storeTaxId").trim(),
+    phone: value("#storePhone").trim(),
+    address: value("#storeAddress").trim(),
+    ticketNote: value("#storeTicketNote").trim(),
+    cashRegisterCount: Number(value("#storeCashRegisterCount") || 1),
+    taxRate: Number(value("#storeTaxRate") || 0),
+    allowCredit: Boolean(document.querySelector("#storeAllowCredit")?.checked),
+    allowDiscounts: Boolean(document.querySelector("#storeAllowDiscounts")?.checked),
+    requireCustomerForSale: Boolean(document.querySelector("#storeRequireCustomerForSale")?.checked)
+  };
+  const validation = validateStoreSettingsPayload(payload);
+  if (validation) {
+    ventasMessage = validation;
+    return renderMain();
+  }
+  try {
+    const response = await apiRequest("/ventas/settings", { method: "PATCH", body: payload });
+    storeSettings = response.settings;
+    ventasMessage = "Configuracion de tienda actualizada.";
+    await render();
+  } catch (error) {
+    ventasMessage = error.message || "No se pudo guardar la configuracion.";
+    renderMain();
+  }
 }
 
 async function saveSupplier(event) {

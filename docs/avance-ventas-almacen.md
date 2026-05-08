@@ -49,6 +49,9 @@ Avance estimado actual: 99%
 - Panel de actividad operativa con estado de caja, ultima venta, alertas y auditoria visible.
 - Reporte de inventario valorizado con costo en stock, venta potencial, margen estimado y productos de mayor valor.
 - Kardex visual por producto con linea de movimientos, entrada/salida, responsable, referencia y saldo por movimiento.
+- Asistente de configuracion inicial para encargado con avance por datos de empresa, cajas, usuarios, productos y caja de prueba.
+- Validaciones reforzadas en productos y configuracion para evitar codigos duplicados, precios bajo costo, stock negativo e impuestos invalidos.
+- Ajustes responsivos para que actividad, cierre detallado, Kardex y configuracion se acomoden mejor en celular/tablet.
 
 ## Faltante prioritario
 
