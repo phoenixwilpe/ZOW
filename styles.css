@@ -11419,3 +11419,89 @@ body.app-ventas .pos-customer-row select {
   }
 }
 
+/* Cashier focus mode: maximizes the sales workspace for touch and desktop counters. */
+body.app-ventas .topbar-actions #posFocusToggle.is-active {
+  border-color: rgb(245 158 11 / 38%);
+  background:
+    linear-gradient(135deg, rgb(245 158 11 / 24%), rgb(16 185 129 / 18%));
+  color: white;
+}
+
+body.app-ventas .ventas-touch-shell.pos-focus-mode[data-active-view="sell"] {
+  width: min(1720px, 100%) !important;
+  padding: 10px;
+}
+
+body.app-ventas .ventas-touch-shell.pos-focus-mode[data-active-view="sell"] .topbar {
+  min-height: auto;
+  margin-bottom: 8px;
+  padding: 8px 12px;
+  border-radius: 16px;
+}
+
+body.app-ventas .ventas-touch-shell.pos-focus-mode[data-active-view="sell"] .topbar h1 {
+  font-size: clamp(1.02rem, 1.4vw, 1.32rem);
+}
+
+body.app-ventas .ventas-touch-shell.pos-focus-mode[data-active-view="sell"] .topbar .eyebrow,
+body.app-ventas .ventas-touch-shell.pos-focus-mode[data-active-view="sell"] .copyright-line {
+  display: none;
+}
+
+body.app-ventas .ventas-touch-shell.pos-focus-mode[data-active-view="sell"] .ventas-workspace {
+  display: block;
+  grid-template-columns: 1fr;
+}
+
+body.app-ventas .ventas-touch-shell.pos-focus-mode[data-active-view="sell"] .ventas-tabs,
+body.app-ventas .ventas-touch-shell.pos-focus-mode[data-active-view="sell"] .ventas-menu-toggle {
+  display: none;
+}
+
+body.app-ventas .ventas-touch-shell.pos-focus-mode[data-active-view="sell"] .content-grid,
+body.app-ventas .ventas-touch-shell.pos-focus-mode[data-active-view="sell"] .document-list {
+  grid-column: 1;
+  width: 100%;
+}
+
+body.app-ventas .ventas-touch-shell.pos-focus-mode[data-active-view="sell"] .touch-pos-shell {
+  grid-template-columns: minmax(0, 1.72fr) minmax(360px, 0.62fr);
+  gap: 12px;
+}
+
+body.app-ventas .ventas-touch-shell.pos-focus-mode[data-active-view="sell"] .touch-panel,
+body.app-ventas .ventas-touch-shell.pos-focus-mode[data-active-view="sell"] .touch-cart-panel {
+  border-radius: 18px;
+}
+
+body.app-ventas .ventas-touch-shell.pos-focus-mode[data-active-view="sell"] .touch-product-grid {
+  grid-template-columns: repeat(auto-fit, minmax(178px, 1fr));
+}
+
+body.app-ventas .ventas-touch-shell.pos-focus-mode[data-active-view="sell"] .pos-products-block .touch-product-grid {
+  max-height: clamp(420px, 62dvh, 720px);
+}
+
+body.app-ventas .ventas-touch-shell.pos-focus-mode[data-active-view="sell"] .touch-product-card {
+  min-height: 150px;
+}
+
+body.app-ventas .ventas-touch-shell.pos-focus-mode[data-active-view="sell"] .touch-cart-panel {
+  max-height: calc(100dvh - 84px);
+}
+
+@media (max-width: 1180px) {
+  body.app-ventas .ventas-touch-shell.pos-focus-mode[data-active-view="sell"] .topbar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  body.app-ventas .ventas-touch-shell.pos-focus-mode[data-active-view="sell"] .touch-pos-shell {
+    grid-template-columns: 1fr;
+  }
+
+  body.app-ventas .ventas-touch-shell.pos-focus-mode[data-active-view="sell"] .pos-products-block .touch-product-grid {
+    max-height: none;
+  }
+}
+

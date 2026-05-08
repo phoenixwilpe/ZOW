@@ -6,6 +6,7 @@ const SESSION_KEY = "zowVentasAlmacen.session";
 const SUSPENDED_SALES_KEY = "zowVentasAlmacen.suspendedSales";
 const LOCAL_SALE_META_KEY = "zowVentasAlmacen.saleMeta";
 const FAVORITE_PRODUCTS_KEY = "zowVentasAlmacen.favoriteProducts";
+const POS_FOCUS_KEY = "zowVentasAlmacen.posFocus";
 
 /**
  * @typedef {{ id:string, code:string, barcode?:string, name:string, category:string, stock:number, sale_price:number, cost_price:number }} Product
@@ -54,6 +55,7 @@ let cashClosures = [];
 let selectedKardex = null;
 let localSaleMeta = loadJson(LOCAL_SALE_META_KEY, {});
 let favoriteProducts = loadJson(FAVORITE_PRODUCTS_KEY, []);
+let posFocusMode = localStorage.getItem(POS_FOCUS_KEY) === "1";
 let historyFilter = { status: "", method: "", date: "" };
 let storeSettings = {
   companyName: "",
@@ -114,6 +116,7 @@ const saleDetailContent = document.querySelector("#saleDetailContent");
 const ventasMenuToggle = document.querySelector("#ventasMenuToggle");
 const installVentasAppButton = document.querySelector("#installVentasApp");
 const ventasNotificationButton = document.querySelector("#ventasNotificationBtn");
+const posFocusToggle = document.querySelector("#posFocusToggle");
 const ventasLoginScene = document.querySelector(".advanced-sales-scene");
 let ventasLoginSceneFrame = 0;
 let ventasInstallPrompt = null;
@@ -182,6 +185,13 @@ ventasMenuToggle?.addEventListener("click", () => {
 ventasNotificationButton?.addEventListener("click", () => {
   notificationsOpen = !notificationsOpen;
   ventasNotificationButton.setAttribute("aria-expanded", String(notificationsOpen));
+  renderMain();
+});
+
+posFocusToggle?.addEventListener("click", () => {
+  posFocusMode = !posFocusMode;
+  localStorage.setItem(POS_FOCUS_KEY, posFocusMode ? "1" : "0");
+  closeVentasMenu();
   renderMain();
 });
 
@@ -400,6 +410,12 @@ function renderLoggedIn() {
 function renderMain() {
   if (!canAccessView(activeView)) activeView = defaultViewForRole();
   appShell.dataset.activeView = activeView;
+  appShell.classList.toggle("pos-focus-mode", activeView === "sell" && posFocusMode);
+  if (posFocusToggle) {
+    posFocusToggle.hidden = activeView !== "sell";
+    posFocusToggle.textContent = posFocusMode ? "Salir modo caja" : "Modo caja";
+    posFocusToggle.classList.toggle("is-active", activeView === "sell" && posFocusMode);
+  }
   document.querySelectorAll("[data-view]").forEach((button) => {
     const allowed = canAccessView(button.dataset.view);
     button.hidden = !allowed;
