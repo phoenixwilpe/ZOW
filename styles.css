@@ -4559,6 +4559,333 @@ body.app-correspondencia .metrics article:hover {
   color: var(--accent-dark);
 }
 
+/* Visual polish for the sales SaaS workspace. Kept CSS-only for smooth POS performance. */
+body.app-ventas {
+  background:
+    linear-gradient(115deg, rgb(4 18 16 / 4%) 0 24%, transparent 24% 100%),
+    radial-gradient(circle at 8% 18%, rgb(20 184 166 / 13%), transparent 28vw),
+    radial-gradient(circle at 92% 12%, rgb(245 158 11 / 12%), transparent 26vw),
+    radial-gradient(circle at 68% 92%, rgb(37 99 235 / 8%), transparent 30vw),
+    #f6faf8;
+}
+
+body.app-ventas .ventas-touch-shell::before {
+  background:
+    linear-gradient(90deg, transparent 0 71%, rgb(20 184 166 / 10%) 71% 71.2%, transparent 71.2% 100%),
+    linear-gradient(0deg, transparent 0 78%, rgb(245 158 11 / 7%) 78% 78.18%, transparent 78.18% 100%),
+    radial-gradient(circle at 76% 24%, rgb(20 184 166 / 14%), transparent 30vw),
+    radial-gradient(circle at 18% 92%, rgb(245 158 11 / 13%), transparent 30vw);
+}
+
+body.app-ventas .ventas-touch-shell::after {
+  opacity: 0.36;
+  mix-blend-mode: multiply;
+}
+
+body.app-ventas .admin-panel,
+body.app-ventas .ventas-workspace .document-list,
+body.app-ventas .ventas-workspace .workflow-panel,
+body.app-ventas .metrics article {
+  border: 1px solid rgb(15 23 42 / 6%);
+  box-shadow:
+    0 22px 60px rgb(8 30 26 / 10%),
+    inset 0 1px 0 rgb(255 255 255 / 78%);
+}
+
+body.app-ventas .ventas-touch-shell .topbar {
+  min-height: 86px;
+  border: 1px solid rgb(255 255 255 / 14%);
+  background:
+    radial-gradient(circle at 16% 18%, rgb(82 255 193 / 28%), transparent 28%),
+    radial-gradient(circle at 78% 22%, rgb(255 183 77 / 22%), transparent 26%),
+    linear-gradient(135deg, #071613, #10251f 46%, #0f766e 78%, #11915f);
+}
+
+body.app-ventas .ventas-touch-shell .topbar h1 {
+  text-shadow: 0 10px 26px rgb(0 0 0 / 22%);
+}
+
+body.app-ventas .ventas-tabs {
+  border-radius: 14px;
+  background:
+    linear-gradient(180deg, rgb(7 18 17 / 96%), rgb(17 38 32 / 94%)),
+    radial-gradient(circle at 24% 0%, rgb(82 255 193 / 22%), transparent 34%);
+}
+
+body.app-ventas .ventas-tabs button {
+  border-radius: 12px;
+  font-weight: 900;
+}
+
+body.app-ventas .ventas-tabs button.is-active,
+body.app-ventas .ventas-tabs button.is-active:hover {
+  background:
+    linear-gradient(135deg, #10b981, #0f766e 58%, #f59e0b);
+}
+
+body.app-ventas .touch-pos-shell {
+  gap: 18px;
+}
+
+body.app-ventas .touch-panel,
+body.app-ventas .touch-cart-panel {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid rgb(15 23 42 / 6%);
+  border-radius: 16px;
+  background:
+    linear-gradient(180deg, rgb(255 255 255 / 94%), rgb(246 252 249 / 90%)),
+    radial-gradient(circle at 92% 0%, rgb(16 185 129 / 14%), transparent 34%);
+}
+
+body.app-ventas .touch-panel::before,
+body.app-ventas .touch-cart-panel::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    linear-gradient(115deg, transparent 0 48%, rgb(255 255 255 / 36%) 50%, transparent 52% 100%),
+    repeating-linear-gradient(90deg, transparent 0 42px, rgb(15 118 110 / 4%) 42px 43px);
+  opacity: 0.36;
+}
+
+body.app-ventas .touch-panel > *,
+body.app-ventas .touch-cart-panel > * {
+  position: relative;
+  z-index: 1;
+}
+
+body.app-ventas .touch-pos-head,
+body.app-ventas .touch-cart-head {
+  min-height: 66px;
+  padding: 2px 2px 12px;
+  border-bottom: 1px solid rgb(15 118 110 / 10%);
+}
+
+body.app-ventas .touch-pos-head h3,
+body.app-ventas .touch-cart-head h3 {
+  color: #10251f;
+}
+
+body.app-ventas .touch-shortcuts span,
+body.app-ventas .product-code {
+  border: 1px solid rgb(15 118 110 / 12%);
+  background: linear-gradient(135deg, rgb(236 253 245 / 92%), rgb(255 251 235 / 82%));
+}
+
+body.app-ventas .pos-quick-status article {
+  position: relative;
+  overflow: hidden;
+  border-radius: 14px;
+  background:
+    linear-gradient(135deg, rgb(255 255 255 / 92%), rgb(236 253 245 / 82%)),
+    radial-gradient(circle at 88% 12%, rgb(245 158 11 / 12%), transparent 30%);
+}
+
+body.app-ventas .pos-quick-status article::after {
+  content: "";
+  position: absolute;
+  right: -24px;
+  bottom: -34px;
+  width: 86px;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: rgb(20 184 166 / 9%);
+}
+
+body.app-ventas .pos-search-row {
+  border: 1px solid rgb(15 118 110 / 11%);
+  border-radius: 16px;
+  padding: 10px;
+  background: rgb(255 255 255 / 72%);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 84%);
+}
+
+body.app-ventas .touch-search input,
+body.app-ventas .touch-customer-select select,
+body.app-ventas .pos-sale-options input,
+body.app-ventas .cart-line input {
+  border-color: rgb(15 118 110 / 14%);
+  background: rgb(255 255 255 / 88%);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 90%);
+}
+
+body.app-ventas .touch-search input:focus,
+body.app-ventas .touch-customer-select select:focus,
+body.app-ventas .pos-sale-options input:focus,
+body.app-ventas .cart-line input:focus {
+  border-color: #10b981;
+  box-shadow: 0 0 0 4px rgb(16 185 129 / 12%);
+}
+
+body.app-ventas .scanner-status {
+  border-radius: 14px;
+}
+
+body.app-ventas .pos-input-hint {
+  border-radius: 14px;
+  background:
+    linear-gradient(135deg, rgb(236 253 245 / 76%), rgb(255 251 235 / 62%));
+}
+
+body.app-ventas .pos-section-block {
+  border-radius: 16px;
+  background:
+    linear-gradient(180deg, rgb(255 255 255 / 82%), rgb(248 252 250 / 72%)),
+    radial-gradient(circle at 100% 0%, rgb(20 184 166 / 8%), transparent 34%);
+}
+
+body.app-ventas .pos-section-title {
+  align-items: center;
+}
+
+body.app-ventas .pos-category-rail button {
+  border-radius: 999px;
+  transition: transform 140ms ease, box-shadow 140ms ease, border-color 140ms ease, background 140ms ease;
+}
+
+body.app-ventas .pos-category-rail button:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 12px 24px rgb(15 118 110 / 12%);
+}
+
+body.app-ventas .touch-product-grid {
+  gap: 14px;
+}
+
+body.app-ventas .touch-product-card {
+  isolation: isolate;
+  position: relative;
+  min-height: 170px;
+  border-radius: 16px;
+  border-color: rgb(15 118 110 / 12%);
+  background:
+    linear-gradient(145deg, rgb(255 255 255 / 96%), rgb(240 253 250 / 80%)),
+    radial-gradient(circle at 90% 10%, rgb(16 185 129 / 18%), transparent 36%);
+  box-shadow:
+    0 16px 36px rgb(8 30 26 / 9%),
+    inset 0 1px 0 rgb(255 255 255 / 86%);
+}
+
+body.app-ventas .touch-product-card::after {
+  content: "";
+  position: absolute;
+  right: 12px;
+  bottom: 12px;
+  width: 42px;
+  aspect-ratio: 1;
+  border-radius: 12px;
+  background:
+    linear-gradient(135deg, rgb(16 185 129 / 18%), rgb(245 158 11 / 16%));
+  transform: rotate(8deg);
+  z-index: -1;
+}
+
+body.app-ventas .touch-product-card:not(:disabled):hover,
+body.app-ventas .touch-product-card:not(:disabled):focus-visible {
+  border-color: rgb(16 185 129 / 42%);
+  box-shadow:
+    0 24px 54px rgb(8 30 26 / 14%),
+    0 0 0 5px rgb(16 185 129 / 9%);
+}
+
+body.app-ventas .combo-product-card {
+  border-color: rgb(245 158 11 / 30%);
+  background:
+    linear-gradient(145deg, #ffffff, #fff7ed 52%, #ecfdf5),
+    radial-gradient(circle at 90% 10%, rgb(245 158 11 / 20%), transparent 36%);
+}
+
+body.app-ventas .combo-product-card::after {
+  background: linear-gradient(135deg, rgb(245 158 11 / 24%), rgb(16 185 129 / 18%));
+}
+
+body.app-ventas .touch-product-card b {
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: #10251f;
+  color: #ecfdf5;
+  font-size: 1.08rem;
+  box-shadow: 0 10px 22px rgb(16 37 31 / 12%);
+}
+
+body.app-ventas .touch-cart-panel {
+  border-color: rgb(245 158 11 / 12%);
+}
+
+body.app-ventas .touch-cart-head > strong {
+  padding: 8px 12px;
+  border-radius: 14px;
+  background: linear-gradient(135deg, #10251f, #0f766e);
+  color: #ffffff;
+  box-shadow: 0 14px 30px rgb(15 118 110 / 18%);
+}
+
+body.app-ventas .touch-cart-line {
+  border-radius: 14px;
+  border-color: rgb(15 118 110 / 10%);
+  background:
+    linear-gradient(135deg, rgb(255 255 255 / 94%), rgb(247 252 249 / 80%));
+  box-shadow: 0 10px 26px rgb(8 30 26 / 7%);
+}
+
+body.app-ventas .touch-qty strong {
+  border: 1px solid rgb(15 118 110 / 14%);
+  background: linear-gradient(135deg, rgb(236 253 245 / 96%), #ffffff);
+}
+
+body.app-ventas .sale-total-card {
+  border-radius: 16px;
+  background:
+    linear-gradient(135deg, #10251f, #0f766e);
+  color: #ffffff;
+  box-shadow: 0 18px 42px rgb(15 118 110 / 18%);
+}
+
+body.app-ventas .sale-total-card span,
+body.app-ventas .sale-total-card strong {
+  color: #ffffff;
+}
+
+body.app-ventas .sale-total-card > div:not(.is-total) {
+  opacity: 0.82;
+}
+
+body.app-ventas .sale-total-card .is-total {
+  border-color: rgb(255 255 255 / 18%);
+}
+
+body.app-ventas .touch-sale-actions .ghost-button {
+  border-radius: 12px;
+  background: rgb(255 255 255 / 84%);
+}
+
+body.app-ventas .touch-charge-button {
+  border-radius: 16px;
+  background:
+    linear-gradient(135deg, #10b981, #0f766e 54%, #f59e0b);
+  box-shadow:
+    0 22px 50px rgb(15 118 110 / 24%),
+    inset 0 1px 0 rgb(255 255 255 / 26%);
+}
+
+body.app-ventas .touch-charge-button:not(:disabled):hover {
+  box-shadow:
+    0 28px 66px rgb(15 118 110 / 30%),
+    0 0 0 6px rgb(245 158 11 / 10%);
+}
+
+body.app-ventas .promotion-card,
+body.app-ventas .collection-plan-grid article,
+body.app-ventas .debt-aging-grid article,
+body.app-ventas .inventory-insight-grid article,
+body.app-ventas .cash-health-grid article,
+body.app-ventas .business-health-grid article {
+  border-radius: 16px;
+  box-shadow: 0 14px 34px rgb(8 30 26 / 7%);
+}
+
 .receivable-payment-card {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
