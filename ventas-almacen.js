@@ -72,6 +72,7 @@ let receivablePaymentDraft = { saleId: "" };
 let reportFilter = { from: "", to: "" };
 let voidSaleDraft = { saleId: "" };
 let purchaseCart = [];
+let notificationsOpen = false;
 
 const starterProducts = [
   { code: "AB-001", name: "Agua mineral 600 ml", category: "Bebidas", unit: "Botella", costPrice: 2.1, salePrice: 4, minStock: 24, stock: 96 },
@@ -110,6 +111,7 @@ const saleDetailTitle = document.querySelector("#saleDetailTitle");
 const saleDetailContent = document.querySelector("#saleDetailContent");
 const ventasMenuToggle = document.querySelector("#ventasMenuToggle");
 const installVentasAppButton = document.querySelector("#installVentasApp");
+const ventasNotificationButton = document.querySelector("#ventasNotificationBtn");
 const ventasLoginScene = document.querySelector(".advanced-sales-scene");
 let ventasLoginSceneFrame = 0;
 let ventasInstallPrompt = null;
@@ -173,6 +175,12 @@ document.querySelectorAll("[data-view]").forEach((button) => {
 ventasMenuToggle?.addEventListener("click", () => {
   const isOpen = appShell.classList.toggle("ventas-menu-open");
   ventasMenuToggle.setAttribute("aria-expanded", String(isOpen));
+});
+
+ventasNotificationButton?.addEventListener("click", () => {
+  notificationsOpen = !notificationsOpen;
+  ventasNotificationButton.setAttribute("aria-expanded", String(notificationsOpen));
+  renderMain();
 });
 
 if ("serviceWorker" in navigator) {
@@ -381,6 +389,7 @@ function renderLoggedIn() {
   document.querySelector("#stockMetric").textContent = Number(summary.stock || 0).toLocaleString("es-BO");
   document.querySelector("#valueMetric").textContent = money(summary.inventory_value || 0);
   document.querySelector("#lowStockMetric").textContent = summary.low_stock || 0;
+  updateNotificationButton();
   renderMain();
 }
 
@@ -414,10 +423,92 @@ function renderMain() {
   renderWorkflow();
   const renderers = { summary: renderSummary, alerts: renderAlerts, sell: renderSell, finance: renderFinance, history: renderHistory, routes: renderRoutes, promotions: renderPromotions, reports: renderReports, catalog: renderCatalog, customers: renderCustomers, inventory: renderInventory, purchases: renderPurchases, users: renderUsers, settings: renderSettings };
   renderers[activeView]();
+  if (notificationsOpen) {
+    mainList().insertAdjacentHTML("afterbegin", renderNotificationCenter());
+    bindNotificationCenter();
+  }
   document.querySelectorAll("[data-module-view]").forEach((button) => {
     button.addEventListener("click", () => {
       if (!canAccessView(button.dataset.moduleView)) return;
       activeView = button.dataset.moduleView;
+      renderMain();
+    });
+  });
+}
+
+function updateNotificationButton() {
+  const count = buildOperationalNotifications().length;
+  document.querySelector("#ventasNotificationCount").textContent = count;
+  ventasNotificationButton?.classList.toggle("has-alerts", count > 0);
+  ventasNotificationButton?.setAttribute("aria-label", `${count} avisos operativos`);
+}
+
+function buildOperationalNotifications() {
+  const notices = [];
+  const lowStock = products.filter((product) => isProductActive(product) && Number(product.stock || 0) > 0 && Number(product.stock || 0) <= Number(product.min_stock || 0));
+  const outOfStock = products.filter((product) => isProductActive(product) && Number(product.stock || 0) <= 0);
+  const expired = products.filter((product) => isProductActive(product) && expiryStatus(product).level === "danger");
+  const expiring = products.filter((product) => isProductActive(product) && expiryStatus(product).level === "warning");
+  if (cashSession?.status === "abierta") {
+    notices.push({ level: "info", title: `Caja ${num(cashSession.registerNumber)} abierta`, detail: `Esperado actual ${money(cashExpectedTotal())}. Cierra caja al terminar turno.`, view: "finance" });
+  }
+  if ((cash.pendingSales?.length || 0) > 0) {
+    notices.push({ level: "warning", title: `${num(cash.pendingSales.length)} venta(s) sin cierre`, detail: `Monto pendiente de cierre ${money(cash.total || 0)}.`, view: "finance" });
+  }
+  if (outOfStock.length) {
+    notices.push({ level: "danger", title: `${num(outOfStock.length)} producto(s) sin stock`, detail: outOfStock.slice(0, 3).map((item) => item.name).join(", "), view: "alerts" });
+  }
+  if (lowStock.length) {
+    notices.push({ level: "warning", title: `${num(lowStock.length)} producto(s) bajo minimo`, detail: lowStock.slice(0, 3).map((item) => item.name).join(", "), view: "alerts" });
+  }
+  if (expired.length) {
+    notices.push({ level: "danger", title: `${num(expired.length)} producto(s) vencido(s)`, detail: expired.slice(0, 3).map((item) => item.name).join(", "), view: "inventory" });
+  }
+  if (expiring.length) {
+    notices.push({ level: "warning", title: `${num(expiring.length)} producto(s) por vencer`, detail: expiring.slice(0, 3).map((item) => item.name).join(", "), view: "inventory" });
+  }
+  if (receivables.length) {
+    const debt = receivables.reduce((sum, sale) => sum + Number(sale.balance_due || 0), 0);
+    notices.push({ level: "info", title: `${num(receivables.length)} cuenta(s) por cobrar`, detail: `Saldo pendiente ${money(debt)}.`, view: "customers" });
+  }
+  const sensitiveEvent = auditEvents.find((event) => ["sale_void", "sale_return", "cash_close", "product_import"].includes(event.action));
+  if (sensitiveEvent) {
+    notices.push({ level: "info", title: auditActionLabel(sensitiveEvent.action), detail: sensitiveEvent.description || "Accion sensible registrada.", view: "reports" });
+  }
+  return notices;
+}
+
+function renderNotificationCenter() {
+  const notices = buildOperationalNotifications();
+  return `<section class="admin-panel ventas-notification-panel">
+    <div class="admin-panel-head">
+      <div><p class="eyebrow">Centro de avisos</p><h3>Alertas internas del sistema</h3></div>
+      <button class="ghost-button" type="button" id="closeVentasNotifications">Cerrar</button>
+    </div>
+    <div class="ventas-notification-grid">
+      ${notices.map(renderOperationalNotification).join("") || empty("Sin avisos pendientes para este rol")}
+    </div>
+  </section>`;
+}
+
+function renderOperationalNotification(notice) {
+  return `<article class="ventas-notification-card is-${notice.level}">
+    <div><strong>${escapeHtml(notice.title)}</strong><span>${escapeHtml(notice.detail || "Revisa el modulo correspondiente.")}</span></div>
+    ${canAccessView(notice.view) ? `<button class="ghost-button" type="button" data-notification-view="${notice.view}">Revisar</button>` : ""}
+  </article>`;
+}
+
+function bindNotificationCenter() {
+  document.querySelector("#closeVentasNotifications")?.addEventListener("click", () => {
+    notificationsOpen = false;
+    ventasNotificationButton?.setAttribute("aria-expanded", "false");
+    renderMain();
+  });
+  document.querySelectorAll("[data-notification-view]").forEach((button) => {
+    button.addEventListener("click", () => {
+      notificationsOpen = false;
+      activeView = button.dataset.notificationView;
+      ventasNotificationButton?.setAttribute("aria-expanded", "false");
       renderMain();
     });
   });

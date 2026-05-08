@@ -3846,6 +3846,86 @@ body.app-correspondencia .metrics article:hover {
   overflow: hidden;
 }
 
+.ventas-notification-button {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid color-mix(in srgb, var(--accent) 18%, var(--line));
+  border-radius: 999px;
+  padding: 8px 12px;
+  background: rgb(255 255 255 / 82%);
+  color: var(--accent-dark);
+  font-weight: 900;
+}
+
+.ventas-notification-button strong {
+  display: inline-grid;
+  min-width: 24px;
+  height: 24px;
+  place-items: center;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--accent) 14%, white);
+  color: var(--accent-dark);
+  font-size: 0.76rem;
+}
+
+.ventas-notification-button.has-alerts strong {
+  color: #ffffff;
+  background: linear-gradient(135deg, #f59e0b, #dc2626);
+  box-shadow: 0 0 0 5px rgb(245 158 11 / 12%);
+  animation: notificationPulse 1.8s ease-in-out infinite;
+}
+
+.ventas-notification-panel {
+  border-color: color-mix(in srgb, var(--accent) 24%, var(--line));
+  background:
+    linear-gradient(135deg, rgb(255 255 255 / 96%), rgb(236 253 245 / 82%)),
+    radial-gradient(circle at 92% 12%, rgb(15 159 110 / 16%), transparent 34%);
+}
+
+.ventas-notification-grid {
+  display: grid;
+  gap: 10px;
+}
+
+.ventas-notification-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border: 1px solid color-mix(in srgb, var(--accent) 14%, var(--line));
+  border-radius: 8px;
+  padding: 12px;
+  background: rgb(255 255 255 / 82%);
+}
+
+.ventas-notification-card.is-warning {
+  border-color: rgb(245 158 11 / 28%);
+  background: linear-gradient(135deg, #fffbeb, #ffffff);
+}
+
+.ventas-notification-card.is-danger {
+  border-color: rgb(220 38 38 / 28%);
+  background: linear-gradient(135deg, #fef2f2, #ffffff);
+}
+
+.ventas-notification-card strong,
+.ventas-notification-card span {
+  display: block;
+}
+
+.ventas-notification-card strong {
+  color: var(--accent-dark);
+}
+
+.ventas-notification-card span {
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: 0.8rem;
+  font-weight: 800;
+}
+
 .live-activity-panel::after {
   content: "";
   position: absolute;
@@ -9948,9 +10028,15 @@ body.system-zow-site .site-footer {
   .pos-customer-row,
   .pos-sale-options,
   .pos-cash-warning,
+  .ventas-notification-card,
   .cart-line,
   .touch-payment-actions {
     grid-template-columns: 1fr;
+  }
+
+  .ventas-notification-card {
+    align-items: stretch;
+    flex-direction: column;
   }
 
   .pos-cash-warning {
