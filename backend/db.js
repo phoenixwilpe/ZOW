@@ -417,6 +417,32 @@ function initDb() {
       FOREIGN KEY (created_by) REFERENCES users(id)
     );
 
+    CREATE TABLE IF NOT EXISTS sales_combos (
+      id TEXT PRIMARY KEY,
+      company_id TEXT NOT NULL,
+      code TEXT NOT NULL,
+      name TEXT NOT NULL,
+      price REAL NOT NULL DEFAULT 0,
+      is_active INTEGER NOT NULL DEFAULT 1,
+      created_by TEXT NOT NULL,
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TEXT NOT NULL DEFAULT '',
+      UNIQUE(company_id, code),
+      FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE,
+      FOREIGN KEY (created_by) REFERENCES users(id)
+    );
+
+    CREATE TABLE IF NOT EXISTS sales_combo_items (
+      id TEXT PRIMARY KEY,
+      company_id TEXT NOT NULL,
+      combo_id TEXT NOT NULL,
+      product_id TEXT NOT NULL,
+      quantity REAL NOT NULL DEFAULT 1,
+      FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE,
+      FOREIGN KEY (combo_id) REFERENCES sales_combos(id) ON DELETE CASCADE,
+      FOREIGN KEY (product_id) REFERENCES inventory_products(id)
+    );
+
     CREATE TABLE IF NOT EXISTS sales_returns (
       id TEXT PRIMARY KEY,
       company_id TEXT NOT NULL,
@@ -611,6 +637,8 @@ function migrateSchema() {
   db.prepare("CREATE INDEX IF NOT EXISTS idx_suspended_sales_company ON suspended_sales(company_id, status, created_at)").run();
   db.prepare("CREATE INDEX IF NOT EXISTS idx_pos_favorites_company ON pos_favorite_products(company_id, sort_order, created_at)").run();
   db.prepare("CREATE INDEX IF NOT EXISTS idx_sales_promotions_company ON sales_promotions(company_id, is_active, starts_at, ends_at)").run();
+  db.prepare("CREATE INDEX IF NOT EXISTS idx_sales_combos_company ON sales_combos(company_id, is_active, name)").run();
+  db.prepare("CREATE INDEX IF NOT EXISTS idx_sales_combo_items_combo ON sales_combo_items(combo_id)").run();
   migrateTenantTables();
   db.prepare("UPDATE units SET company_id = COALESCE(NULLIF(company_id, ''), 'company-default')").run();
   db.prepare("UPDATE users SET company_id = COALESCE(NULLIF(company_id, ''), 'company-default')").run();

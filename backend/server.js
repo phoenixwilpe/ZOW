@@ -1468,6 +1468,67 @@ app.delete("/api/ventas/promotions/:id", requireAuth, requireSystemAccess("venta
   res.json({ ok: true });
 });
 
+app.get("/api/ventas/combos", requireAuth, requireSystemAccess("ventas_almacen"), (req, res) => {
+  const combos = db.prepare("SELECT * FROM sales_combos WHERE company_id = ? ORDER BY is_active DESC, name").all(req.user.company_id);
+  const items = db
+    .prepare(
+      `SELECT sales_combo_items.*, inventory_products.name AS product_name, inventory_products.sale_price, inventory_products.stock
+       FROM sales_combo_items
+       JOIN inventory_products ON inventory_products.id = sales_combo_items.product_id AND inventory_products.company_id = sales_combo_items.company_id
+       WHERE sales_combo_items.company_id = ?
+       ORDER BY inventory_products.name`
+    )
+    .all(req.user.company_id);
+  res.json({ combos: combos.map((combo) => mapSalesCombo(combo, items.filter((item) => item.combo_id === combo.id))) });
+});
+
+app.post("/api/ventas/combos", requireAuth, requireSystemAccess("ventas_almacen"), requireVentasRole("admin", "ventas_admin", "supervisor"), (req, res) => {
+  const combo = readComboPayload(req.body, req.user.company_id);
+  if (!combo.name || !combo.code) return res.status(400).json({ error: "Codigo y nombre del combo son obligatorios" });
+  if (combo.price <= 0) return res.status(400).json({ error: "El precio del combo debe ser mayor a cero" });
+  if (combo.items.length < 2) return res.status(400).json({ error: "Un combo necesita al menos 2 productos" });
+  const duplicate = db.prepare("SELECT id FROM sales_combos WHERE company_id = ? AND upper(code) = upper(?)").get(req.user.company_id, combo.code);
+  if (duplicate) return res.status(400).json({ error: "Ya existe un combo con ese codigo" });
+  const now = new Date().toISOString();
+  db.prepare("INSERT INTO sales_combos (id, company_id, code, name, price, is_active, created_by, created_at, updated_at) VALUES (?, ?, ?, ?, ?, 1, ?, ?, ?)")
+    .run(combo.id, req.user.company_id, combo.code, combo.name, combo.price, req.user.id, now, now);
+  const insertItem = db.prepare("INSERT INTO sales_combo_items (id, company_id, combo_id, product_id, quantity) VALUES (?, ?, ?, ?, ?)");
+  combo.items.forEach((item) => insertItem.run(randomUUID(), req.user.company_id, combo.id, item.productId, item.quantity));
+  recordAuditEvent({ req, action: "combo_create", entityType: "combo", entityId: combo.id, description: `Creo combo: ${combo.name}` });
+  res.status(201).json({ combo: getSalesCombo(req.user.company_id, combo.id) });
+});
+
+app.patch("/api/ventas/combos/:id", requireAuth, requireSystemAccess("ventas_almacen"), requireVentasRole("admin", "ventas_admin", "supervisor"), (req, res) => {
+  const existing = db.prepare("SELECT * FROM sales_combos WHERE id = ? AND company_id = ?").get(req.params.id, req.user.company_id);
+  if (!existing) return res.status(404).json({ error: "Combo no encontrado" });
+  const now = new Date().toISOString();
+  if (Object.prototype.hasOwnProperty.call(req.body, "active")) {
+    db.prepare("UPDATE sales_combos SET is_active = ?, updated_at = ? WHERE id = ? AND company_id = ?").run(req.body.active ? 1 : 0, now, existing.id, req.user.company_id);
+    recordAuditEvent({ req, action: "combo_status", entityType: "combo", entityId: existing.id, description: `${req.body.active ? "Activo" : "Pauso"} combo: ${existing.name}` });
+    return res.json({ combo: getSalesCombo(req.user.company_id, existing.id) });
+  }
+  const combo = readComboPayload(req.body, req.user.company_id);
+  if (!combo.name || !combo.code) return res.status(400).json({ error: "Codigo y nombre del combo son obligatorios" });
+  if (combo.price <= 0) return res.status(400).json({ error: "El precio del combo debe ser mayor a cero" });
+  if (combo.items.length < 2) return res.status(400).json({ error: "Un combo necesita al menos 2 productos" });
+  const duplicate = db.prepare("SELECT id FROM sales_combos WHERE company_id = ? AND upper(code) = upper(?) AND id <> ?").get(req.user.company_id, combo.code, existing.id);
+  if (duplicate) return res.status(400).json({ error: "Ya existe otro combo con ese codigo" });
+  db.prepare("UPDATE sales_combos SET code = ?, name = ?, price = ?, updated_at = ? WHERE id = ? AND company_id = ?").run(combo.code, combo.name, combo.price, now, existing.id, req.user.company_id);
+  db.prepare("DELETE FROM sales_combo_items WHERE combo_id = ? AND company_id = ?").run(existing.id, req.user.company_id);
+  const insertItem = db.prepare("INSERT INTO sales_combo_items (id, company_id, combo_id, product_id, quantity) VALUES (?, ?, ?, ?, ?)");
+  combo.items.forEach((item) => insertItem.run(randomUUID(), req.user.company_id, existing.id, item.productId, item.quantity));
+  recordAuditEvent({ req, action: "combo_update", entityType: "combo", entityId: existing.id, description: `Actualizo combo: ${combo.name}` });
+  res.json({ combo: getSalesCombo(req.user.company_id, existing.id) });
+});
+
+app.delete("/api/ventas/combos/:id", requireAuth, requireSystemAccess("ventas_almacen"), requireVentasRole("admin", "ventas_admin", "supervisor"), (req, res) => {
+  const combo = db.prepare("SELECT * FROM sales_combos WHERE id = ? AND company_id = ?").get(req.params.id, req.user.company_id);
+  if (!combo) return res.status(404).json({ error: "Combo no encontrado" });
+  db.prepare("DELETE FROM sales_combos WHERE id = ? AND company_id = ?").run(combo.id, req.user.company_id);
+  recordAuditEvent({ req, action: "combo_delete", entityType: "combo", entityId: combo.id, description: `Elimino combo: ${combo.name}` });
+  res.json({ ok: true });
+});
+
 app.patch("/api/ventas/settings", requireAuth, requireSystemAccess("ventas_almacen"), requireVentasRole("admin", "ventas_admin"), (req, res) => {
   const current = mapSettings(loadSettings(req.user.company_id));
   const settings = {
@@ -2654,6 +2715,62 @@ function readPromotionPayload(body, companyId) {
     minQuantity: clampNumber(body.minQuantity ?? body.min_quantity, 1, 9999, 1),
     startsAt: String(body.startsAt || body.starts_at || new Date().toISOString().slice(0, 10)).trim().slice(0, 10),
     endsAt: String(body.endsAt || body.ends_at || "").trim().slice(0, 10)
+  };
+}
+
+function getSalesCombo(companyId, comboId) {
+  const combo = db.prepare("SELECT * FROM sales_combos WHERE id = ? AND company_id = ?").get(comboId, companyId);
+  if (!combo) return null;
+  const items = db
+    .prepare(
+      `SELECT sales_combo_items.*, inventory_products.name AS product_name, inventory_products.sale_price, inventory_products.stock
+       FROM sales_combo_items
+       JOIN inventory_products ON inventory_products.id = sales_combo_items.product_id AND inventory_products.company_id = sales_combo_items.company_id
+       WHERE sales_combo_items.company_id = ? AND sales_combo_items.combo_id = ?
+       ORDER BY inventory_products.name`
+    )
+    .all(companyId, comboId);
+  return mapSalesCombo(combo, items);
+}
+
+function readComboPayload(body, companyId) {
+  const rawItems = Array.isArray(body.items) ? body.items : [];
+  const items = [];
+  const seen = new Set();
+  rawItems.forEach((rawItem) => {
+    const productId = String(rawItem.productId || rawItem.product_id || "").trim();
+    const quantity = Number(rawItem.quantity || 0);
+    if (!productId || quantity <= 0 || seen.has(productId)) return;
+    const product = db.prepare("SELECT id FROM inventory_products WHERE id = ? AND company_id = ? AND is_active = 1").get(productId, companyId);
+    if (!product) return;
+    seen.add(productId);
+    items.push({ productId, quantity });
+  });
+  return {
+    id: randomUUID(),
+    code: String(body.code || "").trim().toUpperCase().slice(0, 40),
+    name: String(body.name || "").trim().slice(0, 140),
+    price: Number(body.price || 0),
+    items
+  };
+}
+
+function mapSalesCombo(combo, items = []) {
+  return {
+    id: combo.id,
+    code: combo.code,
+    name: combo.name,
+    price: Number(combo.price || 0),
+    active: Boolean(combo.is_active),
+    createdAt: combo.created_at,
+    updatedAt: combo.updated_at,
+    items: items.map((item) => ({
+      productId: item.product_id,
+      productName: item.product_name || "",
+      quantity: Number(item.quantity || 0),
+      salePrice: Number(item.sale_price || 0),
+      stock: Number(item.stock || 0)
+    }))
   };
 }
 

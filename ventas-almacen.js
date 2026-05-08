@@ -27,6 +27,7 @@ let suppliers = [];
 let purchases = [];
 let receivables = [];
 let promotions = [];
+let combos = [];
 let auditEvents = [];
 let profitReport = { rows: [], totals: {} };
 let cash = { pendingSales: [], total: 0 };
@@ -38,6 +39,7 @@ let editingUserId = "";
 let editingProductId = "";
 let editingCustomerId = "";
 let editingPromotionId = "";
+let editingComboId = "";
 let productSearch = "";
 let productSearchTimer = 0;
 let ventasMessage = "";
@@ -326,7 +328,7 @@ async function render() {
   try {
     await assertVentasAccess();
     const canReadPurchases = canAccessView("purchases");
-    const [settingsResponse, summaryResponse, productsResponse, customersResponse, categoriesResponse, salesResponse, cashResponse, cashHistoryResponse, suppliersResponse, purchasesResponse, receivablesResponse, promotionsResponse, auditResponse, profitResponse, suspendedResponse, favoritesResponse, usersResponse, unitsResponse] = await Promise.all([
+    const [settingsResponse, summaryResponse, productsResponse, customersResponse, categoriesResponse, salesResponse, cashResponse, cashHistoryResponse, suppliersResponse, purchasesResponse, receivablesResponse, promotionsResponse, combosResponse, auditResponse, profitResponse, suspendedResponse, favoritesResponse, usersResponse, unitsResponse] = await Promise.all([
       apiRequest("/ventas/settings"),
       apiRequest("/ventas/summary"),
       apiRequest("/ventas/products"),
@@ -339,6 +341,7 @@ async function render() {
       canReadPurchases ? apiRequest("/ventas/purchases") : Promise.resolve({ purchases: [] }),
       canAccessView("customers") ? apiRequest("/ventas/receivables") : Promise.resolve({ receivables: [] }),
       canAccessView("promotions") || canAccessView("sell") ? apiRequest("/ventas/promotions") : Promise.resolve({ promotions: [] }),
+      canAccessView("promotions") || canAccessView("sell") ? apiRequest("/ventas/combos") : Promise.resolve({ combos: [] }),
       canAccessView("reports") ? apiRequest("/ventas/audit") : Promise.resolve({ events: [] }),
       canAccessView("reports") ? apiRequest(`/ventas/reports/profit${profitReportQuery()}`) : Promise.resolve({ rows: [], totals: {} }),
       apiRequest("/ventas/suspended-sales").catch(() => ({ sales: suspendedSales })),
@@ -356,6 +359,7 @@ async function render() {
     purchases = purchasesResponse.purchases || [];
     receivables = receivablesResponse.receivables || [];
     promotions = (promotionsResponse.promotions || []).map(normalizePromotion);
+    combos = (combosResponse.combos || []).map(normalizeCombo);
     auditEvents = auditResponse.events || [];
     profitReport = { rows: profitResponse.rows || [], totals: profitResponse.totals || {} };
     const localSuspended = loadJson(SUSPENDED_SALES_KEY, []).map((sale) => normalizeSuspendedSale({ ...sale, localOnly: true }));
@@ -634,6 +638,7 @@ function renderAlerts() {
 function renderSell() {
   setCount(`${saleCart.length} item${saleCart.length === 1 ? "" : "s"}`);
   const sellProducts = filteredProducts().filter(isProductActive);
+  const activeCombos = combos.filter((combo) => combo.active && comboAvailableStock(combo) > 0).slice(0, 8);
   const favoriteSellProducts = favoriteProducts
     .map((productId) => products.find((product) => product.id === productId))
     .filter((product) => product && isProductActive(product) && Number(product.stock || 0) > 0)
@@ -691,6 +696,12 @@ function renderSell() {
           <div class="pos-section-block pos-products-block">
             <div class="pos-section-title"><strong>Favoritos de mostrador</strong><span>Productos rapidos para pantalla tactil</span></div>
             <div class="product-suggestion-grid touch-product-grid">${favoriteSellProducts.map(renderSellProduct).join("")}</div>
+          </div>
+        ` : ""}
+        ${activeCombos.length ? `
+          <div class="pos-section-block pos-products-block">
+            <div class="pos-section-title"><strong>Combos rapidos</strong><span>Paquetes con precio final y stock real</span></div>
+            <div class="product-suggestion-grid touch-product-grid">${activeCombos.map(renderSellCombo).join("")}</div>
           </div>
         ` : ""}
         <div class="pos-section-block pos-products-block">
@@ -783,6 +794,7 @@ function renderSell() {
     renderMain();
   }));
   document.querySelectorAll("[data-add-product]").forEach((button) => button.addEventListener("click", () => addToCart(button.dataset.addProduct)));
+  document.querySelectorAll("[data-add-combo]").forEach((button) => button.addEventListener("click", () => addComboToCart(button.dataset.addCombo)));
   document.querySelectorAll("[data-toggle-favorite]").forEach((button) => button.addEventListener("click", () => toggleFavoriteProduct(button.dataset.toggleFavorite)));
   document.querySelectorAll("[data-remove-cart]").forEach((button) => button.addEventListener("click", () => removeFromCart(button.dataset.removeCart)));
   document.querySelectorAll("[data-cart-dec]").forEach((button) => button.addEventListener("click", () => updateCartQuantity(button.dataset.cartDec, -1)));
@@ -1047,16 +1059,32 @@ function renderRoutes() {
 
 function renderPromotions() {
   const activePromotions = promotions.filter(isPromotionActiveNow);
+  const activeCombos = combos.filter((combo) => combo.active);
   const critical = products.filter((product) => Number(product.stock || 0) <= Number(product.min_stock || 0)).slice(0, 4);
   const editingPromotion = promotions.find((promotion) => promotion.id === editingPromotionId);
-  setCount(`${activePromotions.length} activa${activePromotions.length === 1 ? "" : "s"}`);
+  const editingCombo = combos.find((combo) => combo.id === editingComboId);
+  setCount(`${activePromotions.length + activeCombos.length} activa${activePromotions.length + activeCombos.length === 1 ? "" : "s"}`);
   mainList().innerHTML = `
     <section class="promotion-grid">
       <article class="promotion-card is-green"><span>Promociones activas</span><strong>${activePromotions.length}</strong><p>Se aplican automaticamente en el POS al cumplir cantidad y fecha.</p></article>
-      <article class="promotion-card is-amber"><span>Reglas creadas</span><strong>${promotions.length}</strong><p>Descuento por porcentaje o monto fijo sobre productos elegidos.</p></article>
+      <article class="promotion-card is-amber"><span>Combos activos</span><strong>${activeCombos.length}</strong><p>Paquetes de varios productos con precio final fijo para caja.</p></article>
       <article class="promotion-card is-red"><span>Reposicion</span><strong>${critical.length} criticos</strong><p>Evita promocionar articulos por debajo del minimo.</p></article>
     </section>
     ${can("managePromotions") ? `
+      <section class="admin-panel">
+        <div class="admin-panel-head"><div><p class="eyebrow">${editingCombo ? "Editar combo" : "Nuevo combo"}</p><h3>Paquete con stock real</h3></div>${editingCombo ? `<button class="ghost-button" type="button" id="cancelComboEdit">Cancelar edicion</button>` : ""}</div>
+        <form class="admin-form combo-rule-form" id="comboForm">
+          <div class="form-grid">
+            <label>Codigo<input id="comboCode" type="text" required placeholder="COMBO-001" value="${escapeHtml(editingCombo?.code || "")}" /></label>
+            <label>Nombre<input id="comboName" type="text" required placeholder="Combo familiar" value="${escapeHtml(editingCombo?.name || "")}" /></label>
+            <label>Precio final<input id="comboPrice" type="number" min="0.01" step="0.01" required value="${Number(editingCombo?.price || "")}" /></label>
+          </div>
+          <div class="combo-builder-grid">
+            ${[0, 1, 2, 3].map((index) => renderComboBuilderLine(editingCombo, index)).join("")}
+          </div>
+          <button class="primary-button" type="submit">${editingCombo ? "Guardar combo" : "Crear combo"}</button>
+        </form>
+      </section>
       <section class="admin-panel">
         <div class="admin-panel-head"><div><p class="eyebrow">${editingPromotion ? "Editar promocion" : "Nueva promocion"}</p><h3>Regla automatica para POS</h3></div>${editingPromotion ? `<button class="ghost-button" type="button" id="cancelPromotionEdit">Cancelar edicion</button>` : ""}</div>
         <form class="admin-form promotion-rule-form" id="promotionForm">
@@ -1074,6 +1102,10 @@ function renderPromotions() {
       </section>
     ` : ""}
     <section class="admin-panel">
+      <div class="admin-panel-head"><div><p class="eyebrow">Combos registrados</p><h3>Paquetes para caja</h3></div></div>
+      <div class="admin-list">${combos.map(renderComboRow).join("") || empty("Crea combos para vender paquetes con precio fijo")}</div>
+    </section>
+    <section class="admin-panel">
       <div class="admin-panel-head"><div><p class="eyebrow">Promociones registradas</p><h3>Reglas comerciales</h3></div></div>
       <div class="admin-list">${promotions.map(renderPromotionRow).join("") || empty("Crea tu primera promocion para aplicarla en caja")}</div>
     </section>
@@ -1082,6 +1114,11 @@ function renderPromotions() {
       <div class="price-list">${products.filter(isProductActive).slice(0, 8).map(renderPriceRow).join("") || empty("Registra productos para crear listas de precios")}</div>
     </section>
   `;
+  document.querySelector("#comboForm")?.addEventListener("submit", saveCombo);
+  document.querySelector("#cancelComboEdit")?.addEventListener("click", () => {
+    editingComboId = "";
+    renderMain();
+  });
   document.querySelector("#promotionForm")?.addEventListener("submit", savePromotion);
   document.querySelector("#cancelPromotionEdit")?.addEventListener("click", () => {
     editingPromotionId = "";
@@ -1099,6 +1136,12 @@ function renderPromotions() {
   document.querySelectorAll("[data-delete-promotion]").forEach((button) => {
     button.addEventListener("click", () => deletePromotion(button.dataset.deletePromotion));
   });
+  document.querySelectorAll("[data-edit-combo]").forEach((button) => button.addEventListener("click", () => {
+    editingComboId = button.dataset.editCombo;
+    renderMain();
+  }));
+  document.querySelectorAll("[data-toggle-combo]").forEach((button) => button.addEventListener("click", () => toggleCombo(button.dataset.toggleCombo)));
+  document.querySelectorAll("[data-delete-combo]").forEach((button) => button.addEventListener("click", () => deleteCombo(button.dataset.deleteCombo)));
 }
 
 function renderReports() {
@@ -1435,6 +1478,35 @@ function renderReceivableRow(sale) {
       <div class="receivable-progress"><i style="width:${paidPercent}%"></i></div>
     </div>
     <div class="admin-row-meta"><span class="warn-text">Debe ${money(sale.balance_due)}</span><button class="primary-button" type="button" data-pay-receivable="${sale.id}">Registrar pago</button></div>
+  </article>`;
+}
+
+function renderComboBuilderLine(combo, index) {
+  const item = combo?.items?.[index] || {};
+  return `<div class="combo-builder-line">
+    <label>Producto ${index + 1}<select data-combo-product="${index}">
+      <option value="">Seleccionar producto</option>
+      ${products.filter(isProductActive).map((product) => `<option value="${product.id}" ${item.productId === product.id ? "selected" : ""}>${escapeHtml(product.name)} / Stock ${num(product.stock)}</option>`).join("")}
+    </select></label>
+    <label>Cantidad<input data-combo-qty="${index}" type="number" min="0" step="1" value="${Number(item.quantity || 0)}" /></label>
+  </div>`;
+}
+
+function renderComboRow(combo) {
+  const baseTotal = combo.items.reduce((sum, item) => sum + Number(item.salePrice || 0) * Number(item.quantity || 0), 0);
+  const saving = Math.max(baseTotal - Number(combo.price || 0), 0);
+  const stock = comboAvailableStock(combo);
+  return `<article class="admin-row combo-row">
+    <div>
+      <strong>${escapeHtml(combo.name)}</strong>
+      <span>${escapeHtml(combo.code)} / Precio ${money(combo.price)} / Ahorro ${money(saving)}</span>
+      <span>${combo.items.map((item) => `${escapeHtml(item.productName)} x ${num(item.quantity)}`).join(" + ")}</span>
+    </div>
+    <div class="admin-row-meta">
+      <span class="${stock > 0 ? "ok-text" : "danger-text"}">Disponibles ${num(stock)}</span>
+      <span class="${combo.active ? "ok-text" : "warn-text"}">${combo.active ? "Activo" : "Pausado"}</span>
+      ${can("managePromotions") ? `<button class="ghost-button" type="button" data-edit-combo="${combo.id}">Editar</button><button class="ghost-button" type="button" data-toggle-combo="${combo.id}">${combo.active ? "Pausar" : "Activar"}</button><button class="ghost-button danger-action" type="button" data-delete-combo="${combo.id}">Eliminar</button>` : ""}
+    </div>
   </article>`;
 }
 
@@ -2009,6 +2081,19 @@ function renderSellProduct(product) {
   </button>`;
 }
 
+function renderSellCombo(combo) {
+  const available = comboAvailableStock(combo);
+  const baseTotal = combo.items.reduce((sum, item) => sum + Number(item.salePrice || 0) * Number(item.quantity || 0), 0);
+  return `<button class="pos-product-card touch-product-card combo-product-card" type="button" data-add-combo="${combo.id}" ${available <= 0 ? "disabled" : ""}>
+    <span class="product-code">${escapeHtml(combo.code)}</span>
+    <strong>${escapeHtml(combo.name)}</strong>
+    <span class="product-meta"><span>${combo.items.length} productos</span><small>Disponibles ${num(available)}</small></span>
+    <small>${combo.items.map((item) => `${escapeHtml(item.productName)} x ${num(item.quantity)}`).join(" + ")}</small>
+    <b>${money(combo.price)}</b>
+    ${baseTotal > combo.price ? `<small class="ok-text">Ahorro ${money(baseTotal - combo.price)}</small>` : ""}
+  </button>`;
+}
+
 function renderLastSaleReceipt() {
   const sale = lastSaleReceipt?.sale;
   if (!sale) return "";
@@ -2030,9 +2115,9 @@ function renderCartItem(item) {
   const minStock = Number(product?.min_stock || 0);
   const stockClass = stockAfterSale < 0 ? "danger-text" : stockAfterSale <= minStock ? "warn-text" : "ok-text";
   return `<article class="cart-line touch-cart-line">
-    <div class="cart-item-name"><strong>${escapeHtml(item.name)}</strong><span>${money(item.salePrice)} c/u</span><small class="${stockClass}">Stock despues: ${num(stockAfterSale)}</small>${item.promotionName ? `<small class="ok-text">${escapeHtml(item.promotionName)}</small>` : ""}</div>
+    <div class="cart-item-name"><strong>${escapeHtml(item.name)}</strong><span>${money(item.salePrice)} c/u</span><small class="${stockClass}">Stock despues: ${num(stockAfterSale)}</small>${item.comboName ? `<small class="ok-text">Combo: ${escapeHtml(item.comboName)}</small>` : ""}${item.promotionName ? `<small class="ok-text">${escapeHtml(item.promotionName)}</small>` : ""}</div>
     <div class="cart-qty touch-qty"><button class="ghost-button" type="button" data-cart-dec="${item.productId}">-</button><strong>${item.quantity}</strong><button class="ghost-button" type="button" data-cart-inc="${item.productId}">+</button></div>
-    <label>Descuento<input type="number" min="0" step="0.01" value="${Number(lineDiscount || 0)}" data-cart-discount="${item.productId}" ${storeSettings.allowDiscounts ? "" : "disabled"} /></label>
+    <label>Descuento<input type="number" min="0" step="0.01" value="${Number(lineDiscount || 0)}" data-cart-discount="${item.productId}" ${storeSettings.allowDiscounts && !item.comboId ? "" : "disabled"} /></label>
     <strong>${money(Math.max(lineSubtotal - lineDiscount, 0))}</strong>
     <button class="ghost-button danger-action" type="button" data-remove-cart="${item.productId}">Quitar</button>
   </article>`;
@@ -2286,6 +2371,38 @@ function addToCart(productId, quantity = 1) {
   renderMain();
 }
 
+function addComboToCart(comboId) {
+  const combo = combos.find((item) => item.id === comboId);
+  if (!combo || !combo.active) return;
+  if (combo.items.some((item) => saleCart.some((cartItem) => cartItem.productId === item.productId))) {
+    ventasMessage = "Para aplicar el precio del combo, primero quita del carrito los productos que ya forman parte de ese combo.";
+    return renderMain();
+  }
+  const available = comboAvailableStock(combo);
+  if (available <= 0) {
+    ventasMessage = `Stock insuficiente para el combo ${combo.name}.`;
+    return renderMain();
+  }
+  const baseTotal = combo.items.reduce((sum, item) => sum + Number(item.salePrice || 0) * Number(item.quantity || 0), 0);
+  const priceRatio = baseTotal > 0 ? Math.min(Number(combo.price || 0) / baseTotal, 1) : 1;
+  combo.items.forEach((component) => {
+    const product = products.find((item) => item.id === component.productId);
+    if (!product) return;
+    saleCart.push({
+      productId: product.id,
+      name: product.name,
+      quantity: Number(component.quantity || 0),
+      salePrice: Number(product.sale_price || 0) * priceRatio,
+      discount: 0,
+      comboId: combo.id,
+      comboName: combo.name
+    });
+  });
+  ventasMessage = `Combo ${combo.name} agregado al carrito.`;
+  if (isMobilePos()) posMobilePanel = "cart";
+  renderMain();
+}
+
 function removeFromCart(productId) {
   saleCart = saleCart.filter((item) => item.productId !== productId);
   renderMain();
@@ -2322,6 +2439,7 @@ function updateCartDiscount(productId, discount) {
 function applyPromotionsToCart() {
   if (!storeSettings.allowDiscounts) return;
   saleCart = saleCart.map((item) => {
+    if (item.comboId) return item;
     const promotion = bestPromotionForCartItem(item);
     if (!promotion) return { ...item, discount: Number(item.discount || 0), promotionId: "" };
     const lineSubtotal = Number(item.quantity || 0) * Number(item.salePrice || 0);
@@ -3447,6 +3565,32 @@ async function savePromotion(event) {
   }
 }
 
+async function saveCombo(event) {
+  event.preventDefault();
+  const items = [0, 1, 2, 3].map((index) => ({
+    productId: document.querySelector(`[data-combo-product="${index}"]`)?.value || "",
+    quantity: Number(document.querySelector(`[data-combo-qty="${index}"]`)?.value || 0)
+  })).filter((item) => item.productId && item.quantity > 0);
+  const payload = {
+    code: value("#comboCode"),
+    name: value("#comboName"),
+    price: Number(value("#comboPrice")),
+    items
+  };
+  try {
+    await apiRequest(editingComboId ? `/ventas/combos/${editingComboId}` : "/ventas/combos", {
+      method: editingComboId ? "PATCH" : "POST",
+      body: payload
+    });
+    ventasMessage = editingComboId ? "Combo actualizado." : "Combo creado y disponible en caja.";
+    editingComboId = "";
+    await render();
+  } catch (error) {
+    ventasMessage = error.message || "No se pudo guardar el combo.";
+    renderMain();
+  }
+}
+
 function editPromotion(id) {
   editingPromotionId = id;
   renderMain();
@@ -3499,6 +3643,31 @@ async function deletePromotion(id) {
     await render();
   } catch (error) {
     ventasMessage = error.message || "No se pudo eliminar la promocion.";
+    renderMain();
+  }
+}
+
+async function toggleCombo(id) {
+  const combo = combos.find((item) => item.id === id);
+  if (!combo) return;
+  try {
+    await apiRequest(`/ventas/combos/${id}`, { method: "PATCH", body: { active: !combo.active } });
+    ventasMessage = combo.active ? "Combo pausado." : "Combo activado.";
+    await render();
+  } catch (error) {
+    ventasMessage = error.message || "No se pudo actualizar el combo.";
+    renderMain();
+  }
+}
+
+async function deleteCombo(id) {
+  if (!confirm("Eliminar este combo?")) return;
+  try {
+    await apiRequest(`/ventas/combos/${id}`, { method: "DELETE" });
+    ventasMessage = "Combo eliminado.";
+    await render();
+  } catch (error) {
+    ventasMessage = error.message || "No se pudo eliminar el combo.";
     renderMain();
   }
 }
@@ -4059,6 +4228,32 @@ function normalizePromotion(promotion) {
     endsAt: String(promotion.endsAt || promotion.ends_at || "").slice(0, 10),
     active: promotion.active !== false && promotion.is_active !== false && promotion.is_active !== 0
   };
+}
+
+function normalizeCombo(combo) {
+  return {
+    id: combo.id,
+    code: combo.code || "",
+    name: combo.name || "Combo",
+    price: Number(combo.price || 0),
+    active: combo.active !== false && combo.is_active !== false && combo.is_active !== 0,
+    items: (combo.items || []).map((item) => ({
+      productId: item.productId || item.product_id || "",
+      productName: item.productName || item.product_name || "",
+      quantity: Number(item.quantity || 0),
+      salePrice: Number(item.salePrice || item.sale_price || 0),
+      stock: Number(item.stock || 0)
+    })).filter((item) => item.productId && item.quantity > 0)
+  };
+}
+
+function comboAvailableStock(combo) {
+  if (!combo?.items?.length) return 0;
+  return Math.min(...combo.items.map((item) => {
+    const product = products.find((entry) => entry.id === item.productId);
+    const stock = Number(product?.stock ?? item.stock ?? 0);
+    return Math.floor(stock / Math.max(Number(item.quantity || 1), 1));
+  }));
 }
 function canAccessView(view) { return accessibleViewsForRole(currentUser?.role).includes(view); }
 function defaultViewForRole() { return accessibleViewsForRole(currentUser?.role)[0] || "summary"; }

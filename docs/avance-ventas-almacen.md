@@ -58,11 +58,11 @@ Avance estimado actual: 99%
 - Exportaciones administrativas adicionales: cierres de caja CSV y auditoria comercial CSV para control interno.
 - Cartera de clientes mejorada con plan de cobro, prioridades por antiguedad, riesgo comercial y exportacion directa de cuentas por cobrar.
 - Importacion masiva con vista previa: valida filas, duplicados, actualizaciones y observaciones antes de modificar el inventario.
+- Combos comerciales: paquetes con varios productos, precio final fijo, validacion de stock y venta tactil desde POS.
 
 ## Faltante prioritario
 
-1. Combos comerciales avanzados: paquetes con varios productos y precio final fijo.
-2. Ajustes finales de experiencia movil.
+1. Ajustes finales de experiencia movil.
 
 ## Omitido por ahora
 

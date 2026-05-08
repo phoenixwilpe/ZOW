@@ -2586,6 +2586,28 @@ body.app-correspondencia .metrics article:hover {
   margin-bottom: 14px;
 }
 
+.combo-builder-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.combo-builder-line {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 120px;
+  gap: 10px;
+  align-items: end;
+  padding: 10px;
+  border: 1px solid color-mix(in srgb, var(--accent) 14%, var(--line));
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--accent-tint) 30%, #fff);
+}
+
+.combo-product-card {
+  border-color: color-mix(in srgb, var(--ok) 24%, var(--line));
+  background: linear-gradient(145deg, #ffffff, #f0fdf4);
+}
+
 .debt-aging-grid article,
 .collection-plan-grid article {
   border: 1px solid color-mix(in srgb, var(--accent) 16%, var(--line));
@@ -10149,6 +10171,7 @@ body.system-zow-site .site-footer {
 
   .payment-method-grid,
   .product-suggestion-grid,
+  .combo-builder-grid,
   .cash-health-grid,
   .debt-aging-grid,
   .collection-plan-grid,
@@ -10214,6 +10237,10 @@ body.system-zow-site .site-footer {
   }
 
   .pos-search-row {
+    grid-template-columns: 1fr;
+  }
+
+  .combo-builder-line {
     grid-template-columns: 1fr;
   }
 

@@ -403,6 +403,27 @@ create table if not exists sales_promotions (
   updated_at timestamptz
 );
 
+create table if not exists sales_combos (
+  id text primary key,
+  company_id text not null references companies(id) on delete cascade,
+  code text not null,
+  name text not null,
+  price numeric not null default 0,
+  is_active boolean not null default true,
+  created_by text not null references users(id),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  unique(company_id, code)
+);
+
+create table if not exists sales_combo_items (
+  id text primary key,
+  company_id text not null references companies(id) on delete cascade,
+  combo_id text not null references sales_combos(id) on delete cascade,
+  product_id text not null references inventory_products(id),
+  quantity numeric not null default 1
+);
+
 create index if not exists idx_users_company on users(company_id);
 create index if not exists idx_units_company on units(company_id);
 create index if not exists idx_documents_company on documents(company_id);
@@ -423,6 +444,8 @@ create index if not exists idx_cash_movements_session on cash_movements(session_
 create index if not exists idx_inventory_movements_product on inventory_movements(product_id, created_at desc);
 create index if not exists idx_pos_favorites_company on pos_favorite_products(company_id, sort_order, created_at);
 create index if not exists idx_sales_promotions_company on sales_promotions(company_id, is_active, starts_at, ends_at);
+create index if not exists idx_sales_combos_company on sales_combos(company_id, is_active, name);
+create index if not exists idx_sales_combo_items_combo on sales_combo_items(combo_id);
 
 alter table companies enable row level security;
 alter table units enable row level security;
@@ -445,6 +468,8 @@ alter table cash_movements enable row level security;
 alter table inventory_movements enable row level security;
 alter table pos_favorite_products enable row level security;
 alter table sales_promotions enable row level security;
+alter table sales_combos enable row level security;
+alter table sales_combo_items enable row level security;
 
 -- El backend de Vercel usara SUPABASE_SERVICE_ROLE_KEY, por eso RLS no bloquea al servidor.
 -- Cuando pasemos auth directa de Supabase al frontend, agregaremos politicas por JWT/company_id.

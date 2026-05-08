@@ -1317,6 +1317,88 @@ app.delete("/api/ventas/promotions/:id", requireAuth, async (req, res) => {
   res.json({ ok: true });
 });
 
+app.get("/api/ventas/combos", requireAuth, async (req, res) => {
+  if (!(await requireSystemAccess("ventas_almacen", req, res))) return;
+  await ensureVentasSchema();
+  const combos = await pg.all("SELECT * FROM sales_combos WHERE company_id = ? ORDER BY is_active DESC, name", [req.user.company_id]);
+  const items = await pg.all(
+    `SELECT sales_combo_items.*, inventory_products.name AS product_name, inventory_products.sale_price, inventory_products.stock
+     FROM sales_combo_items
+     JOIN inventory_products ON inventory_products.id = sales_combo_items.product_id AND inventory_products.company_id = sales_combo_items.company_id
+     WHERE sales_combo_items.company_id = ?
+     ORDER BY inventory_products.name`,
+    [req.user.company_id]
+  );
+  res.json({ combos: combos.map((combo) => mapSalesCombo(combo, items.filter((item) => item.combo_id === combo.id))) });
+});
+
+app.post("/api/ventas/combos", requireAuth, async (req, res) => {
+  if (!(await requireSystemAccess("ventas_almacen", req, res))) return;
+  if (!requireVentasRole(req, res, "admin", "ventas_admin", "supervisor")) return;
+  await ensureVentasSchema();
+  const combo = await readComboPayload(req.body, req.user.company_id);
+  if (!combo.name || !combo.code) return res.status(400).json({ error: "Codigo y nombre del combo son obligatorios" });
+  if (combo.price <= 0) return res.status(400).json({ error: "El precio del combo debe ser mayor a cero" });
+  if (combo.items.length < 2) return res.status(400).json({ error: "Un combo necesita al menos 2 productos" });
+  const duplicate = await pg.get("SELECT id FROM sales_combos WHERE company_id = ? AND upper(code) = upper(?)", [req.user.company_id, combo.code]);
+  if (duplicate) return res.status(400).json({ error: "Ya existe un combo con ese codigo" });
+  await pg.tx(async (client) => {
+    await client.run(
+      `INSERT INTO sales_combos (id, company_id, code, name, price, is_active, created_by, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, true, ?, now(), now())`,
+      [combo.id, req.user.company_id, combo.code, combo.name, combo.price, req.user.id]
+    );
+    for (const item of combo.items) {
+      await client.run(
+        `INSERT INTO sales_combo_items (id, company_id, combo_id, product_id, quantity)
+         VALUES (?, ?, ?, ?, ?)`,
+        [randomUUID(), req.user.company_id, combo.id, item.productId, item.quantity]
+      );
+    }
+  });
+  await recordAuditEvent({ req, action: "combo_create", entityType: "combo", entityId: combo.id, description: `Creo combo: ${combo.name}` });
+  res.status(201).json({ combo: await getSalesCombo(req.user.company_id, combo.id) });
+});
+
+app.patch("/api/ventas/combos/:id", requireAuth, async (req, res) => {
+  if (!(await requireSystemAccess("ventas_almacen", req, res))) return;
+  if (!requireVentasRole(req, res, "admin", "ventas_admin", "supervisor")) return;
+  await ensureVentasSchema();
+  const existing = await pg.get("SELECT * FROM sales_combos WHERE id = ? AND company_id = ?", [req.params.id, req.user.company_id]);
+  if (!existing) return res.status(404).json({ error: "Combo no encontrado" });
+  if (Object.prototype.hasOwnProperty.call(req.body, "active")) {
+    await pg.run("UPDATE sales_combos SET is_active = ?, updated_at = now() WHERE id = ? AND company_id = ?", [Boolean(req.body.active), existing.id, req.user.company_id]);
+    await recordAuditEvent({ req, action: "combo_status", entityType: "combo", entityId: existing.id, description: `${req.body.active ? "Activo" : "Pauso"} combo: ${existing.name}` });
+    return res.json({ combo: await getSalesCombo(req.user.company_id, existing.id) });
+  }
+  const combo = await readComboPayload(req.body, req.user.company_id);
+  if (!combo.name || !combo.code) return res.status(400).json({ error: "Codigo y nombre del combo son obligatorios" });
+  if (combo.price <= 0) return res.status(400).json({ error: "El precio del combo debe ser mayor a cero" });
+  if (combo.items.length < 2) return res.status(400).json({ error: "Un combo necesita al menos 2 productos" });
+  const duplicate = await pg.get("SELECT id FROM sales_combos WHERE company_id = ? AND upper(code) = upper(?) AND id <> ?", [req.user.company_id, combo.code, existing.id]);
+  if (duplicate) return res.status(400).json({ error: "Ya existe otro combo con ese codigo" });
+  await pg.tx(async (client) => {
+    await client.run("UPDATE sales_combos SET code = ?, name = ?, price = ?, updated_at = now() WHERE id = ? AND company_id = ?", [combo.code, combo.name, combo.price, existing.id, req.user.company_id]);
+    await client.run("DELETE FROM sales_combo_items WHERE combo_id = ? AND company_id = ?", [existing.id, req.user.company_id]);
+    for (const item of combo.items) {
+      await client.run("INSERT INTO sales_combo_items (id, company_id, combo_id, product_id, quantity) VALUES (?, ?, ?, ?, ?)", [randomUUID(), req.user.company_id, existing.id, item.productId, item.quantity]);
+    }
+  });
+  await recordAuditEvent({ req, action: "combo_update", entityType: "combo", entityId: existing.id, description: `Actualizo combo: ${combo.name}` });
+  res.json({ combo: await getSalesCombo(req.user.company_id, existing.id) });
+});
+
+app.delete("/api/ventas/combos/:id", requireAuth, async (req, res) => {
+  if (!(await requireSystemAccess("ventas_almacen", req, res))) return;
+  if (!requireVentasRole(req, res, "admin", "ventas_admin", "supervisor")) return;
+  await ensureVentasSchema();
+  const combo = await pg.get("SELECT * FROM sales_combos WHERE id = ? AND company_id = ?", [req.params.id, req.user.company_id]);
+  if (!combo) return res.status(404).json({ error: "Combo no encontrado" });
+  await pg.run("DELETE FROM sales_combos WHERE id = ? AND company_id = ?", [combo.id, req.user.company_id]);
+  await recordAuditEvent({ req, action: "combo_delete", entityType: "combo", entityId: combo.id, description: `Elimino combo: ${combo.name}` });
+  res.json({ ok: true });
+});
+
 app.get("/api/ventas/settings", requireAuth, async (req, res) => {
   if (!(await requireSystemAccess("ventas_almacen", req, res))) return;
   res.json({ settings: await mapSettings(await loadSettings(req.user.company_id)) });
@@ -2821,6 +2903,61 @@ async function readPromotionPayload(body, companyId) {
   };
 }
 
+async function getSalesCombo(companyId, comboId) {
+  const combo = await pg.get("SELECT * FROM sales_combos WHERE id = ? AND company_id = ?", [comboId, companyId]);
+  if (!combo) return null;
+  const items = await pg.all(
+    `SELECT sales_combo_items.*, inventory_products.name AS product_name, inventory_products.sale_price, inventory_products.stock
+     FROM sales_combo_items
+     JOIN inventory_products ON inventory_products.id = sales_combo_items.product_id AND inventory_products.company_id = sales_combo_items.company_id
+     WHERE sales_combo_items.company_id = ? AND sales_combo_items.combo_id = ?
+     ORDER BY inventory_products.name`,
+    [companyId, comboId]
+  );
+  return mapSalesCombo(combo, items);
+}
+
+async function readComboPayload(body, companyId) {
+  const rawItems = Array.isArray(body.items) ? body.items : [];
+  const items = [];
+  const seen = new Set();
+  for (const rawItem of rawItems) {
+    const productId = String(rawItem.productId || rawItem.product_id || "").trim();
+    const quantity = Number(rawItem.quantity || 0);
+    if (!productId || quantity <= 0 || seen.has(productId)) continue;
+    const product = await pg.get("SELECT id FROM inventory_products WHERE id = ? AND company_id = ? AND is_active = true", [productId, companyId]);
+    if (!product) continue;
+    seen.add(productId);
+    items.push({ productId, quantity });
+  }
+  return {
+    id: randomUUID(),
+    code: String(body.code || "").trim().toUpperCase().slice(0, 40),
+    name: String(body.name || "").trim().slice(0, 140),
+    price: Number(body.price || 0),
+    items
+  };
+}
+
+function mapSalesCombo(combo, items = []) {
+  return {
+    id: combo.id,
+    code: combo.code,
+    name: combo.name,
+    price: Number(combo.price || 0),
+    active: Boolean(combo.is_active),
+    createdAt: combo.created_at,
+    updatedAt: combo.updated_at,
+    items: items.map((item) => ({
+      productId: item.product_id,
+      productName: item.product_name || "",
+      quantity: Number(item.quantity || 0),
+      salePrice: Number(item.sale_price || 0),
+      stock: Number(item.stock || 0)
+    }))
+  };
+}
+
 function mapSalesPromotion(row) {
   return {
     id: row.id,
@@ -3211,6 +3348,29 @@ async function ensureVentasSchema() {
         )
       `);
       await pg.run(`
+        CREATE TABLE IF NOT EXISTS sales_combos (
+          id text primary key,
+          company_id text not null references companies(id) on delete cascade,
+          code text not null,
+          name text not null,
+          price numeric not null default 0,
+          is_active boolean not null default true,
+          created_by text not null references users(id),
+          created_at timestamptz not null default now(),
+          updated_at timestamptz not null default now(),
+          unique(company_id, code)
+        )
+      `);
+      await pg.run(`
+        CREATE TABLE IF NOT EXISTS sales_combo_items (
+          id text primary key,
+          company_id text not null references companies(id) on delete cascade,
+          combo_id text not null references sales_combos(id) on delete cascade,
+          product_id text not null references inventory_products(id),
+          quantity numeric not null default 1
+        )
+      `);
+      await pg.run(`
         CREATE TABLE IF NOT EXISTS sales_returns (
           id text primary key,
           company_id text not null references companies(id) on delete cascade,
@@ -3303,6 +3463,8 @@ async function ensureVentasSchema() {
       await pg.run("CREATE INDEX IF NOT EXISTS idx_suspended_sales_company ON suspended_sales(company_id, status, created_at)");
       await pg.run("CREATE INDEX IF NOT EXISTS idx_pos_favorites_company ON pos_favorite_products(company_id, sort_order, created_at)");
       await pg.run("CREATE INDEX IF NOT EXISTS idx_sales_promotions_company ON sales_promotions(company_id, is_active, starts_at, ends_at)");
+      await pg.run("CREATE INDEX IF NOT EXISTS idx_sales_combos_company ON sales_combos(company_id, is_active, name)");
+      await pg.run("CREATE INDEX IF NOT EXISTS idx_sales_combo_items_combo ON sales_combo_items(combo_id)");
       await pg.run("ALTER TABLE sales_promotions ADD COLUMN IF NOT EXISTS scope_type text not null default 'product'");
       await pg.run("ALTER TABLE sales_promotions ADD COLUMN IF NOT EXISTS category_name text not null default ''");
       await pg.run("ALTER TABLE sales_promotions ALTER COLUMN product_id DROP NOT NULL");
