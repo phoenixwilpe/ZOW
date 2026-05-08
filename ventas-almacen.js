@@ -1364,6 +1364,8 @@ function renderCustomers() {
   const oldestDebt = receivables.slice().sort((a, b) => new Date(a.created_at) - new Date(b.created_at))[0];
   const debtAging = buildDebtAging(receivables);
   const riskCustomers = buildCustomerRiskList().slice(0, 6);
+  const collectionPlan = buildCollectionPlan();
+  const followUpList = buildReceivableFollowUpList().slice(0, 6);
   setCount(`${customers.length} cliente${customers.length === 1 ? "" : "s"}`);
   mainList().innerHTML = `
     <section class="setup-overview">
@@ -1375,16 +1377,25 @@ function renderCustomers() {
     <section class="debt-aging-grid">
       ${debtAging.map((bucket) => `<article class="${bucket.className}"><span>${escapeHtml(bucket.label)}</span><strong>${money(bucket.total)}</strong><small>${bucket.count} venta${bucket.count === 1 ? "" : "s"} pendiente${bucket.count === 1 ? "" : "s"}</small></article>`).join("")}
     </section>
-    <section class="admin-panel">
-      <div class="admin-panel-head"><div><p class="eyebrow">Riesgo comercial</p><h3>Clientes que requieren seguimiento</h3></div></div>
-      <div class="admin-list">${riskCustomers.map(renderCustomerRiskRow).join("") || empty("Sin clientes con riesgo de credito")}</div>
+    <section class="collection-plan-grid">
+      ${collectionPlan.map((item) => `<article class="${item.className}"><span>${escapeHtml(item.label)}</span><strong>${money(item.total)}</strong><small>${item.detail}</small></article>`).join("")}
+    </section>
+    <section class="customer-workspace-grid">
+      <article class="admin-panel">
+        <div class="admin-panel-head"><div><p class="eyebrow">Riesgo comercial</p><h3>Clientes que requieren seguimiento</h3></div></div>
+        <div class="admin-list">${riskCustomers.map(renderCustomerRiskRow).join("") || empty("Sin clientes con riesgo de credito")}</div>
+      </article>
+      <article class="admin-panel">
+        <div class="admin-panel-head"><div><p class="eyebrow">Plan de cobro</p><h3>Acciones recomendadas</h3></div><button class="ghost-button" type="button" id="exportReceivablesCsv">Exportar cartera CSV</button></div>
+        <div class="admin-list">${followUpList.map(renderReceivableFollowUpRow).join("") || empty("Sin acciones de cobro pendientes")}</div>
+      </article>
     </section>
     <section class="admin-panel">
       <div class="admin-panel-head"><div><p class="eyebrow">Cuentas por cobrar</p><h3>Ventas al credito</h3></div></div>
       <div class="admin-list">${receivables.map(renderReceivableRow).join("") || empty("Sin saldos pendientes")}</div>
     </section>
     <section class="admin-panel">
-      <div class="admin-panel-head"><div><p class="eyebrow">Directorio</p><h3>Clientes registrados</h3></div></div>
+      <div class="admin-panel-head"><div><p class="eyebrow">Directorio</p><h3>Clientes registrados</h3></div><button class="ghost-button" type="button" id="exportCustomersFromCustomersCsv">Exportar clientes CSV</button></div>
       <div class="admin-list">${customers.map((customer) => `
         <article class="admin-row">
           <div>
@@ -1408,6 +1419,8 @@ function renderCustomers() {
   document.querySelectorAll("[data-edit-customer]").forEach((button) => {
     button.addEventListener("click", () => openCustomerModal(button.dataset.editCustomer));
   });
+  document.querySelector("#exportReceivablesCsv")?.addEventListener("click", exportReceivablesCsv);
+  document.querySelector("#exportCustomersFromCustomersCsv")?.addEventListener("click", exportCustomersCsv);
 }
 
 function renderReceivableRow(sale) {
@@ -1436,6 +1449,20 @@ function renderCustomerRiskRow(item) {
     <div class="admin-row-meta">
       <span class="${levelClass}">Riesgo ${item.level}</span>
       <span>${item.recommendation}</span>
+    </div>
+  </article>`;
+}
+
+function renderReceivableFollowUpRow(item) {
+  return `<article class="admin-row collection-action-row">
+    <div>
+      <strong>${escapeHtml(item.name)}</strong>
+      <span>${item.salesCount} venta${item.salesCount === 1 ? "" : "s"} pendiente${item.salesCount === 1 ? "" : "s"} / saldo ${money(item.debt)}</span>
+      <span>${escapeHtml(item.nextStep)}</span>
+    </div>
+    <div class="admin-row-meta">
+      <span class="${item.className}">${escapeHtml(item.priority)}</span>
+      <span>${item.oldestDays} dia${item.oldestDays === 1 ? "" : "s"}</span>
     </div>
   </article>`;
 }
@@ -1575,6 +1602,55 @@ function buildCustomerRiskList() {
   }).sort((a, b) => {
     const order = { alto: 3, medio: 2, bajo: 1 };
     return order[b.level] - order[a.level] || b.debt - a.debt;
+  });
+}
+
+function buildCollectionPlan() {
+  const urgent = receivables.filter((sale) => daysSince(sale.created_at) > 30);
+  const watch = receivables.filter((sale) => {
+    const age = daysSince(sale.created_at);
+    return age >= 16 && age <= 30;
+  });
+  const normal = receivables.filter((sale) => daysSince(sale.created_at) < 16);
+  const withoutFile = receivables.filter((sale) => !customers.some((customer) => customer.name === sale.customer_name));
+  return [
+    {
+      label: "Cobro urgente",
+      total: urgent.reduce((sum, sale) => sum + Number(sale.balance_due || 0), 0),
+      detail: `${urgent.length} cuenta${urgent.length === 1 ? "" : "s"} con mas de 30 dias`,
+      className: "is-danger"
+    },
+    {
+      label: "Seguimiento semanal",
+      total: watch.reduce((sum, sale) => sum + Number(sale.balance_due || 0), 0),
+      detail: `${watch.length} cuenta${watch.length === 1 ? "" : "s"} entre 16 y 30 dias`,
+      className: "is-warning"
+    },
+    {
+      label: "Credito controlado",
+      total: normal.reduce((sum, sale) => sum + Number(sale.balance_due || 0), 0),
+      detail: `${normal.length} cuenta${normal.length === 1 ? "" : "s"} dentro del plazo inicial`,
+      className: "is-ok"
+    },
+    {
+      label: "Sin ficha completa",
+      total: withoutFile.reduce((sum, sale) => sum + Number(sale.balance_due || 0), 0),
+      detail: `${withoutFile.length} venta${withoutFile.length === 1 ? "" : "s"} debe${withoutFile.length === 1 ? "" : "n"} asociarse a cliente`,
+      className: withoutFile.length ? "is-warning" : "is-ok"
+    }
+  ];
+}
+
+function buildReceivableFollowUpList() {
+  return buildCustomerRiskList().map((item) => {
+    const priority = item.level === "alto" ? "Prioridad alta" : item.level === "medio" ? "Prioridad media" : "Control";
+    const className = item.level === "alto" ? "danger-text" : item.level === "medio" ? "warn-text" : "ok-text";
+    const nextStep = item.level === "alto"
+      ? "Contactar hoy, registrar pago o bloquear nuevas ventas a credito."
+      : item.level === "medio"
+        ? "Confirmar fecha de pago antes de autorizar mas credito."
+        : "Mantener seguimiento normal y revisar limite disponible.";
+    return { ...item, priority, className, nextStep };
   });
 }
 
@@ -3666,6 +3742,27 @@ function exportCustomersCsv() {
     });
   });
   downloadCsv(`clientes-${csvDateStamp()}.csv`, rows);
+}
+
+function exportReceivablesCsv() {
+  const riskByCustomer = new Map(buildCustomerRiskList().map((item) => [item.name, item]));
+  const rows = receivables.map((sale) => {
+    const customerName = sale.customer_name || "Cliente sin registrar";
+    const age = daysSince(sale.created_at);
+    const risk = riskByCustomer.get(customerName);
+    return {
+      codigo_venta: sale.code,
+      fecha: formatDateTime(sale.created_at),
+      cliente: customerName,
+      total_venta: Number(sale.total || 0).toFixed(2),
+      pagado: Number(sale.amount_paid || 0).toFixed(2),
+      saldo_pendiente: Number(sale.balance_due || 0).toFixed(2),
+      antiguedad_dias: age,
+      riesgo_cliente: risk?.level || (age > 30 ? "alto" : age > 15 ? "medio" : "bajo"),
+      recomendacion: risk?.recommendation || (age > 30 ? "Cobrar antes de vender mas" : "Hacer seguimiento")
+    };
+  });
+  downloadCsv(`cartera-cobranza-${csvDateStamp()}.csv`, rows);
 }
 
 function exportProfitCsv() {

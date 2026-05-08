@@ -56,6 +56,7 @@ Avance estimado actual: 99%
 - Observacion de cierre de caja persistente: se guarda en la base de datos, historial y comprobante imprimible.
 - Panel de salud del negocio en reportes con puntaje ejecutivo sobre ventas, inventario, vencimientos, caja, deuda y margen.
 - Exportaciones administrativas adicionales: cierres de caja CSV y auditoria comercial CSV para control interno.
+- Cartera de clientes mejorada con plan de cobro, prioridades por antiguedad, riesgo comercial y exportacion directa de cuentas por cobrar.
 
 ## Faltante prioritario
 

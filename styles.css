@@ -2563,6 +2563,22 @@ body.app-correspondencia .metrics article:hover {
   margin-bottom: 14px;
 }
 
+.collection-plan-grid,
+.customer-workspace-grid {
+  display: grid;
+  gap: 14px;
+  margin-bottom: 14px;
+}
+
+.collection-plan-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.customer-workspace-grid {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  align-items: start;
+}
+
 .inventory-insight-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -2570,7 +2586,8 @@ body.app-correspondencia .metrics article:hover {
   margin-bottom: 14px;
 }
 
-.debt-aging-grid article {
+.debt-aging-grid article,
+.collection-plan-grid article {
   border: 1px solid color-mix(in srgb, var(--accent) 16%, var(--line));
   border-radius: 8px;
   padding: 12px;
@@ -2589,12 +2606,28 @@ body.app-correspondencia .metrics article:hover {
   background: linear-gradient(135deg, #f0fdf4, #ffffff);
 }
 
+.collection-plan-grid article.is-ok {
+  border-color: rgb(22 163 74 / 22%);
+  background: linear-gradient(135deg, #f0fdf4, #ffffff);
+}
+
+.debt-aging-grid article.is-muted,
+.collection-plan-grid article.is-muted {
+  border-color: color-mix(in srgb, var(--accent) 12%, var(--line));
+  background: linear-gradient(135deg, #f8fafc, #ffffff);
+}
+
 .inventory-insight-grid article.is-ok {
   border-color: rgb(22 163 74 / 22%);
   background: linear-gradient(135deg, #f0fdf4, #ffffff);
 }
 
 .debt-aging-grid article.is-warning {
+  border-color: rgb(245 158 11 / 28%);
+  background: linear-gradient(135deg, #fffbeb, #ffffff);
+}
+
+.collection-plan-grid article.is-warning {
   border-color: rgb(245 158 11 / 28%);
   background: linear-gradient(135deg, #fffbeb, #ffffff);
 }
@@ -2609,6 +2642,11 @@ body.app-correspondencia .metrics article:hover {
   background: linear-gradient(135deg, #fef2f2, #ffffff);
 }
 
+.collection-plan-grid article.is-danger {
+  border-color: rgb(220 38 38 / 24%);
+  background: linear-gradient(135deg, #fef2f2, #ffffff);
+}
+
 .inventory-insight-grid article.is-danger {
   border-color: rgb(220 38 38 / 24%);
   background: linear-gradient(135deg, #fef2f2, #ffffff);
@@ -2616,6 +2654,8 @@ body.app-correspondencia .metrics article:hover {
 
 .debt-aging-grid span,
 .debt-aging-grid small,
+.collection-plan-grid span,
+.collection-plan-grid small,
 .inventory-insight-grid span,
 .inventory-insight-grid small {
   display: block;
@@ -2625,6 +2665,7 @@ body.app-correspondencia .metrics article:hover {
 }
 
 .debt-aging-grid strong,
+.collection-plan-grid strong,
 .inventory-insight-grid strong {
   display: block;
   margin: 6px 0;
@@ -9771,6 +9812,8 @@ body.system-zow-site .site-footer {
   .report-grid,
   .report-actions,
   .report-risk-columns,
+  .collection-plan-grid,
+  .customer-workspace-grid,
   .service-strip,
   .operation-model-grid,
   .role-template-grid {
@@ -10108,6 +10151,8 @@ body.system-zow-site .site-footer {
   .product-suggestion-grid,
   .cash-health-grid,
   .debt-aging-grid,
+  .collection-plan-grid,
+  .customer-workspace-grid,
   .inventory-insight-grid,
   .payment-breakdown-grid,
   .cash-close-breakdown,
@@ -10137,6 +10182,7 @@ body.system-zow-site .site-footer {
   .inventory-health-grid,
   .cash-health-grid,
   .debt-aging-grid,
+  .collection-plan-grid,
   .inventory-insight-grid,
   .owner-dashboard-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
