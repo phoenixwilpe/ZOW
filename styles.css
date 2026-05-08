@@ -11193,3 +11193,123 @@ body.app-ventas .cloud-safe-note {
   }
 }
 
+/* Desktop POS correction: clean product cards and stable cashier panel. */
+body.app-ventas .pos-products {
+  min-width: 0;
+}
+
+body.app-ventas .touch-pos-shell {
+  grid-template-columns: minmax(0, 1.42fr) minmax(360px, 0.78fr);
+}
+
+body.app-ventas .touch-cart-panel {
+  position: sticky;
+  top: 12px;
+  max-height: calc(100dvh - 24px);
+  overflow: auto;
+}
+
+body.app-ventas .touch-product-grid {
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  align-items: stretch;
+}
+
+body.app-ventas .pos-products-block .touch-product-grid {
+  max-height: clamp(300px, 52dvh, 560px);
+  overflow: auto;
+  padding: 2px 6px 6px 2px;
+}
+
+body.app-ventas .touch-product-card {
+  grid-template-columns: 1fr;
+  grid-template-rows: auto auto 1fr auto;
+  align-content: stretch;
+  align-items: start;
+  gap: 9px;
+  min-height: 168px;
+  padding: 14px;
+}
+
+body.app-ventas .touch-product-card > * {
+  min-width: 0;
+  position: relative;
+  z-index: 1;
+}
+
+body.app-ventas .touch-product-card .product-code {
+  max-width: 100%;
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+body.app-ventas .touch-product-card strong {
+  display: -webkit-box;
+  width: 100%;
+  min-height: 2.35em;
+  margin: 0;
+  overflow: hidden;
+  color: #10251f;
+  font-size: clamp(0.96rem, 1.1vw, 1.05rem);
+  line-height: 1.16;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+body.app-ventas .touch-product-card .product-meta {
+  align-self: end;
+  display: grid;
+  gap: 4px;
+  width: 100%;
+  margin: 0;
+  line-height: 1.25;
+}
+
+body.app-ventas .touch-product-card .product-meta span,
+body.app-ventas .touch-product-card .product-meta small {
+  margin: 0;
+}
+
+body.app-ventas .touch-product-card b {
+  justify-self: start;
+  max-width: 100%;
+  margin: 0;
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+
+body.app-ventas .touch-cart-panel .pos-cart-list {
+  max-height: clamp(150px, 24dvh, 300px);
+}
+
+body.app-ventas .pos-actions-block .touch-sale-actions {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+body.app-ventas .pos-actions-block .danger-action {
+  grid-column: 1 / -1;
+}
+
+@media (min-width: 1440px) {
+  body.app-ventas .touch-pos-shell {
+    grid-template-columns: minmax(0, 1.55fr) minmax(370px, 0.72fr);
+  }
+
+  body.app-ventas .touch-product-grid {
+    grid-template-columns: repeat(auto-fit, minmax(205px, 1fr));
+  }
+}
+
+@media (max-width: 1180px) {
+  body.app-ventas .touch-cart-panel {
+    position: static;
+    max-height: none;
+    overflow: visible;
+  }
+
+  body.app-ventas .pos-products-block .touch-product-grid {
+    max-height: none;
+    overflow: visible;
+  }
+}
+
