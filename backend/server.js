@@ -1413,15 +1413,16 @@ app.get("/api/ventas/promotions", requireAuth, requireSystemAccess("ventas_almac
 
 app.post("/api/ventas/promotions", requireAuth, requireSystemAccess("ventas_almacen"), requireVentasRole("admin", "ventas_admin", "supervisor"), (req, res) => {
   const promotion = readPromotionPayload(req.body, req.user.company_id);
-  if (!promotion.productId) return res.status(400).json({ error: "Selecciona un producto" });
+  if (promotion.scopeType === "product" && !promotion.productId) return res.status(400).json({ error: "Selecciona un producto" });
+  if (promotion.scopeType === "category" && !promotion.category) return res.status(400).json({ error: "Selecciona una categoria" });
   if (!promotion.name) return res.status(400).json({ error: "Nombre de promocion obligatorio" });
   if (promotion.value <= 0) return res.status(400).json({ error: "El valor de descuento debe ser mayor a cero" });
   if (promotion.type === "percent" && promotion.value > 100) return res.status(400).json({ error: "El porcentaje no puede superar 100%" });
   if (promotion.endsAt && promotion.endsAt < promotion.startsAt) return res.status(400).json({ error: "La fecha final no puede ser menor a la inicial" });
   db.prepare(
-    `INSERT INTO sales_promotions (id, company_id, name, product_id, type, value, min_quantity, starts_at, ends_at, is_active, created_by, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?)`
-  ).run(promotion.id, req.user.company_id, promotion.name, promotion.productId, promotion.type, promotion.value, promotion.minQuantity, promotion.startsAt, promotion.endsAt, req.user.id, new Date().toISOString(), new Date().toISOString());
+    `INSERT INTO sales_promotions (id, company_id, name, scope_type, product_id, category_name, type, value, min_quantity, starts_at, ends_at, is_active, created_by, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?)`
+  ).run(promotion.id, req.user.company_id, promotion.name, promotion.scopeType, promotion.productId, promotion.category, promotion.type, promotion.value, promotion.minQuantity, promotion.startsAt, promotion.endsAt, req.user.id, new Date().toISOString(), new Date().toISOString());
   recordAuditEvent({ req, action: "promotion_create", entityType: "promotion", entityId: promotion.id, description: `Creo promocion: ${promotion.name}` });
   res.status(201).json({ promotion: mapSalesPromotion(db.prepare("SELECT * FROM sales_promotions WHERE id = ?").get(promotion.id)) });
 });
@@ -1429,19 +1430,20 @@ app.post("/api/ventas/promotions", requireAuth, requireSystemAccess("ventas_alma
 app.patch("/api/ventas/promotions/:id", requireAuth, requireSystemAccess("ventas_almacen"), requireVentasRole("admin", "ventas_admin", "supervisor"), (req, res) => {
   const existing = db.prepare("SELECT * FROM sales_promotions WHERE id = ? AND company_id = ?").get(req.params.id, req.user.company_id);
   if (!existing) return res.status(404).json({ error: "Promocion no encontrada" });
-  const hasRulePayload = ["name", "productId", "product_id", "type", "value", "minQuantity", "min_quantity", "startsAt", "starts_at", "endsAt", "ends_at"].some((key) => Object.prototype.hasOwnProperty.call(req.body, key));
+  const hasRulePayload = ["name", "scopeType", "scope_type", "productId", "product_id", "category", "categoryName", "category_name", "type", "value", "minQuantity", "min_quantity", "startsAt", "starts_at", "endsAt", "ends_at"].some((key) => Object.prototype.hasOwnProperty.call(req.body, key));
   if (hasRulePayload) {
     const promotion = readPromotionPayload(req.body, req.user.company_id);
-    if (!promotion.productId) return res.status(400).json({ error: "Selecciona un producto" });
+    if (promotion.scopeType === "product" && !promotion.productId) return res.status(400).json({ error: "Selecciona un producto" });
+    if (promotion.scopeType === "category" && !promotion.category) return res.status(400).json({ error: "Selecciona una categoria" });
     if (!promotion.name) return res.status(400).json({ error: "Nombre de promocion obligatorio" });
     if (promotion.value <= 0) return res.status(400).json({ error: "El valor de descuento debe ser mayor a cero" });
     if (promotion.type === "percent" && promotion.value > 100) return res.status(400).json({ error: "El porcentaje no puede superar 100%" });
     if (promotion.endsAt && promotion.endsAt < promotion.startsAt) return res.status(400).json({ error: "La fecha final no puede ser menor a la inicial" });
     db.prepare(
       `UPDATE sales_promotions
-       SET name = ?, product_id = ?, type = ?, value = ?, min_quantity = ?, starts_at = ?, ends_at = ?, updated_at = ?
+       SET name = ?, scope_type = ?, product_id = ?, category_name = ?, type = ?, value = ?, min_quantity = ?, starts_at = ?, ends_at = ?, updated_at = ?
        WHERE id = ? AND company_id = ?`
-    ).run(promotion.name, promotion.productId, promotion.type, promotion.value, promotion.minQuantity, promotion.startsAt, promotion.endsAt, new Date().toISOString(), existing.id, req.user.company_id);
+    ).run(promotion.name, promotion.scopeType, promotion.productId, promotion.category, promotion.type, promotion.value, promotion.minQuantity, promotion.startsAt, promotion.endsAt, new Date().toISOString(), existing.id, req.user.company_id);
     recordAuditEvent({ req, action: "promotion_update", entityType: "promotion", entityId: existing.id, description: `Actualizo promocion: ${promotion.name}` });
   } else {
     const active = req.body.active !== false ? 1 : 0;
@@ -2574,12 +2576,16 @@ function loadVentasFavorites(companyId) {
 }
 
 function readPromotionPayload(body, companyId) {
+  const scopeType = String(body.scopeType || body.scope_type || "product") === "category" ? "category" : "product";
   const productId = String(body.productId || body.product_id || "").trim();
   const product = productId ? db.prepare("SELECT id FROM inventory_products WHERE id = ? AND company_id = ? AND is_active = 1").get(productId, companyId) : null;
+  const category = String(body.category || body.categoryName || body.category_name || "").trim().slice(0, 120);
   return {
     id: randomUUID(),
     name: String(body.name || "").trim().slice(0, 140),
+    scopeType,
     productId: product?.id || "",
+    category,
     type: String(body.type || "percent") === "fixed" ? "fixed" : "percent",
     value: clampDecimal(body.value, 0, 999999, 0),
     minQuantity: clampNumber(body.minQuantity ?? body.min_quantity, 1, 9999, 1),
@@ -2592,8 +2598,10 @@ function mapSalesPromotion(row) {
   return {
     id: row.id,
     name: row.name || "",
+    scopeType: row.scope_type || "product",
     productId: row.product_id || "",
     productName: row.product_name || "",
+    category: row.category_name || "",
     type: row.type || "percent",
     value: Number(row.value || 0),
     minQuantity: Number(row.min_quantity || 1),

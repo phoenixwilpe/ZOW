@@ -1254,15 +1254,16 @@ app.post("/api/ventas/promotions", requireAuth, async (req, res) => {
   if (!requireVentasRole(req, res, "admin", "ventas_admin", "supervisor")) return;
   await ensureVentasSchema();
   const promotion = await readPromotionPayload(req.body, req.user.company_id);
-  if (!promotion.productId) return res.status(400).json({ error: "Selecciona un producto" });
+  if (promotion.scopeType === "product" && !promotion.productId) return res.status(400).json({ error: "Selecciona un producto" });
+  if (promotion.scopeType === "category" && !promotion.category) return res.status(400).json({ error: "Selecciona una categoria" });
   if (!promotion.name) return res.status(400).json({ error: "Nombre de promocion obligatorio" });
   if (promotion.value <= 0) return res.status(400).json({ error: "El valor de descuento debe ser mayor a cero" });
   if (promotion.type === "percent" && promotion.value > 100) return res.status(400).json({ error: "El porcentaje no puede superar 100%" });
   if (promotion.endsAt && promotion.endsAt < promotion.startsAt) return res.status(400).json({ error: "La fecha final no puede ser menor a la inicial" });
   await pg.run(
-    `INSERT INTO sales_promotions (id, company_id, name, product_id, type, value, min_quantity, starts_at, ends_at, is_active, created_by, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?::date, NULLIF(?, '')::date, true, ?, now(), now())`,
-    [promotion.id, req.user.company_id, promotion.name, promotion.productId, promotion.type, promotion.value, promotion.minQuantity, promotion.startsAt, promotion.endsAt, req.user.id]
+    `INSERT INTO sales_promotions (id, company_id, name, scope_type, product_id, category_name, type, value, min_quantity, starts_at, ends_at, is_active, created_by, created_at, updated_at)
+     VALUES (?, ?, ?, ?, NULLIF(?, ''), ?, ?, ?, ?, ?::date, NULLIF(?, '')::date, true, ?, now(), now())`,
+    [promotion.id, req.user.company_id, promotion.name, promotion.scopeType, promotion.productId, promotion.category, promotion.type, promotion.value, promotion.minQuantity, promotion.startsAt, promotion.endsAt, req.user.id]
   );
   await recordAuditEvent({ req, action: "promotion_create", entityType: "promotion", entityId: promotion.id, description: `Creo promocion: ${promotion.name}` });
   res.status(201).json({ promotion: mapSalesPromotion(await pg.get("SELECT * FROM sales_promotions WHERE id = ?", [promotion.id])) });
@@ -1274,19 +1275,20 @@ app.patch("/api/ventas/promotions/:id", requireAuth, async (req, res) => {
   await ensureVentasSchema();
   const existing = await pg.get("SELECT * FROM sales_promotions WHERE id = ? AND company_id = ?", [req.params.id, req.user.company_id]);
   if (!existing) return res.status(404).json({ error: "Promocion no encontrada" });
-  const hasRulePayload = ["name", "productId", "product_id", "type", "value", "minQuantity", "min_quantity", "startsAt", "starts_at", "endsAt", "ends_at"].some((key) => Object.prototype.hasOwnProperty.call(req.body, key));
+  const hasRulePayload = ["name", "scopeType", "scope_type", "productId", "product_id", "category", "categoryName", "category_name", "type", "value", "minQuantity", "min_quantity", "startsAt", "starts_at", "endsAt", "ends_at"].some((key) => Object.prototype.hasOwnProperty.call(req.body, key));
   if (hasRulePayload) {
     const promotion = await readPromotionPayload(req.body, req.user.company_id);
-    if (!promotion.productId) return res.status(400).json({ error: "Selecciona un producto" });
+    if (promotion.scopeType === "product" && !promotion.productId) return res.status(400).json({ error: "Selecciona un producto" });
+    if (promotion.scopeType === "category" && !promotion.category) return res.status(400).json({ error: "Selecciona una categoria" });
     if (!promotion.name) return res.status(400).json({ error: "Nombre de promocion obligatorio" });
     if (promotion.value <= 0) return res.status(400).json({ error: "El valor de descuento debe ser mayor a cero" });
     if (promotion.type === "percent" && promotion.value > 100) return res.status(400).json({ error: "El porcentaje no puede superar 100%" });
     if (promotion.endsAt && promotion.endsAt < promotion.startsAt) return res.status(400).json({ error: "La fecha final no puede ser menor a la inicial" });
     await pg.run(
       `UPDATE sales_promotions
-       SET name = ?, product_id = ?, type = ?, value = ?, min_quantity = ?, starts_at = ?::date, ends_at = NULLIF(?, '')::date, updated_at = now()
+       SET name = ?, scope_type = ?, product_id = NULLIF(?, ''), category_name = ?, type = ?, value = ?, min_quantity = ?, starts_at = ?::date, ends_at = NULLIF(?, '')::date, updated_at = now()
        WHERE id = ? AND company_id = ?`,
-      [promotion.name, promotion.productId, promotion.type, promotion.value, promotion.minQuantity, promotion.startsAt, promotion.endsAt, existing.id, req.user.company_id]
+      [promotion.name, promotion.scopeType, promotion.productId, promotion.category, promotion.type, promotion.value, promotion.minQuantity, promotion.startsAt, promotion.endsAt, existing.id, req.user.company_id]
     );
     await recordAuditEvent({ req, action: "promotion_update", entityType: "promotion", entityId: existing.id, description: `Actualizo promocion: ${promotion.name}` });
   } else {
@@ -2733,12 +2735,16 @@ async function loadVentasFavorites(companyId) {
 }
 
 async function readPromotionPayload(body, companyId) {
+  const scopeType = String(body.scopeType || body.scope_type || "product") === "category" ? "category" : "product";
   const productId = String(body.productId || body.product_id || "").trim();
   const product = productId ? await pg.get("SELECT id FROM inventory_products WHERE id = ? AND company_id = ? AND is_active = true", [productId, companyId]) : null;
+  const category = String(body.category || body.categoryName || body.category_name || "").trim().slice(0, 120);
   return {
     id: randomUUID(),
     name: String(body.name || "").trim().slice(0, 140),
+    scopeType,
     productId: product?.id || "",
+    category,
     type: String(body.type || "percent") === "fixed" ? "fixed" : "percent",
     value: clampDecimal(body.value, 0, 999999, 0),
     minQuantity: clampNumber(body.minQuantity ?? body.min_quantity, 1, 9999, 1),
@@ -2751,8 +2757,10 @@ function mapSalesPromotion(row) {
   return {
     id: row.id,
     name: row.name || "",
+    scopeType: row.scope_type || "product",
     productId: row.product_id || "",
     productName: row.product_name || "",
+    category: row.category_name || "",
     type: row.type || "percent",
     value: Number(row.value || 0),
     minQuantity: Number(row.min_quantity || 1),
@@ -2949,7 +2957,9 @@ async function ensureVentasSchema() {
           id text primary key,
           company_id text not null references companies(id) on delete cascade,
           name text not null,
-          product_id text not null references inventory_products(id) on delete cascade,
+          scope_type text not null default 'product',
+          product_id text references inventory_products(id) on delete cascade,
+          category_name text not null default '',
           type text not null default 'percent',
           value numeric not null default 0,
           min_quantity numeric not null default 1,
@@ -3053,6 +3063,9 @@ async function ensureVentasSchema() {
       await pg.run("CREATE INDEX IF NOT EXISTS idx_suspended_sales_company ON suspended_sales(company_id, status, created_at)");
       await pg.run("CREATE INDEX IF NOT EXISTS idx_pos_favorites_company ON pos_favorite_products(company_id, sort_order, created_at)");
       await pg.run("CREATE INDEX IF NOT EXISTS idx_sales_promotions_company ON sales_promotions(company_id, is_active, starts_at, ends_at)");
+      await pg.run("ALTER TABLE sales_promotions ADD COLUMN IF NOT EXISTS scope_type text not null default 'product'");
+      await pg.run("ALTER TABLE sales_promotions ADD COLUMN IF NOT EXISTS category_name text not null default ''");
+      await pg.run("ALTER TABLE sales_promotions ALTER COLUMN product_id DROP NOT NULL");
       await pg.run("ALTER TABLE purchase_orders ADD COLUMN IF NOT EXISTS received_at timestamptz");
       await pg.run("ALTER TABLE purchase_orders ADD COLUMN IF NOT EXISTS cancelled_at timestamptz");
       await pg.run("ALTER TABLE inventory_products ADD COLUMN IF NOT EXISTS batch_number text not null default ''");

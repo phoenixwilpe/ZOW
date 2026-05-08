@@ -925,7 +925,9 @@ function renderPromotions() {
         <div class="admin-panel-head"><div><p class="eyebrow">${editingPromotion ? "Editar promocion" : "Nueva promocion"}</p><h3>Regla automatica para POS</h3></div>${editingPromotion ? `<button class="ghost-button" type="button" id="cancelPromotionEdit">Cancelar edicion</button>` : ""}</div>
         <form class="admin-form promotion-rule-form" id="promotionForm">
           <label>Nombre<input id="promotionName" type="text" required placeholder="Ej. Descuento refrescos fin de semana" value="${escapeHtml(editingPromotion?.name || "")}" /></label>
-          <label>Producto<select id="promotionProduct" required><option value="">Seleccionar producto</option>${products.filter(isProductActive).map((product) => `<option value="${product.id}" ${editingPromotion?.productId === product.id ? "selected" : ""}>${escapeHtml(product.name)} / ${money(product.sale_price)}</option>`).join("")}</select></label>
+          <label>Aplicar a<select id="promotionScope"><option value="product" ${editingPromotion?.scopeType !== "category" ? "selected" : ""}>Producto especifico</option><option value="category" ${editingPromotion?.scopeType === "category" ? "selected" : ""}>Categoria completa</option></select></label>
+          <label>Producto<select id="promotionProduct"><option value="">Seleccionar producto</option>${products.filter(isProductActive).map((product) => `<option value="${product.id}" ${editingPromotion?.productId === product.id ? "selected" : ""}>${escapeHtml(product.name)} / ${money(product.sale_price)}</option>`).join("")}</select></label>
+          <label>Categoria<select id="promotionCategory"><option value="">Seleccionar categoria</option>${productCategories().map((category) => `<option value="${escapeHtml(category)}" ${editingPromotion?.category === category ? "selected" : ""}>${escapeHtml(category)}</option>`).join("")}</select></label>
           <label>Tipo<select id="promotionType"><option value="percent" ${editingPromotion?.type === "percent" ? "selected" : ""}>Porcentaje</option><option value="fixed" ${editingPromotion?.type === "fixed" ? "selected" : ""}>Monto fijo</option></select></label>
           <label>Valor<input id="promotionValue" type="number" min="0.01" step="0.01" required value="${Number(editingPromotion?.value || "")}" /></label>
           <label>Cantidad minima<input id="promotionMinQuantity" type="number" min="1" step="1" value="${Number(editingPromotion?.minQuantity || 1)}" /></label>
@@ -1073,10 +1075,11 @@ function renderProfitProductRow(row) {
 function renderPromotionRow(promotion) {
   const product = products.find((item) => item.id === promotion.productId);
   const active = isPromotionActiveNow(promotion);
+  const target = promotion.scopeType === "category" ? `Categoria ${promotion.category || "sin categoria"}` : product?.name || promotion.productName || "Producto";
   return `<article class="admin-row">
     <div>
       <strong>${escapeHtml(promotion.name)}</strong>
-      <span>${escapeHtml(product?.name || promotion.productName || "Producto")} / ${promotionLabel(promotion)}</span>
+      <span>${escapeHtml(target)} / ${promotionLabel(promotion)}</span>
       <span>Desde ${escapeHtml(promotion.startsAt || "hoy")} ${promotion.endsAt ? `/ Hasta ${escapeHtml(promotion.endsAt)}` : "/ Sin fecha final"}</span>
     </div>
     <div class="admin-row-meta">
@@ -1938,9 +1941,15 @@ function applyPromotionsToCart() {
 }
 
 function bestPromotionForCartItem(item) {
+  const product = products.find((entry) => entry.id === item.productId);
   return promotions
-    .filter((promotion) => promotion.productId === item.productId && isPromotionActiveNow(promotion) && Number(item.quantity || 0) >= Number(promotion.minQuantity || 1))
+    .filter((promotion) => promotionMatchesCartItem(promotion, item, product) && isPromotionActiveNow(promotion) && Number(item.quantity || 0) >= Number(promotion.minQuantity || 1))
     .sort((a, b) => promotionDiscountAmount(b, item) - promotionDiscountAmount(a, item))[0];
+}
+
+function promotionMatchesCartItem(promotion, item, product) {
+  if (promotion.scopeType === "category") return normalizeText(promotion.category) === normalizeText(product?.category);
+  return promotion.productId === item.productId;
 }
 
 function promotionDiscountAmount(promotion, item) {
@@ -2996,7 +3005,9 @@ async function savePromotion(event) {
   event.preventDefault();
   const payload = {
     name: value("#promotionName"),
+    scopeType: value("#promotionScope"),
     productId: value("#promotionProduct"),
+    category: value("#promotionCategory"),
     type: value("#promotionType"),
     value: Number(value("#promotionValue")),
     minQuantity: Number(value("#promotionMinQuantity") || 1),
@@ -3030,7 +3041,9 @@ async function duplicatePromotion(id) {
       method: "POST",
       body: {
         name: `${promotion.name} copia`,
+        scopeType: promotion.scopeType,
         productId: promotion.productId,
+        category: promotion.category,
         type: promotion.type,
         value: promotion.value,
         minQuantity: promotion.minQuantity,
@@ -3261,6 +3274,7 @@ function availablePaymentMethods() {
   return paymentMethods().filter((method) => storeSettings.allowCredit || method.id !== "credito");
 }
 function paymentLabel(id) { return paymentMethods().find((method) => method.id === id)?.label || "Efectivo"; }
+function normalizeText(value) { return String(value || "").trim().toLowerCase(); }
 function purchaseStatusLabel(status) {
   return { pendiente: "Pendiente", confirmada: "Recibida", recibida: "Recibida", cancelada: "Cancelada" }[status] || status;
 }
@@ -3614,8 +3628,10 @@ function normalizePromotion(promotion) {
   return {
     id: promotion.id,
     name: promotion.name || "Promocion",
+    scopeType: promotion.scopeType || promotion.scope_type || (promotion.category || promotion.category_name ? "category" : "product"),
     productId: promotion.productId || promotion.product_id || "",
     productName: promotion.productName || promotion.product_name || "",
+    category: promotion.category || promotion.category_name || "",
     type: promotion.type || "percent",
     value: Number(promotion.value || 0),
     minQuantity: Number(promotion.minQuantity || promotion.min_quantity || 1),

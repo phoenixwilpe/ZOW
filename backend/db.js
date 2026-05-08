@@ -400,7 +400,9 @@ function initDb() {
       id TEXT PRIMARY KEY,
       company_id TEXT NOT NULL,
       name TEXT NOT NULL,
-      product_id TEXT NOT NULL,
+      scope_type TEXT NOT NULL DEFAULT 'product',
+      product_id TEXT NOT NULL DEFAULT '',
+      category_name TEXT NOT NULL DEFAULT '',
       type TEXT NOT NULL DEFAULT 'percent',
       value REAL NOT NULL DEFAULT 0,
       min_quantity REAL NOT NULL DEFAULT 1,
@@ -589,6 +591,8 @@ function migrateSchema() {
   ensureColumn("sales_customers", "status", "TEXT NOT NULL DEFAULT 'activo'");
   ensureColumn("sales_customers", "credit_limit", "REAL NOT NULL DEFAULT 0");
   ensureColumn("cash_sessions", "register_number", "INTEGER NOT NULL DEFAULT 1");
+  ensureColumn("sales_promotions", "scope_type", "TEXT NOT NULL DEFAULT 'product'");
+  ensureColumn("sales_promotions", "category_name", "TEXT NOT NULL DEFAULT ''");
   db.prepare("UPDATE sales_order_items SET subtotal = quantity * unit_price WHERE subtotal = 0").run();
   db.prepare(
     `UPDATE sales_order_items
