@@ -55,6 +55,7 @@ Avance estimado actual: 99%
 - Centro de avisos interno con contador en barra superior para caja abierta, ventas sin cierre, stock critico, vencimientos, cuentas por cobrar y acciones sensibles.
 - Observacion de cierre de caja persistente: se guarda en la base de datos, historial y comprobante imprimible.
 - Panel de salud del negocio en reportes con puntaje ejecutivo sobre ventas, inventario, vencimientos, caja, deuda y margen.
+- Exportaciones administrativas adicionales: cierres de caja CSV y auditoria comercial CSV para control interno.
 
 ## Faltante prioritario
 

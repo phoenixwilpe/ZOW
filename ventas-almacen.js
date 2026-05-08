@@ -881,7 +881,10 @@ function renderFinance() {
     <section class="admin-panel">
       <div class="admin-panel-head">
         <div><p class="eyebrow">Arqueos</p><h3>Historial de cierres de caja</h3></div>
-        <span>${cashClosures.length} cierre${cashClosures.length === 1 ? "" : "s"}</span>
+        <div class="admin-head-actions">
+          <span>${cashClosures.length} cierre${cashClosures.length === 1 ? "" : "s"}</span>
+          <button class="ghost-button" type="button" id="exportCashClosuresCsv">Exportar cierres</button>
+        </div>
       </div>
       <div class="admin-list">${cashClosures.slice(0, 10).map(renderCashClosureRow).join("") || empty("Sin cierres registrados")}</div>
     </section>
@@ -893,6 +896,7 @@ function renderFinance() {
   document.querySelectorAll("[data-print-closure]").forEach((button) => {
     button.addEventListener("click", () => printCashClosure(button.dataset.printClosure));
   });
+  document.querySelector("#exportCashClosuresCsv")?.addEventListener("click", exportCashClosuresCsv);
 }
 
 function renderHistory() {
@@ -1169,6 +1173,14 @@ function renderReports() {
         <button class="ghost-button" type="button" id="exportProfitCsv">Exportar utilidad CSV</button>
       </article>
       <article class="report-export-card">
+        <div><strong>Cierres de caja</strong><span>Exporta arqueos, esperado, contado, diferencia, ventas cerradas y observaciones.</span></div>
+        <button class="ghost-button" type="button" id="exportClosuresCsv">Exportar cierres CSV</button>
+      </article>
+      <article class="report-export-card">
+        <div><strong>Auditoria comercial</strong><span>Descarga eventos sensibles: ventas, anulaciones, caja, inventario y usuarios responsables.</span></div>
+        <button class="ghost-button" type="button" id="exportAuditCsv">Exportar auditoria CSV</button>
+      </article>
+      <article class="report-export-card">
         <div><strong>Respaldo operativo</strong><span>Descarga un archivo JSON con ventas, productos, clientes, compras y configuracion visible.</span></div>
         <button class="ghost-button" type="button" id="exportBackupJson">Exportar respaldo JSON</button>
       </article>
@@ -1198,6 +1210,8 @@ function renderReports() {
   document.querySelector("#exportInventoryCsv")?.addEventListener("click", exportInventoryCsv);
   document.querySelector("#exportCustomersCsv")?.addEventListener("click", exportCustomersCsv);
   document.querySelector("#exportProfitCsv")?.addEventListener("click", exportProfitCsv);
+  document.querySelector("#exportClosuresCsv")?.addEventListener("click", exportCashClosuresCsv);
+  document.querySelector("#exportAuditCsv")?.addEventListener("click", exportAuditCsv);
   document.querySelector("#exportBackupJson")?.addEventListener("click", exportBackupJson);
 }
 
@@ -3669,6 +3683,36 @@ function exportProfitCsv() {
     };
   });
   downloadCsv(`utilidad-productos-${csvDateStamp()}.csv`, rows);
+}
+
+function exportCashClosuresCsv() {
+  const rows = cashClosures.map((closure) => ({
+    codigo: closure.code,
+    fecha: formatDateTime(closure.createdAt),
+    caja: closure.registerNumber,
+    apertura: Number(closure.openingAmount || 0).toFixed(2),
+    ventas: Number(closure.totalSales || 0).toFixed(2),
+    movimientos: Number(closure.movementTotal || 0).toFixed(2),
+    esperado: Number(closure.expectedAmount || 0).toFixed(2),
+    contado: Number(closure.countedAmount || 0).toFixed(2),
+    diferencia: Number(closure.differenceAmount || 0).toFixed(2),
+    ventas_cerradas: Number(closure.saleCount || 0),
+    observacion: closure.note || ""
+  }));
+  downloadCsv(`cierres-caja-${csvDateStamp()}.csv`, rows);
+}
+
+function exportAuditCsv() {
+  const rows = auditEvents.map((event) => ({
+    fecha: formatDateTime(event.created_at),
+    usuario: event.actor_name || "Sistema",
+    accion: auditActionLabel(event.action),
+    entidad: event.entity_type || "",
+    referencia: event.entity_id || "",
+    descripcion: event.description || "",
+    ip: event.ip_address || ""
+  }));
+  downloadCsv(`auditoria-comercial-${csvDateStamp()}.csv`, rows);
 }
 
 function profitReportQuery() {
