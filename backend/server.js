@@ -1539,11 +1539,14 @@ app.post("/api/ventas/products/import", requireAuth, requireSystemAccess("ventas
   if (!req.file) return res.status(400).json({ error: "Selecciona un archivo CSV o Excel" });
   const rows = (await parseProductImportRows(req.file)).slice(0, 1000);
   if (!rows.length) return res.status(400).json({ error: "El archivo no tiene productos validos" });
+  const preview = analyzeProductImportRows(rows, req.user.company_id);
+  const validRows = rows.filter((_product, index) => preview.items[index]?.status === "valid");
   let created = 0;
   let updated = 0;
-  const skipped = [];
+  const skipped = preview.items
+    .filter((item) => item.status === "skipped")
+    .map((item) => ({ row: item.row, code: item.code || "", reason: item.issues.join("; ") }));
   const findExisting = db.prepare("SELECT id FROM inventory_products WHERE company_id = ? AND upper(code) = upper(?)");
-  const findDuplicateBarcode = db.prepare("SELECT id FROM inventory_products WHERE company_id = ? AND barcode <> '' AND lower(barcode) = lower(?) AND (? = '' OR id <> ?)");
   const updateProduct = db.prepare(
     `UPDATE inventory_products
      SET barcode = ?, name = ?, category = ?, unit = ?, batch_number = ?, expires_at = ?, cost_price = ?, sale_price = ?, min_stock = ?, stock = ?, updated_at = ?
@@ -1553,19 +1556,8 @@ app.post("/api/ventas/products/import", requireAuth, requireSystemAccess("ventas
     `INSERT INTO inventory_products (id, company_id, code, barcode, name, category, unit, batch_number, expires_at, cost_price, sale_price, min_stock, stock, created_at, updated_at)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   );
-  rows.forEach((product) => {
-    if (!product.code || !product.name) {
-      skipped.push({ code: product.code || "", reason: "Codigo y nombre son obligatorios" });
-      return;
-    }
+  validRows.forEach((product) => {
     const existing = findExisting.get(req.user.company_id, product.code);
-    if (product.barcode) {
-      const duplicateBarcode = findDuplicateBarcode.get(req.user.company_id, product.barcode, existing?.id || "", existing?.id || "");
-      if (duplicateBarcode) {
-        skipped.push({ code: product.code, reason: "Codigo de barras duplicado" });
-        return;
-      }
-    }
     const now = new Date().toISOString();
     if (existing) {
       updateProduct.run(product.barcode, product.name, product.category, product.unit, product.batchNumber, product.expiresAt, product.costPrice, product.salePrice, product.minStock, product.stock, now, existing.id, req.user.company_id);
@@ -1577,6 +1569,13 @@ app.post("/api/ventas/products/import", requireAuth, requireSystemAccess("ventas
   });
   recordAuditEvent({ req, action: "product_import", entityType: "product", entityId: "", description: `Importo productos: ${created} nuevos, ${updated} actualizados`, metadata: { created, updated, skipped: skipped.length, file: req.file.originalname } });
   res.json({ created, updated, skipped, total: rows.length });
+});
+
+app.post("/api/ventas/products/import/preview", requireAuth, requireSystemAccess("ventas_almacen"), requireVentasRole("admin", "ventas_admin", "almacen"), productImportUpload.single("file"), async (req, res) => {
+  if (!req.file) return res.status(400).json({ error: "Selecciona un archivo CSV o Excel" });
+  const rows = (await parseProductImportRows(req.file)).slice(0, 1000);
+  if (!rows.length) return res.status(400).json({ error: "El archivo no tiene productos validos" });
+  res.json(analyzeProductImportRows(rows, req.user.company_id));
 });
 
 app.post("/api/ventas/products", requireAuth, requireSystemAccess("ventas_almacen"), requireVentasRole("admin", "ventas_admin", "almacen"), (req, res) => {
@@ -2695,6 +2694,48 @@ async function parseProductImportRows(file) {
     rows.push(object);
   });
   return rows.map(normalizeProductImportRow).filter(Boolean);
+}
+
+function analyzeProductImportRows(rows, companyId) {
+  const existingProducts = db.prepare("SELECT id, code, barcode FROM inventory_products WHERE company_id = ?").all(companyId);
+  const productsByCode = new Map(existingProducts.map((product) => [String(product.code || "").toUpperCase(), product]));
+  const productsByBarcode = new Map(existingProducts.filter((product) => product.barcode).map((product) => [String(product.barcode).toLowerCase(), product]));
+  const seenCodes = new Set();
+  const seenBarcodes = new Set();
+  const items = rows.map((product, index) => {
+    const issues = [];
+    const warnings = [];
+    const code = String(product.code || "").toUpperCase();
+    const barcode = String(product.barcode || "").toLowerCase();
+    const existing = code ? productsByCode.get(code) : null;
+    if (!code || !product.name) issues.push("Codigo y nombre son obligatorios");
+    if (code && seenCodes.has(code)) issues.push("Codigo repetido dentro del archivo");
+    if (barcode && seenBarcodes.has(barcode)) issues.push("Codigo de barras repetido dentro del archivo");
+    const barcodeOwner = barcode ? productsByBarcode.get(barcode) : null;
+    if (barcodeOwner && (!existing || barcodeOwner.id !== existing.id)) issues.push("Codigo de barras ya usado por otro producto");
+    if (Number(product.salePrice || 0) <= 0) warnings.push("Precio de venta en cero");
+    if (Number(product.salePrice || 0) < Number(product.costPrice || 0)) warnings.push("Precio menor al costo");
+    if (Number(product.stock || 0) <= Number(product.minStock || 0) && Number(product.minStock || 0) > 0) warnings.push("Stock inicial igual o menor al minimo");
+    if (code) seenCodes.add(code);
+    if (barcode) seenBarcodes.add(barcode);
+    return {
+      row: index + 2,
+      code,
+      name: product.name || "",
+      action: existing ? "actualizar" : "crear",
+      status: issues.length ? "skipped" : "valid",
+      issues: issues.length ? issues : warnings
+    };
+  });
+  return {
+    total: rows.length,
+    valid: items.filter((item) => item.status === "valid").length,
+    created: items.filter((item) => item.status === "valid" && item.action === "crear").length,
+    updated: items.filter((item) => item.status === "valid" && item.action === "actualizar").length,
+    skipped: items.filter((item) => item.status === "skipped").length,
+    warnings: items.filter((item) => item.status === "valid" && item.issues.length).length,
+    items
+  };
 }
 
 function normalizeProductImportRow(row) {

@@ -57,12 +57,12 @@ Avance estimado actual: 99%
 - Panel de salud del negocio en reportes con puntaje ejecutivo sobre ventas, inventario, vencimientos, caja, deuda y margen.
 - Exportaciones administrativas adicionales: cierres de caja CSV y auditoria comercial CSV para control interno.
 - Cartera de clientes mejorada con plan de cobro, prioridades por antiguedad, riesgo comercial y exportacion directa de cuentas por cobrar.
+- Importacion masiva con vista previa: valida filas, duplicados, actualizaciones y observaciones antes de modificar el inventario.
 
 ## Faltante prioritario
 
 1. Combos comerciales avanzados: paquetes con varios productos y precio final fijo.
 2. Ajustes finales de experiencia movil.
-3. Validacion asistida de importaciones grandes con vista previa de filas observadas.
 
 ## Omitido por ahora
 

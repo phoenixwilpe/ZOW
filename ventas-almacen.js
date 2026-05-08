@@ -3603,7 +3603,12 @@ async function importProductsFile(event) {
   if (!can("manageInventory")) return window.alert("Tu rol no puede importar productos.");
   try {
     if (file.size > 8 * 1024 * 1024) return window.alert("El archivo no debe superar 8 MB.");
-    if (!confirm(`Importar productos desde "${file.name}"? Si el codigo existe, se actualizara.`)) return;
+    const previewForm = new FormData();
+    previewForm.append("file", file);
+    const preview = await apiRequest("/ventas/products/import/preview", { method: "POST", body: previewForm });
+    const previewText = productImportPreviewText(file.name, preview);
+    if (!preview.valid) return window.alert(`${previewText}\n\nNo hay filas validas para importar.`);
+    if (!confirm(previewText)) return;
     const formData = new FormData();
     formData.append("file", file);
     const result = await apiRequest("/ventas/products/import", { method: "POST", body: formData });
@@ -3616,6 +3621,26 @@ async function importProductsFile(event) {
     ventasMessage = error.message || "No se pudo importar el archivo.";
     renderMain();
   }
+}
+
+function productImportPreviewText(fileName, preview) {
+  const sampleIssues = (preview.items || [])
+    .filter((item) => item.issues?.length)
+    .slice(0, 6)
+    .map((item) => `Fila ${item.row} (${item.code || item.name || "sin codigo"}): ${item.issues.join(", ")}`)
+    .join("\n");
+  return [
+    `Vista previa de importacion: "${fileName}"`,
+    "",
+    `Filas leidas: ${preview.total || 0}`,
+    `Listas para importar: ${preview.valid || 0}`,
+    `Productos nuevos: ${preview.created || 0}`,
+    `Productos a actualizar: ${preview.updated || 0}`,
+    `Filas omitidas: ${preview.skipped || 0}`,
+    `Observaciones: ${preview.warnings || 0}`,
+    sampleIssues ? `\nPrimeras observaciones:\n${sampleIssues}` : "",
+    "\nContinuar con la importacion?"
+  ].filter(Boolean).join("\n");
 }
 
 async function assertVentasAccess() {

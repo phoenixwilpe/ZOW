@@ -1397,25 +1397,15 @@ app.post("/api/ventas/products/import", requireAuth, productImportUpload.single(
   if (!req.file) return res.status(400).json({ error: "Selecciona un archivo CSV o Excel" });
   const rows = (await parseProductImportRows(req.file)).slice(0, 1000);
   if (!rows.length) return res.status(400).json({ error: "El archivo no tiene productos validos" });
+  const preview = await analyzeProductImportRows(rows, req.user.company_id);
+  const validRows = rows.filter((_product, index) => preview.items[index]?.status === "valid");
   let created = 0;
   let updated = 0;
-  const skipped = [];
-  for (const product of rows) {
-    if (!product.code || !product.name) {
-      skipped.push({ code: product.code || "", reason: "Codigo y nombre son obligatorios" });
-      continue;
-    }
+  const skipped = preview.items
+    .filter((item) => item.status === "skipped")
+    .map((item) => ({ row: item.row, code: item.code || "", reason: item.issues.join("; ") }));
+  for (const product of validRows) {
     const existing = await pg.get("SELECT id FROM inventory_products WHERE company_id = ? AND upper(code) = upper(?)", [req.user.company_id, product.code]);
-    if (product.barcode) {
-      const duplicateBarcode = await pg.get(
-        "SELECT id FROM inventory_products WHERE company_id = ? AND barcode <> '' AND lower(barcode) = lower(?) AND (? = '' OR id <> ?)",
-        [req.user.company_id, product.barcode, existing?.id || "", existing?.id || ""]
-      );
-      if (duplicateBarcode) {
-        skipped.push({ code: product.code, reason: "Codigo de barras duplicado" });
-        continue;
-      }
-    }
     if (existing) {
       await pg.run(
         `UPDATE inventory_products
@@ -1435,6 +1425,17 @@ app.post("/api/ventas/products/import", requireAuth, productImportUpload.single(
   }
   await recordAuditEvent({ req, action: "product_import", entityType: "product", entityId: "", description: `Importo productos: ${created} nuevos, ${updated} actualizados`, metadata: { created, updated, skipped: skipped.length, file: req.file.originalname } });
   res.json({ created, updated, skipped, total: rows.length });
+});
+
+app.post("/api/ventas/products/import/preview", requireAuth, productImportUpload.single("file"), async (req, res) => {
+  if (!(await requireSystemAccess("ventas_almacen", req, res))) return;
+  if (!requireVentasRole(req, res, "admin", "ventas_admin", "almacen")) return;
+  await ensureVentasSchema();
+  if (!req.file) return res.status(400).json({ error: "Selecciona un archivo CSV o Excel" });
+  const rows = (await parseProductImportRows(req.file)).slice(0, 1000);
+  if (!rows.length) return res.status(400).json({ error: "El archivo no tiene productos validos" });
+  const preview = await analyzeProductImportRows(rows, req.user.company_id);
+  res.json(preview);
 });
 
 app.post("/api/ventas/products", requireAuth, async (req, res) => {
@@ -2857,6 +2858,48 @@ async function parseProductImportRows(file) {
     rows.push(object);
   });
   return rows.map(normalizeProductImportRow).filter(Boolean);
+}
+
+async function analyzeProductImportRows(rows, companyId) {
+  const existingProducts = await pg.all("SELECT id, code, barcode FROM inventory_products WHERE company_id = ?", [companyId]);
+  const productsByCode = new Map(existingProducts.map((product) => [String(product.code || "").toUpperCase(), product]));
+  const productsByBarcode = new Map(existingProducts.filter((product) => product.barcode).map((product) => [String(product.barcode).toLowerCase(), product]));
+  const seenCodes = new Set();
+  const seenBarcodes = new Set();
+  const items = rows.map((product, index) => {
+    const issues = [];
+    const warnings = [];
+    const code = String(product.code || "").toUpperCase();
+    const barcode = String(product.barcode || "").toLowerCase();
+    const existing = code ? productsByCode.get(code) : null;
+    if (!code || !product.name) issues.push("Codigo y nombre son obligatorios");
+    if (code && seenCodes.has(code)) issues.push("Codigo repetido dentro del archivo");
+    if (barcode && seenBarcodes.has(barcode)) issues.push("Codigo de barras repetido dentro del archivo");
+    const barcodeOwner = barcode ? productsByBarcode.get(barcode) : null;
+    if (barcodeOwner && (!existing || barcodeOwner.id !== existing.id)) issues.push("Codigo de barras ya usado por otro producto");
+    if (Number(product.salePrice || 0) <= 0) warnings.push("Precio de venta en cero");
+    if (Number(product.salePrice || 0) < Number(product.costPrice || 0)) warnings.push("Precio menor al costo");
+    if (Number(product.stock || 0) <= Number(product.minStock || 0) && Number(product.minStock || 0) > 0) warnings.push("Stock inicial igual o menor al minimo");
+    if (code) seenCodes.add(code);
+    if (barcode) seenBarcodes.add(barcode);
+    return {
+      row: index + 2,
+      code,
+      name: product.name || "",
+      action: existing ? "actualizar" : "crear",
+      status: issues.length ? "skipped" : "valid",
+      issues: issues.length ? issues : warnings
+    };
+  });
+  return {
+    total: rows.length,
+    valid: items.filter((item) => item.status === "valid").length,
+    created: items.filter((item) => item.status === "valid" && item.action === "crear").length,
+    updated: items.filter((item) => item.status === "valid" && item.action === "actualizar").length,
+    skipped: items.filter((item) => item.status === "skipped").length,
+    warnings: items.filter((item) => item.status === "valid" && item.issues.length).length,
+    items
+  };
 }
 
 function normalizeProductImportRow(row) {
