@@ -2185,16 +2185,17 @@ app.post("/api/ventas/cash/close", requireAuth, async (req, res) => {
   const expectedAmount = openingAmount + total + movementTotal;
   const countedAmount = Number(req.body.countedAmount ?? expectedAmount);
   const differenceAmount = countedAmount - expectedAmount;
+  const note = String(req.body.note || "").trim().slice(0, 500);
   if (countedAmount < 0) return res.status(400).json({ error: "El efectivo contado no puede ser negativo" });
   const code = await buildNextCashCode(req.user.company_id);
   await pg.tx(async (client) => {
     await client.run(
       `INSERT INTO cash_closures (
          id, company_id, code, register_number, opening_amount, total_sales, movement_total, expected_amount,
-         counted_amount, difference_amount, sale_count, created_by, created_at
+         counted_amount, difference_amount, note, sale_count, created_by, created_at
        )
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, now())`,
-      [closureId, req.user.company_id, code, Number(session.register_number || 1), openingAmount, total, movementTotal, expectedAmount, countedAmount, differenceAmount, pendingSales.length, req.user.id]
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, now())`,
+      [closureId, req.user.company_id, code, Number(session.register_number || 1), openingAmount, total, movementTotal, expectedAmount, countedAmount, differenceAmount, note, pendingSales.length, req.user.id]
     );
     await client.run(
       "UPDATE sales_orders SET cash_closed = true WHERE company_id = ? AND status = 'confirmada' AND cash_closed = false AND (cash_session_id = ? OR (cash_session_id = '' AND created_by = ?))",
@@ -2208,7 +2209,7 @@ app.post("/api/ventas/cash/close", requireAuth, async (req, res) => {
     entityType: "cash_closure",
     entityId: closureId,
     description: `Cerro caja ${session.register_number || 1}. Esperado ${expectedAmount}, contado ${countedAmount}, diferencia ${differenceAmount}`,
-    metadata: { saleCount: pendingSales.length, total, movementTotal, openingAmount }
+    metadata: { saleCount: pendingSales.length, total, movementTotal, openingAmount, note }
   });
   res.status(201).json({ closure: await pg.get("SELECT * FROM cash_closures WHERE id = ?", [closureId]) });
 });
@@ -3205,6 +3206,7 @@ async function ensureVentasSchema() {
           expected_amount numeric not null default 0,
           counted_amount numeric not null default 0,
           difference_amount numeric not null default 0,
+          note text not null default '',
           sale_count integer not null default 0,
           created_by text not null references users(id),
           created_at timestamptz not null default now(),
@@ -3272,6 +3274,7 @@ async function ensureVentasSchema() {
       await pg.run("ALTER TABLE cash_closures ADD COLUMN IF NOT EXISTS expected_amount numeric not null default 0");
       await pg.run("ALTER TABLE cash_closures ADD COLUMN IF NOT EXISTS counted_amount numeric not null default 0");
       await pg.run("ALTER TABLE cash_closures ADD COLUMN IF NOT EXISTS difference_amount numeric not null default 0");
+      await pg.run("ALTER TABLE cash_closures ADD COLUMN IF NOT EXISTS note text not null default ''");
       await pg.run("ALTER TABLE sales_orders ADD COLUMN IF NOT EXISTS payment_method text not null default 'efectivo'");
       await pg.run("ALTER TABLE sales_orders ADD COLUMN IF NOT EXISTS payment_detail text not null default ''");
       await pg.run("ALTER TABLE sales_orders ADD COLUMN IF NOT EXISTS amount_paid numeric not null default 0");

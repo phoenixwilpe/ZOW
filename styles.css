@@ -4050,6 +4050,66 @@ body.app-correspondencia .metrics article:hover {
   margin: 12px 0 0;
 }
 
+.business-health-panel {
+  overflow: hidden;
+}
+
+.business-health-meter {
+  height: 12px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: color-mix(in srgb, #f59e0b 10%, white);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 14%, var(--line));
+}
+
+.business-health-meter span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #ef4444, #f59e0b 42%, var(--accent));
+  transition: width 420ms ease;
+}
+
+.business-health-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.business-health-grid article {
+  border: 1px solid color-mix(in srgb, var(--accent) 14%, var(--line));
+  border-radius: 8px;
+  padding: 12px;
+  background: rgb(255 255 255 / 84%);
+}
+
+.business-health-grid article.is-ok {
+  border-color: rgb(22 163 74 / 24%);
+  background: linear-gradient(135deg, #f0fdf4, #ffffff);
+}
+
+.business-health-grid article.is-warning {
+  border-color: rgb(245 158 11 / 28%);
+  background: linear-gradient(135deg, #fffbeb, #ffffff);
+}
+
+.business-health-grid strong,
+.business-health-grid span {
+  display: block;
+}
+
+.business-health-grid strong {
+  color: var(--accent-dark);
+}
+
+.business-health-grid span {
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 0.8rem;
+  font-weight: 800;
+}
+
 @keyframes zow-scan {
   from { transform: translateX(-120%); }
   to { transform: translateX(120%); }
@@ -10053,7 +10113,8 @@ body.system-zow-site .site-footer {
   .cash-close-breakdown,
   .live-activity-grid,
   .kardex-summary,
-  .setup-check-grid {
+  .setup-check-grid,
+  .business-health-grid {
     grid-template-columns: 1fr;
   }
 

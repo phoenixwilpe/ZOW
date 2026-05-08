@@ -2319,16 +2319,17 @@ app.post("/api/ventas/cash/close", requireAuth, requireSystemAccess("ventas_alma
   const expectedAmount = openingAmount + total + movementTotal;
   const countedAmount = Number(req.body.countedAmount ?? expectedAmount);
   const differenceAmount = countedAmount - expectedAmount;
+  const note = String(req.body.note || "").trim().slice(0, 500);
   if (countedAmount < 0) return res.status(400).json({ error: "El efectivo contado no puede ser negativo" });
   db.exec("BEGIN");
   try {
   db.prepare(
     `INSERT INTO cash_closures (
        id, company_id, code, register_number, opening_amount, total_sales, movement_total, expected_amount,
-       counted_amount, difference_amount, sale_count, created_by, created_at
+       counted_amount, difference_amount, note, sale_count, created_by, created_at
      )
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-  ).run(closureId, req.user.company_id, code, Number(session.register_number || 1), openingAmount, total, movementTotal, expectedAmount, countedAmount, differenceAmount, pendingSales.length, req.user.id, now);
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+  ).run(closureId, req.user.company_id, code, Number(session.register_number || 1), openingAmount, total, movementTotal, expectedAmount, countedAmount, differenceAmount, note, pendingSales.length, req.user.id, now);
   db.prepare("UPDATE sales_orders SET cash_closed = 1 WHERE company_id = ? AND status = 'confirmada' AND cash_closed = 0 AND (cash_session_id = ? OR (cash_session_id = '' AND created_by = ?))").run(req.user.company_id, session.id, session.opened_by);
   db.prepare("UPDATE cash_sessions SET status = 'cerrada', closed_at = ? WHERE id = ? AND company_id = ?").run(now, session.id, req.user.company_id);
   db.exec("COMMIT");
@@ -2342,7 +2343,7 @@ app.post("/api/ventas/cash/close", requireAuth, requireSystemAccess("ventas_alma
     entityType: "cash_closure",
     entityId: closureId,
     description: `Cerro caja ${session.register_number || 1}. Esperado ${expectedAmount}, contado ${countedAmount}, diferencia ${differenceAmount}`,
-    metadata: { saleCount: pendingSales.length, total, movementTotal, openingAmount }
+    metadata: { saleCount: pendingSales.length, total, movementTotal, openingAmount, note }
   });
   res.status(201).json({ closure: db.prepare("SELECT * FROM cash_closures WHERE id = ?").get(closureId) });
 });

@@ -1111,6 +1111,7 @@ function renderReports() {
   const profitRows = profitReport.rows || [];
   const profitTotals = profitReport.totals || {};
   const marginPercent = Number(profitTotals.netSales || 0) ? (Number(profitTotals.profit || 0) / Number(profitTotals.netSales || 0)) * 100 : 0;
+  const businessHealth = buildBusinessHealth({ confirmedSales, stockRisks, expiryRisks, pendingTotal, marginPercent, totalClosureDifference: cashClosures.reduce((sum, closure) => sum + Math.abs(Number(closure.differenceAmount || 0)), 0) });
   setCount("Auditoria");
   mainList().innerHTML = `
     <section class="admin-panel report-filter-panel">
@@ -1128,6 +1129,13 @@ function renderReports() {
       <article><span>Cuentas por cobrar</span><strong>${money(pendingTotal)}</strong><small>${receivables.length} saldo${receivables.length === 1 ? "" : "s"} activo${receivables.length === 1 ? "" : "s"}</small></article>
       <article><span>Stock critico</span><strong>${summary.low_stock || 0}</strong><small>Productos bajo minimo</small></article>
       <article><span>Valor inventario</span><strong>${money(summary.inventory_value || 0)}</strong><small>Capital en almacen</small></article>
+    </section>
+    <section class="admin-panel business-health-panel">
+      <div class="admin-panel-head"><div><p class="eyebrow">Salud del negocio</p><h3>Lectura ejecutiva para decidir</h3></div><span>${businessHealth.score}/100</span></div>
+      <div class="business-health-meter"><span style="width:${businessHealth.score}%"></span></div>
+      <div class="business-health-grid">
+        ${businessHealth.items.map((item) => `<article class="${item.className}"><strong>${escapeHtml(item.label)}</strong><span>${escapeHtml(item.detail)}</span></article>`).join("")}
+      </div>
     </section>
     ${renderInventoryValuationReport()}
     <section class="admin-panel">
@@ -1191,6 +1199,46 @@ function renderReports() {
   document.querySelector("#exportCustomersCsv")?.addEventListener("click", exportCustomersCsv);
   document.querySelector("#exportProfitCsv")?.addEventListener("click", exportProfitCsv);
   document.querySelector("#exportBackupJson")?.addEventListener("click", exportBackupJson);
+}
+
+function buildBusinessHealth({ confirmedSales, stockRisks, expiryRisks, pendingTotal, marginPercent, totalClosureDifference }) {
+  const items = [
+    {
+      label: "Ventas",
+      ok: confirmedSales.length > 0,
+      detail: confirmedSales.length ? `${confirmedSales.length} venta(s) en el periodo.` : "Aun no hay ventas para analizar."
+    },
+    {
+      label: "Inventario",
+      ok: stockRisks.length === 0,
+      detail: stockRisks.length ? `${stockRisks.length} producto(s) requieren reposicion.` : "Stock minimo controlado."
+    },
+    {
+      label: "Vencimientos",
+      ok: expiryRisks.length === 0,
+      detail: expiryRisks.length ? `${expiryRisks.length} producto(s) vencidos o por vencer.` : "Sin riesgo de vencimiento visible."
+    },
+    {
+      label: "Caja",
+      ok: totalClosureDifference <= 1,
+      detail: totalClosureDifference > 1 ? `Diferencias acumuladas ${money(totalClosureDifference)}.` : "Cierres sin diferencias importantes."
+    },
+    {
+      label: "Cuentas por cobrar",
+      ok: pendingTotal <= 0,
+      detail: pendingTotal > 0 ? `Saldo pendiente ${money(pendingTotal)}.` : "Sin deuda pendiente registrada."
+    },
+    {
+      label: "Margen",
+      ok: marginPercent >= 15 || !confirmedSales.length,
+      detail: confirmedSales.length ? `Margen del periodo ${marginPercent.toFixed(1)}%.` : "Se calculara cuando existan ventas."
+    }
+  ];
+  const score = Math.round((items.filter((item) => item.ok).length / items.length) * 100);
+  return {
+    score,
+    items: items.map((item) => ({ ...item, className: item.ok ? "is-ok" : "is-warning" }))
+  };
 }
 
 function renderProfitProductRow(row) {
@@ -1938,6 +1986,7 @@ function renderCashClosureRow(closure) {
       <strong>${escapeHtml(closure.code)}</strong>
       <span>Caja ${num(closure.registerNumber)} / ${formatDateTime(closure.createdAt)} / ${closure.saleCount} venta${closure.saleCount === 1 ? "" : "s"}</span>
       <span>Apertura ${money(closure.openingAmount)} / Ventas ${money(closure.totalSales)} / Movimientos ${money(closure.movementTotal)}</span>
+      ${closure.note ? `<span>Observacion: ${escapeHtml(closure.note)}</span>` : ""}
     </div>
     <div class="admin-row-meta">
       <span>Esperado ${money(closure.expectedAmount)}</span>
@@ -2563,7 +2612,7 @@ async function closeCashSession(event) {
   }
   if (!confirm(`Cerrar caja? Diferencia: ${money(counted - expected)}`)) return;
   try {
-    await apiRequest("/ventas/cash/close", { method: "POST", body: { countedAmount: counted } });
+    await apiRequest("/ventas/cash/close", { method: "POST", body: { countedAmount: counted, note } });
     ventasMessage = "Caja cerrada correctamente.";
     await render();
   } catch (error) {
@@ -2578,7 +2627,7 @@ function printCashClosure(closureId) {
   const printable = window.open("", "_blank", "width=440,height=720");
   if (!printable) return;
   const difference = Number(closure.differenceAmount || 0);
-  printable.document.write(`<!doctype html><html><head><meta charset="UTF-8"><title>Cierre ${escapeHtml(closure.code)}</title><style>body{font-family:Arial,sans-serif;padding:20px;max-width:360px;color:#111}h1{font-size:18px;text-align:center;margin:0 0 8px}.muted{color:#555;font-size:12px;text-align:center}.row{display:flex;justify-content:space-between;border-bottom:1px dashed #aaa;padding:8px 0}.total{font-weight:800;font-size:17px}.diff{font-weight:800;color:${difference === 0 ? "#15803d" : "#b45309"}}button{margin-bottom:12px}.box{border:1px solid #111;border-radius:10px;padding:10px;margin:10px 0}.sign{margin-top:34px;border-top:1px solid #111;text-align:center;padding-top:8px;font-size:12px}@media print{button{display:none}}</style></head><body><button onclick="window.print()">Imprimir</button><h1>${escapeHtml(storeSettings.storeName || storeSettings.companyName || currentUser.companyName || "Zow Ventas-Almacen")}</h1><p class="muted">Cierre de caja ${escapeHtml(closure.code)}<br>Caja ${num(closure.registerNumber)} / ${formatDateTime(closure.createdAt)}</p><div class="box"><div class="row"><span>Monto apertura</span><strong>${money(closure.openingAmount)}</strong></div><div class="row"><span>Total ventas</span><strong>${money(closure.totalSales)}</strong></div><div class="row"><span>Movimientos</span><strong>${money(closure.movementTotal)}</strong></div><div class="row total"><span>Esperado</span><strong>${money(closure.expectedAmount)}</strong></div><div class="row"><span>Contado</span><strong>${money(closure.countedAmount)}</strong></div><div class="row diff"><span>Diferencia</span><strong>${money(difference)}</strong></div><div class="row"><span>Ventas cerradas</span><strong>${closure.saleCount}</strong></div></div><p class="muted">Reporte generado por ZOW SAAS. Revisar diferencias antes de entregar turno.</p><div class="sign">Firma cajero / responsable</div></body></html>`);
+  printable.document.write(`<!doctype html><html><head><meta charset="UTF-8"><title>Cierre ${escapeHtml(closure.code)}</title><style>body{font-family:Arial,sans-serif;padding:20px;max-width:360px;color:#111}h1{font-size:18px;text-align:center;margin:0 0 8px}.muted{color:#555;font-size:12px;text-align:center}.row{display:flex;justify-content:space-between;border-bottom:1px dashed #aaa;padding:8px 0}.total{font-weight:800;font-size:17px}.diff{font-weight:800;color:${difference === 0 ? "#15803d" : "#b45309"}}button{margin-bottom:12px}.box{border:1px solid #111;border-radius:10px;padding:10px;margin:10px 0}.note{font-size:12px;border:1px dashed #777;border-radius:8px;padding:8px;margin-top:10px}.sign{margin-top:34px;border-top:1px solid #111;text-align:center;padding-top:8px;font-size:12px}@media print{button{display:none}}</style></head><body><button onclick="window.print()">Imprimir</button><h1>${escapeHtml(storeSettings.storeName || storeSettings.companyName || currentUser.companyName || "Zow Ventas-Almacen")}</h1><p class="muted">Cierre de caja ${escapeHtml(closure.code)}<br>Caja ${num(closure.registerNumber)} / ${formatDateTime(closure.createdAt)}</p><div class="box"><div class="row"><span>Monto apertura</span><strong>${money(closure.openingAmount)}</strong></div><div class="row"><span>Total ventas</span><strong>${money(closure.totalSales)}</strong></div><div class="row"><span>Movimientos</span><strong>${money(closure.movementTotal)}</strong></div><div class="row total"><span>Esperado</span><strong>${money(closure.expectedAmount)}</strong></div><div class="row"><span>Contado</span><strong>${money(closure.countedAmount)}</strong></div><div class="row diff"><span>Diferencia</span><strong>${money(difference)}</strong></div><div class="row"><span>Ventas cerradas</span><strong>${closure.saleCount}</strong></div></div>${closure.note ? `<div class="note"><strong>Observacion:</strong><br>${escapeHtml(closure.note)}</div>` : ""}<p class="muted">Reporte generado por ZOW SAAS. Revisar diferencias antes de entregar turno.</p><div class="sign">Firma cajero / responsable</div></body></html>`);
   printable.document.close();
   printable.focus();
 }
@@ -3808,7 +3857,8 @@ function normalizeCashClosure(closure) {
     countedAmount: Number(closure.counted_amount ?? closure.countedAmount ?? 0),
     differenceAmount: Number(closure.difference_amount ?? closure.differenceAmount ?? 0),
     saleCount: Number(closure.sale_count ?? closure.saleCount ?? 0),
-    createdAt: closure.created_at || closure.createdAt || ""
+    createdAt: closure.created_at || closure.createdAt || "",
+    note: closure.note || ""
   };
 }
 function normalizeSuspendedSale(sale) {

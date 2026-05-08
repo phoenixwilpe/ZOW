@@ -334,6 +334,7 @@ create table if not exists cash_closures (
   expected_amount numeric not null default 0,
   counted_amount numeric not null default 0,
   difference_amount numeric not null default 0,
+  note text not null default '',
   sale_count integer not null default 0,
   created_by text not null references users(id),
   created_at timestamptz not null default now(),

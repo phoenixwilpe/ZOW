@@ -53,6 +53,8 @@ Avance estimado actual: 99%
 - Validaciones reforzadas en productos y configuracion para evitar codigos duplicados, precios bajo costo, stock negativo e impuestos invalidos.
 - Ajustes responsivos para que actividad, cierre detallado, Kardex y configuracion se acomoden mejor en celular/tablet.
 - Centro de avisos interno con contador en barra superior para caja abierta, ventas sin cierre, stock critico, vencimientos, cuentas por cobrar y acciones sensibles.
+- Observacion de cierre de caja persistente: se guarda en la base de datos, historial y comprobante imprimible.
+- Panel de salud del negocio en reportes con puntaje ejecutivo sobre ventas, inventario, vencimientos, caja, deuda y margen.
 
 ## Faltante prioritario
 
