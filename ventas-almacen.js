@@ -2236,7 +2236,16 @@ function bindProductSearch() {
   input.addEventListener("input", () => {
     productSearch = input.value;
     clearTimeout(productSearchTimer);
-    productSearchTimer = window.setTimeout(() => renderMain(), 120);
+    const caretPosition = input.selectionStart || productSearch.length;
+    productSearchTimer = window.setTimeout(() => {
+      renderMain();
+      window.requestAnimationFrame(() => {
+        const nextInput = document.querySelector("#productSearchInput");
+        if (!nextInput || activeView !== "sell") return;
+        nextInput.focus({ preventScroll: true });
+        nextInput.setSelectionRange(caretPosition, caretPosition);
+      });
+    }, 420);
   });
   input.addEventListener("keydown", (event) => {
     if (event.key === "Enter") {
