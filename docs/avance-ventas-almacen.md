@@ -40,6 +40,7 @@ Avance estimado actual: 99%
 - Kit comercial con demos por rubro, checklist de instalacion, guion de presentacion y planes sugeridos.
 - Politicas de seguridad y datos SaaS documentadas, con no-cache aplicado a respuestas API sensibles.
 - Modo PWA instalable para caja tactil con manifest, service worker, icono y guia de instalacion.
+- Panel de promociones avanzado con crear, editar, duplicar, pausar, activar y eliminar reglas.
 - Reportes CSV: ventas, inventario, clientes y respaldo operativo JSON.
 - Despliegue en Vercel y backend PostgreSQL/Supabase.
 
@@ -48,7 +49,7 @@ Avance estimado actual: 99%
 1. Combos comerciales avanzados: paquetes con varios productos y precio final fijo.
 2. Ajustes finales de experiencia movil.
 3. Importacion Excel directa con libreria dedicada, si el cliente no quiere convertir a CSV.
-4. Panel de promociones avanzado con duplicar, editar y reglas por categoria.
+4. Reglas de promocion por categoria y combos con varios productos.
 
 ## Omitido por ahora
 

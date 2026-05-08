@@ -1065,6 +1065,7 @@ app.get("/api/ventas/audit", requireAuth, async (req, res) => {
     "favorite_add",
     "favorite_remove",
     "promotion_create",
+    "promotion_update",
     "promotion_status",
     "promotion_delete",
     "sale_void",
@@ -1271,12 +1272,29 @@ app.patch("/api/ventas/promotions/:id", requireAuth, async (req, res) => {
   if (!(await requireSystemAccess("ventas_almacen", req, res))) return;
   if (!requireVentasRole(req, res, "admin", "ventas_admin", "supervisor")) return;
   await ensureVentasSchema();
-  const promotion = await pg.get("SELECT * FROM sales_promotions WHERE id = ? AND company_id = ?", [req.params.id, req.user.company_id]);
-  if (!promotion) return res.status(404).json({ error: "Promocion no encontrada" });
-  const active = req.body.active !== false;
-  await pg.run("UPDATE sales_promotions SET is_active = ?, updated_at = now() WHERE id = ? AND company_id = ?", [active, promotion.id, req.user.company_id]);
-  await recordAuditEvent({ req, action: "promotion_status", entityType: "promotion", entityId: promotion.id, description: `${active ? "Activo" : "Pauso"} promocion: ${promotion.name}` });
-  res.json({ promotion: mapSalesPromotion(await pg.get("SELECT * FROM sales_promotions WHERE id = ?", [promotion.id])) });
+  const existing = await pg.get("SELECT * FROM sales_promotions WHERE id = ? AND company_id = ?", [req.params.id, req.user.company_id]);
+  if (!existing) return res.status(404).json({ error: "Promocion no encontrada" });
+  const hasRulePayload = ["name", "productId", "product_id", "type", "value", "minQuantity", "min_quantity", "startsAt", "starts_at", "endsAt", "ends_at"].some((key) => Object.prototype.hasOwnProperty.call(req.body, key));
+  if (hasRulePayload) {
+    const promotion = await readPromotionPayload(req.body, req.user.company_id);
+    if (!promotion.productId) return res.status(400).json({ error: "Selecciona un producto" });
+    if (!promotion.name) return res.status(400).json({ error: "Nombre de promocion obligatorio" });
+    if (promotion.value <= 0) return res.status(400).json({ error: "El valor de descuento debe ser mayor a cero" });
+    if (promotion.type === "percent" && promotion.value > 100) return res.status(400).json({ error: "El porcentaje no puede superar 100%" });
+    if (promotion.endsAt && promotion.endsAt < promotion.startsAt) return res.status(400).json({ error: "La fecha final no puede ser menor a la inicial" });
+    await pg.run(
+      `UPDATE sales_promotions
+       SET name = ?, product_id = ?, type = ?, value = ?, min_quantity = ?, starts_at = ?::date, ends_at = NULLIF(?, '')::date, updated_at = now()
+       WHERE id = ? AND company_id = ?`,
+      [promotion.name, promotion.productId, promotion.type, promotion.value, promotion.minQuantity, promotion.startsAt, promotion.endsAt, existing.id, req.user.company_id]
+    );
+    await recordAuditEvent({ req, action: "promotion_update", entityType: "promotion", entityId: existing.id, description: `Actualizo promocion: ${promotion.name}` });
+  } else {
+    const active = req.body.active !== false;
+    await pg.run("UPDATE sales_promotions SET is_active = ?, updated_at = now() WHERE id = ? AND company_id = ?", [active, existing.id, req.user.company_id]);
+    await recordAuditEvent({ req, action: "promotion_status", entityType: "promotion", entityId: existing.id, description: `${active ? "Activo" : "Pauso"} promocion: ${existing.name}` });
+  }
+  res.json({ promotion: mapSalesPromotion(await pg.get("SELECT * FROM sales_promotions WHERE id = ?", [existing.id])) });
 });
 
 app.delete("/api/ventas/promotions/:id", requireAuth, async (req, res) => {

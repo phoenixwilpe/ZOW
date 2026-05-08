@@ -1241,6 +1241,7 @@ app.get("/api/ventas/audit", requireAuth, requireSystemAccess("ventas_almacen"),
     "favorite_add",
     "favorite_remove",
     "promotion_create",
+    "promotion_update",
     "promotion_status",
     "promotion_delete",
     "sale_void",
@@ -1426,12 +1427,28 @@ app.post("/api/ventas/promotions", requireAuth, requireSystemAccess("ventas_alma
 });
 
 app.patch("/api/ventas/promotions/:id", requireAuth, requireSystemAccess("ventas_almacen"), requireVentasRole("admin", "ventas_admin", "supervisor"), (req, res) => {
-  const promotion = db.prepare("SELECT * FROM sales_promotions WHERE id = ? AND company_id = ?").get(req.params.id, req.user.company_id);
-  if (!promotion) return res.status(404).json({ error: "Promocion no encontrada" });
-  const active = req.body.active !== false ? 1 : 0;
-  db.prepare("UPDATE sales_promotions SET is_active = ?, updated_at = ? WHERE id = ? AND company_id = ?").run(active, new Date().toISOString(), promotion.id, req.user.company_id);
-  recordAuditEvent({ req, action: "promotion_status", entityType: "promotion", entityId: promotion.id, description: `${active ? "Activo" : "Pauso"} promocion: ${promotion.name}` });
-  res.json({ promotion: mapSalesPromotion(db.prepare("SELECT * FROM sales_promotions WHERE id = ?").get(promotion.id)) });
+  const existing = db.prepare("SELECT * FROM sales_promotions WHERE id = ? AND company_id = ?").get(req.params.id, req.user.company_id);
+  if (!existing) return res.status(404).json({ error: "Promocion no encontrada" });
+  const hasRulePayload = ["name", "productId", "product_id", "type", "value", "minQuantity", "min_quantity", "startsAt", "starts_at", "endsAt", "ends_at"].some((key) => Object.prototype.hasOwnProperty.call(req.body, key));
+  if (hasRulePayload) {
+    const promotion = readPromotionPayload(req.body, req.user.company_id);
+    if (!promotion.productId) return res.status(400).json({ error: "Selecciona un producto" });
+    if (!promotion.name) return res.status(400).json({ error: "Nombre de promocion obligatorio" });
+    if (promotion.value <= 0) return res.status(400).json({ error: "El valor de descuento debe ser mayor a cero" });
+    if (promotion.type === "percent" && promotion.value > 100) return res.status(400).json({ error: "El porcentaje no puede superar 100%" });
+    if (promotion.endsAt && promotion.endsAt < promotion.startsAt) return res.status(400).json({ error: "La fecha final no puede ser menor a la inicial" });
+    db.prepare(
+      `UPDATE sales_promotions
+       SET name = ?, product_id = ?, type = ?, value = ?, min_quantity = ?, starts_at = ?, ends_at = ?, updated_at = ?
+       WHERE id = ? AND company_id = ?`
+    ).run(promotion.name, promotion.productId, promotion.type, promotion.value, promotion.minQuantity, promotion.startsAt, promotion.endsAt, new Date().toISOString(), existing.id, req.user.company_id);
+    recordAuditEvent({ req, action: "promotion_update", entityType: "promotion", entityId: existing.id, description: `Actualizo promocion: ${promotion.name}` });
+  } else {
+    const active = req.body.active !== false ? 1 : 0;
+    db.prepare("UPDATE sales_promotions SET is_active = ?, updated_at = ? WHERE id = ? AND company_id = ?").run(active, new Date().toISOString(), existing.id, req.user.company_id);
+    recordAuditEvent({ req, action: "promotion_status", entityType: "promotion", entityId: existing.id, description: `${active ? "Activo" : "Pauso"} promocion: ${existing.name}` });
+  }
+  res.json({ promotion: mapSalesPromotion(db.prepare("SELECT * FROM sales_promotions WHERE id = ?").get(existing.id)) });
 });
 
 app.delete("/api/ventas/promotions/:id", requireAuth, requireSystemAccess("ventas_almacen"), requireVentasRole("admin", "ventas_admin", "supervisor"), (req, res) => {

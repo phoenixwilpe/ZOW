@@ -37,6 +37,7 @@ let lastSaleReceipt = null;
 let editingUserId = "";
 let editingProductId = "";
 let editingCustomerId = "";
+let editingPromotionId = "";
 let productSearch = "";
 let productSearchTimer = 0;
 let ventasMessage = "";
@@ -911,6 +912,7 @@ function renderRoutes() {
 function renderPromotions() {
   const activePromotions = promotions.filter(isPromotionActiveNow);
   const critical = products.filter((product) => Number(product.stock || 0) <= Number(product.min_stock || 0)).slice(0, 4);
+  const editingPromotion = promotions.find((promotion) => promotion.id === editingPromotionId);
   setCount(`${activePromotions.length} activa${activePromotions.length === 1 ? "" : "s"}`);
   mainList().innerHTML = `
     <section class="promotion-grid">
@@ -920,16 +922,16 @@ function renderPromotions() {
     </section>
     ${can("managePromotions") ? `
       <section class="admin-panel">
-        <div class="admin-panel-head"><div><p class="eyebrow">Nueva promocion</p><h3>Regla automatica para POS</h3></div></div>
+        <div class="admin-panel-head"><div><p class="eyebrow">${editingPromotion ? "Editar promocion" : "Nueva promocion"}</p><h3>Regla automatica para POS</h3></div>${editingPromotion ? `<button class="ghost-button" type="button" id="cancelPromotionEdit">Cancelar edicion</button>` : ""}</div>
         <form class="admin-form promotion-rule-form" id="promotionForm">
-          <label>Nombre<input id="promotionName" type="text" required placeholder="Ej. Descuento refrescos fin de semana" /></label>
-          <label>Producto<select id="promotionProduct" required><option value="">Seleccionar producto</option>${products.filter(isProductActive).map((product) => `<option value="${product.id}">${escapeHtml(product.name)} / ${money(product.sale_price)}</option>`).join("")}</select></label>
-          <label>Tipo<select id="promotionType"><option value="percent">Porcentaje</option><option value="fixed">Monto fijo</option></select></label>
-          <label>Valor<input id="promotionValue" type="number" min="0.01" step="0.01" required /></label>
-          <label>Cantidad minima<input id="promotionMinQuantity" type="number" min="1" step="1" value="1" /></label>
-          <label>Desde<input id="promotionStartsAt" type="date" value="${todayDate()}" /></label>
-          <label>Hasta<input id="promotionEndsAt" type="date" /></label>
-          <button class="primary-button" type="submit">Crear promocion</button>
+          <label>Nombre<input id="promotionName" type="text" required placeholder="Ej. Descuento refrescos fin de semana" value="${escapeHtml(editingPromotion?.name || "")}" /></label>
+          <label>Producto<select id="promotionProduct" required><option value="">Seleccionar producto</option>${products.filter(isProductActive).map((product) => `<option value="${product.id}" ${editingPromotion?.productId === product.id ? "selected" : ""}>${escapeHtml(product.name)} / ${money(product.sale_price)}</option>`).join("")}</select></label>
+          <label>Tipo<select id="promotionType"><option value="percent" ${editingPromotion?.type === "percent" ? "selected" : ""}>Porcentaje</option><option value="fixed" ${editingPromotion?.type === "fixed" ? "selected" : ""}>Monto fijo</option></select></label>
+          <label>Valor<input id="promotionValue" type="number" min="0.01" step="0.01" required value="${Number(editingPromotion?.value || "")}" /></label>
+          <label>Cantidad minima<input id="promotionMinQuantity" type="number" min="1" step="1" value="${Number(editingPromotion?.minQuantity || 1)}" /></label>
+          <label>Desde<input id="promotionStartsAt" type="date" value="${escapeHtml(editingPromotion?.startsAt || todayDate())}" /></label>
+          <label>Hasta<input id="promotionEndsAt" type="date" value="${escapeHtml(editingPromotion?.endsAt || "")}" /></label>
+          <button class="primary-button" type="submit">${editingPromotion ? "Guardar cambios" : "Crear promocion"}</button>
         </form>
       </section>
     ` : ""}
@@ -943,6 +945,16 @@ function renderPromotions() {
     </section>
   `;
   document.querySelector("#promotionForm")?.addEventListener("submit", savePromotion);
+  document.querySelector("#cancelPromotionEdit")?.addEventListener("click", () => {
+    editingPromotionId = "";
+    renderMain();
+  });
+  document.querySelectorAll("[data-edit-promotion]").forEach((button) => {
+    button.addEventListener("click", () => editPromotion(button.dataset.editPromotion));
+  });
+  document.querySelectorAll("[data-duplicate-promotion]").forEach((button) => {
+    button.addEventListener("click", () => duplicatePromotion(button.dataset.duplicatePromotion));
+  });
   document.querySelectorAll("[data-toggle-promotion]").forEach((button) => {
     button.addEventListener("click", () => togglePromotion(button.dataset.togglePromotion));
   });
@@ -1069,7 +1081,7 @@ function renderPromotionRow(promotion) {
     </div>
     <div class="admin-row-meta">
       <span class="${active ? "ok-text" : promotion.active ? "warn-text" : "danger-text"}">${active ? "Activa" : promotion.active ? "Programada/vencida" : "Inactiva"}</span>
-      ${can("managePromotions") ? `<button class="ghost-button" type="button" data-toggle-promotion="${promotion.id}">${promotion.active ? "Pausar" : "Activar"}</button><button class="ghost-button danger-action" type="button" data-delete-promotion="${promotion.id}">Eliminar</button>` : ""}
+      ${can("managePromotions") ? `<button class="ghost-button" type="button" data-edit-promotion="${promotion.id}">Editar</button><button class="ghost-button" type="button" data-duplicate-promotion="${promotion.id}">Duplicar</button><button class="ghost-button" type="button" data-toggle-promotion="${promotion.id}">${promotion.active ? "Pausar" : "Activar"}</button><button class="ghost-button danger-action" type="button" data-delete-promotion="${promotion.id}">Eliminar</button>` : ""}
     </div>
   </article>`;
 }
@@ -1093,6 +1105,7 @@ function auditActionLabel(action) {
     favorite_add: "Favorito POS agregado",
     favorite_remove: "Favorito POS quitado",
     promotion_create: "Promocion creada",
+    promotion_update: "Promocion actualizada",
     promotion_status: "Estado de promocion",
     promotion_delete: "Promocion eliminada",
     sale_void: "Venta anulada",
@@ -2981,23 +2994,54 @@ async function viewStockHistory(productId) {
 
 async function savePromotion(event) {
   event.preventDefault();
+  const payload = {
+    name: value("#promotionName"),
+    productId: value("#promotionProduct"),
+    type: value("#promotionType"),
+    value: Number(value("#promotionValue")),
+    minQuantity: Number(value("#promotionMinQuantity") || 1),
+    startsAt: value("#promotionStartsAt"),
+    endsAt: value("#promotionEndsAt")
+  };
+  try {
+    await apiRequest(editingPromotionId ? `/ventas/promotions/${editingPromotionId}` : "/ventas/promotions", {
+      method: editingPromotionId ? "PATCH" : "POST",
+      body: payload
+    });
+    ventasMessage = editingPromotionId ? "Promocion actualizada." : "Promocion creada y lista para aplicarse en caja.";
+    editingPromotionId = "";
+    await render();
+  } catch (error) {
+    ventasMessage = error.message || "No se pudo guardar la promocion.";
+    renderMain();
+  }
+}
+
+function editPromotion(id) {
+  editingPromotionId = id;
+  renderMain();
+}
+
+async function duplicatePromotion(id) {
+  const promotion = promotions.find((item) => item.id === id);
+  if (!promotion) return;
   try {
     await apiRequest("/ventas/promotions", {
       method: "POST",
       body: {
-        name: value("#promotionName"),
-        productId: value("#promotionProduct"),
-        type: value("#promotionType"),
-        value: Number(value("#promotionValue")),
-        minQuantity: Number(value("#promotionMinQuantity") || 1),
-        startsAt: value("#promotionStartsAt"),
-        endsAt: value("#promotionEndsAt")
+        name: `${promotion.name} copia`,
+        productId: promotion.productId,
+        type: promotion.type,
+        value: promotion.value,
+        minQuantity: promotion.minQuantity,
+        startsAt: todayDate(),
+        endsAt: promotion.endsAt
       }
     });
-    ventasMessage = "Promocion creada y lista para aplicarse en caja.";
+    ventasMessage = "Promocion duplicada. Puedes editarla para ajustar fechas o descuento.";
     await render();
   } catch (error) {
-    ventasMessage = error.message || "No se pudo crear la promocion.";
+    ventasMessage = error.message || "No se pudo duplicar la promocion.";
     renderMain();
   }
 }
