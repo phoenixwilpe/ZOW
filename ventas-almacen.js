@@ -463,11 +463,33 @@ function renderSummary() {
     </section>
     ${renderVentasCommandCenter()}
     ${renderServiceStrip()}
+    ${renderLiveActivityPanel()}
     <section class="admin-panel">
       <div class="admin-panel-head"><div><p class="eyebrow">Ultimas ventas</p><h3>Movimiento comercial</h3></div></div>
       <div class="admin-list">${sales.slice(0, 6).map(renderSaleRow).join("") || empty("Sin ventas registradas")}</div>
     </section>
   `;
+}
+
+function renderLiveActivityPanel() {
+  const events = auditEvents.slice(0, 6);
+  if (!events.length && !cashSession && !sales.length) return "";
+  return `<section class="admin-panel live-activity-panel">
+    <div class="admin-panel-head"><div><p class="eyebrow">Actividad en vivo</p><h3>Lo ultimo que esta pasando</h3></div><span>${formatDateTime(new Date().toISOString())}</span></div>
+    <div class="live-activity-grid">
+      <article><span>Estado caja</span><strong>${cashSession?.status === "abierta" ? `Caja ${num(cashSession.registerNumber)}` : "Cerrada"}</strong><small>${cashSession?.status === "abierta" ? `Esperado ${money(cashExpectedTotal())}` : "Sin turno activo"}</small></article>
+      <article><span>Ultima venta</span><strong>${sales[0] ? money(sales[0].total) : "Sin ventas"}</strong><small>${sales[0] ? `${escapeHtml(sales[0].code)} / ${escapeHtml(sales[0].seller_name || currentUser.name || "")}` : "Aun sin movimiento"}</small></article>
+      <article><span>Alertas</span><strong class="${Number(summary.low_stock || 0) ? "warn-text" : "ok-text"}">${num(summary.low_stock || 0)}</strong><small>Productos bajo minimo</small></article>
+    </div>
+    <div class="activity-timeline">${events.map(renderActivityTimelineItem).join("") || empty("Sin auditoria reciente visible para este rol")}</div>
+  </section>`;
+}
+
+function renderActivityTimelineItem(event) {
+  return `<article class="activity-timeline-item">
+    <span></span>
+    <div><strong>${escapeHtml(auditActionLabel(event.action))}</strong><small>${escapeHtml(event.description || "Accion registrada")} / ${formatDateTime(event.created_at)}</small></div>
+  </article>`;
 }
 
 function renderAlerts() {
@@ -743,6 +765,12 @@ function renderFinance() {
       </div>
     </section>
     <section class="admin-panel">
+      <div class="admin-panel-head"><div><p class="eyebrow">Cierre detallado</p><h3>Cuadre por metodo y movimientos</h3></div></div>
+      <div class="cash-close-breakdown">
+        ${renderCashCloseBreakdown(expectedCash, paymentBreakdown, movementsTotal)}
+      </div>
+    </section>
+    <section class="admin-panel">
       <div class="admin-panel-head"><div><p class="eyebrow">Historial movimientos</p><h3>Turno actual</h3></div></div>
       <div class="admin-list">${cashMovements.slice(0, 8).map(renderCashMovementRow).join("") || empty("Sin movimientos manuales")}</div>
     </section>
@@ -997,6 +1025,7 @@ function renderReports() {
       <article><span>Stock critico</span><strong>${summary.low_stock || 0}</strong><small>Productos bajo minimo</small></article>
       <article><span>Valor inventario</span><strong>${money(summary.inventory_value || 0)}</strong><small>Capital en almacen</small></article>
     </section>
+    ${renderInventoryValuationReport()}
     <section class="admin-panel">
       <div class="admin-panel-head"><div><p class="eyebrow">Cobros</p><h3>Ventas por metodo de pago</h3></div></div>
       <div class="payment-breakdown-grid">${paymentBreakdown.map((item) => `<article><span>${escapeHtml(item.label)}</span><strong>${money(item.total)}</strong><small>${num(item.count)} venta${item.count === 1 ? "" : "s"}</small></article>`).join("")}</div>
@@ -1070,6 +1099,37 @@ function renderProfitProductRow(row) {
     </div>
     <div class="admin-row-meta"><span class="${Number(row.profit || 0) >= 0 ? "ok-text" : "danger-text"}">Utilidad ${money(row.profit)}</span><span>Margen ${margin.toFixed(1)}%</span></div>
   </article>`;
+}
+
+function renderInventoryValuationReport() {
+  const activeProducts = products.filter(isProductActive);
+  const totals = activeProducts.reduce((sum, product) => {
+    const stock = Number(product.stock || 0);
+    const cost = Number(product.cost_price || 0);
+    const price = Number(product.sale_price || 0);
+    sum.cost += stock * cost;
+    sum.sale += stock * price;
+    sum.margin += stock * Math.max(price - cost, 0);
+    return sum;
+  }, { cost: 0, sale: 0, margin: 0 });
+  const topValue = [...activeProducts]
+    .sort((a, b) => Number(b.stock || 0) * Number(b.cost_price || 0) - Number(a.stock || 0) * Number(a.cost_price || 0))
+    .slice(0, 8);
+  return `<section class="admin-panel inventory-valuation-panel">
+    <div class="admin-panel-head"><div><p class="eyebrow">Inventario valorizado</p><h3>Capital, venta potencial y margen</h3></div><span>${num(activeProducts.length)} activos</span></div>
+    <div class="report-grid compact-report-grid">
+      <article><span>Costo en stock</span><strong>${money(totals.cost)}</strong><small>Capital inmovilizado</small></article>
+      <article><span>Venta potencial</span><strong>${money(totals.sale)}</strong><small>Si se vende todo el stock</small></article>
+      <article><span>Margen estimado</span><strong>${money(totals.margin)}</strong><small>Antes de descuentos</small></article>
+    </div>
+    <div class="admin-list">${topValue.map((product) => {
+      const insight = productInventoryInsight(product);
+      return `<article class="admin-row">
+        <div><strong>${escapeHtml(product.name)}</strong><span>${escapeHtml(product.code)} / Clase ${escapeHtml(insight.className)} / Stock ${num(product.stock)}</span></div>
+        <div class="admin-row-meta"><span>Valor ${money(insight.stockValue)}</span><span>Venta ${money(insight.potentialRevenue)}</span><span>Margen ${num(insight.marginPercent)}%</span></div>
+      </article>`;
+    }).join("") || empty("Sin productos activos para valorizar")}</div>
+  </section>`;
 }
 
 function renderPromotionRow(promotion) {
@@ -1530,17 +1590,53 @@ function renderInventoryProductRow(product) {
 
 function renderKardexPanel() {
   const product = products.find((item) => item.id === selectedKardex.productId);
+  const movements = buildKardexTimeline(product, selectedKardex.movements || []);
   return `
-    <section class="admin-panel">
+    <section class="admin-panel kardex-panel">
       <div class="admin-panel-head">
-        <div><p class="eyebrow">Kardex</p><h3>${escapeHtml(product?.name || "Producto")}</h3></div>
+        <div><p class="eyebrow">Kardex visual</p><h3>${escapeHtml(product?.name || "Producto")}</h3></div>
         <button class="ghost-button" type="button" id="closeKardex">Cerrar</button>
       </div>
-      <div class="admin-list">
-        ${selectedKardex.movements.map(renderStockMovementRow).join("") || empty("Sin movimientos de inventario")}
+      <div class="kardex-summary">
+        <article><span>Stock actual</span><strong>${num(product?.stock || 0)}</strong></article>
+        <article><span>Valor actual</span><strong>${money(Number(product?.stock || 0) * Number(product?.cost_price || 0))}</strong></article>
+        <article><span>Movimientos</span><strong>${num(movements.length)}</strong></article>
+      </div>
+      <div class="kardex-timeline">
+        ${movements.map(renderKardexTimelineRow).join("") || empty("Sin movimientos de inventario")}
       </div>
     </section>
   `;
+}
+
+function buildKardexTimeline(product, movements) {
+  const chronological = [...movements].sort((a, b) => new Date(a.created_at || a.createdAt) - new Date(b.created_at || b.createdAt));
+  const totalMoved = chronological.reduce((sum, movement) => sum + signedMovementQuantity(movement), 0);
+  let running = Number(product?.stock || 0) - totalMoved;
+  return chronological.map((movement) => {
+    running += signedMovementQuantity(movement);
+    return { ...movement, runningStock: running };
+  }).reverse();
+}
+
+function signedMovementQuantity(movement) {
+  const quantity = Number(movement.quantity || 0);
+  if (quantity < 0) return quantity;
+  return movement.type === "salida" ? -quantity : quantity;
+}
+
+function renderKardexTimelineRow(movement) {
+  const quantity = signedMovementQuantity(movement);
+  const isOut = quantity < 0;
+  return `<article class="kardex-timeline-row ${isOut ? "is-out" : "is-in"}">
+    <div class="kardex-dot"></div>
+    <div>
+      <strong>${escapeHtml(movement.type)} ${isOut ? "-" : "+"}${num(Math.abs(quantity))}</strong>
+      <span>${escapeHtml(movement.reference || "Sin referencia")} / ${escapeHtml(movement.note || "Sin nota")}</span>
+      <small>${formatDateTime(movement.created_at || movement.createdAt)} / ${escapeHtml(movement.created_by_name || movement.user || "Usuario")}</small>
+    </div>
+    <div class="admin-row-meta"><span>Saldo ${num(movement.runningStock)}</span></div>
+  </article>`;
 }
 
 function renderStockMovementRow(movement) {
@@ -2323,7 +2419,7 @@ function printCashClosure(closureId) {
   const printable = window.open("", "_blank", "width=440,height=720");
   if (!printable) return;
   const difference = Number(closure.differenceAmount || 0);
-  printable.document.write(`<!doctype html><html><head><meta charset="UTF-8"><title>Cierre ${escapeHtml(closure.code)}</title><style>body{font-family:Arial,sans-serif;padding:20px;max-width:340px;color:#111}h1{font-size:18px;text-align:center;margin:0 0 8px}.muted{color:#555;font-size:12px;text-align:center}.row{display:flex;justify-content:space-between;border-bottom:1px dashed #aaa;padding:8px 0}.total{font-weight:800;font-size:17px}.diff{font-weight:800;color:${difference === 0 ? "#15803d" : "#b45309"}}button{margin-bottom:12px}.sign{margin-top:34px;border-top:1px solid #111;text-align:center;padding-top:8px;font-size:12px}</style></head><body><button onclick="window.print()">Imprimir</button><h1>${escapeHtml(storeSettings.storeName || storeSettings.companyName || currentUser.companyName || "Zow Ventas-Almacen")}</h1><p class="muted">Cierre de caja ${escapeHtml(closure.code)}<br>Caja ${num(closure.registerNumber)} / ${formatDateTime(closure.createdAt)}</p><div class="row"><span>Monto apertura</span><strong>${money(closure.openingAmount)}</strong></div><div class="row"><span>Total ventas</span><strong>${money(closure.totalSales)}</strong></div><div class="row"><span>Movimientos</span><strong>${money(closure.movementTotal)}</strong></div><div class="row total"><span>Esperado</span><strong>${money(closure.expectedAmount)}</strong></div><div class="row"><span>Contado</span><strong>${money(closure.countedAmount)}</strong></div><div class="row diff"><span>Diferencia</span><strong>${money(difference)}</strong></div><div class="row"><span>Ventas cerradas</span><strong>${closure.saleCount}</strong></div><div class="sign">Firma cajero / responsable</div></body></html>`);
+  printable.document.write(`<!doctype html><html><head><meta charset="UTF-8"><title>Cierre ${escapeHtml(closure.code)}</title><style>body{font-family:Arial,sans-serif;padding:20px;max-width:360px;color:#111}h1{font-size:18px;text-align:center;margin:0 0 8px}.muted{color:#555;font-size:12px;text-align:center}.row{display:flex;justify-content:space-between;border-bottom:1px dashed #aaa;padding:8px 0}.total{font-weight:800;font-size:17px}.diff{font-weight:800;color:${difference === 0 ? "#15803d" : "#b45309"}}button{margin-bottom:12px}.box{border:1px solid #111;border-radius:10px;padding:10px;margin:10px 0}.sign{margin-top:34px;border-top:1px solid #111;text-align:center;padding-top:8px;font-size:12px}@media print{button{display:none}}</style></head><body><button onclick="window.print()">Imprimir</button><h1>${escapeHtml(storeSettings.storeName || storeSettings.companyName || currentUser.companyName || "Zow Ventas-Almacen")}</h1><p class="muted">Cierre de caja ${escapeHtml(closure.code)}<br>Caja ${num(closure.registerNumber)} / ${formatDateTime(closure.createdAt)}</p><div class="box"><div class="row"><span>Monto apertura</span><strong>${money(closure.openingAmount)}</strong></div><div class="row"><span>Total ventas</span><strong>${money(closure.totalSales)}</strong></div><div class="row"><span>Movimientos</span><strong>${money(closure.movementTotal)}</strong></div><div class="row total"><span>Esperado</span><strong>${money(closure.expectedAmount)}</strong></div><div class="row"><span>Contado</span><strong>${money(closure.countedAmount)}</strong></div><div class="row diff"><span>Diferencia</span><strong>${money(difference)}</strong></div><div class="row"><span>Ventas cerradas</span><strong>${closure.saleCount}</strong></div></div><p class="muted">Reporte generado por ZOW SAAS. Revisar diferencias antes de entregar turno.</p><div class="sign">Firma cajero / responsable</div></body></html>`);
   printable.document.close();
   printable.focus();
 }
@@ -2349,6 +2445,19 @@ function cashPaymentBreakdown() {
       count
     };
   }).filter((item) => item.count || ["efectivo", "tarjeta", "qr"].includes(item.id));
+}
+
+function renderCashCloseBreakdown(expectedCash, paymentBreakdown, movementsTotal) {
+  const opening = cashSession?.status === "abierta" ? Number(cashSession.openingAmount || 0) : 0;
+  const manualIncome = cashMovements.filter((item) => item.type === "ingreso").reduce((sum, item) => sum + Number(item.amount || 0), 0);
+  const manualExpense = cashMovements.filter((item) => item.type === "egreso").reduce((sum, item) => sum + Number(item.amount || 0), 0);
+  return `
+    <article><span>Apertura</span><strong>${money(opening)}</strong><small>Monto inicial declarado</small></article>
+    ${paymentBreakdown.map((item) => `<article><span>${escapeHtml(item.label)}</span><strong>${money(item.total)}</strong><small>${num(item.count)} operacion${item.count === 1 ? "" : "es"}</small></article>`).join("")}
+    <article><span>Ingresos manuales</span><strong>${money(manualIncome)}</strong><small>Cambios o entradas</small></article>
+    <article><span>Egresos manuales</span><strong>${money(manualExpense)}</strong><small>Retiros y gastos menores</small></article>
+    <article><span>Total esperado</span><strong>${money(expectedCash)}</strong><small>Incluye movimientos: ${money(movementsTotal)}</small></article>
+  `;
 }
 
 function buildSalesPaymentBreakdown(sourceSales) {
@@ -2416,23 +2525,25 @@ function printTicket(sale, items) {
   if (!printable) return;
   const title = storeSettings.storeName || storeSettings.companyName || currentUser.companyName || "Zow Ventas-Almacen";
   printable.document.write(`<!doctype html><html><head><meta charset="UTF-8"><title>Ticket ${escapeHtml(sale.code)}</title><style>
-    *{box-sizing:border-box}body{font-family:Arial,sans-serif;margin:0;padding:14px;max-width:330px;color:#111;background:#fff}
+    *{box-sizing:border-box}body{font-family:Arial,sans-serif;margin:0;padding:14px;max-width:360px;color:#111;background:#fff}
     .toolbar{margin-bottom:10px}.toolbar button{width:100%;border:0;border-radius:8px;padding:10px;background:#111;color:#fff;font-weight:800}
-    h1{font-size:17px;text-align:center;margin:0 0 5px;text-transform:uppercase}.center{text-align:center}.muted{color:#555;font-size:11px;line-height:1.35}
-    .ticket-box{border:1px solid #111;border-radius:8px;padding:9px;margin:10px 0}.row{display:flex;justify-content:space-between;gap:10px;padding:5px 0;border-bottom:1px dashed #aaa}.row:last-child{border-bottom:0}
-    table{width:100%;border-collapse:collapse;margin-top:8px}td{padding:6px 0;border-bottom:1px dashed #aaa;font-size:12px;vertical-align:top}td:last-child{text-align:right;font-weight:700}
+    .brand{border:2px solid #111;border-radius:14px;padding:12px;text-align:center;margin-bottom:10px}.brand b{display:block;font-size:18px;text-transform:uppercase;letter-spacing:.08em}.brand span{font-size:10px;color:#555}
+    h1{font-size:15px;text-align:center;margin:0 0 5px;text-transform:uppercase}.center{text-align:center}.muted{color:#555;font-size:11px;line-height:1.35}
+    .ticket-box{border:1px solid #111;border-radius:10px;padding:9px;margin:10px 0}.row{display:flex;justify-content:space-between;gap:10px;padding:5px 0;border-bottom:1px dashed #aaa}.row:last-child{border-bottom:0}
+    table{width:100%;border-collapse:collapse;margin-top:8px}th{font-size:10px;text-align:left;border-bottom:1px solid #111;padding:5px 0}th:last-child,td:last-child{text-align:right}td{padding:7px 0;border-bottom:1px dashed #aaa;font-size:12px;vertical-align:top}td:last-child{font-weight:700}
     .total{font-weight:900;font-size:18px}.barcode{height:34px;margin:10px 24px;background:repeating-linear-gradient(90deg,#111 0 2px,transparent 2px 5px,#111 5px 6px,transparent 6px 10px)}
+    .qr-line{display:flex;gap:10px;align-items:center;justify-content:center}.qr{width:54px;height:54px;background:conic-gradient(#111 25%,transparent 0 50%,#111 0 75%,transparent 0);border:6px solid #fff;box-shadow:0 0 0 1px #111}
     .foot{margin-top:10px;text-align:center;font-size:11px;color:#555}.sign{margin-top:18px;border-top:1px solid #111;text-align:center;padding-top:6px;font-size:10px;color:#444}
     @media print{.toolbar{display:none}body{padding:0}}
   </style></head><body><div class="toolbar"><button onclick="window.print()">Imprimir comprobante</button></div>
-  <h1>${escapeHtml(title)}</h1>
+  <div class="brand"><b>${escapeHtml(title)}</b><span>Comprobante de venta</span></div>
   <p class="center muted">${escapeHtml(storeSettings.taxId ? `NIT ${storeSettings.taxId}` : "")}<br>${escapeHtml(storeSettings.address || "")}<br>${escapeHtml(storeSettings.phone || "")}</p>
   <div class="ticket-box"><div class="row"><span>Comprobante</span><strong>${escapeHtml(sale.code)}</strong></div><div class="row"><span>Fecha</span><strong>${formatDateTime(sale.created_at)}</strong></div><div class="row"><span>Cajero</span><strong>${escapeHtml(currentUser.name || sale.seller_name || "")}</strong></div><div class="row"><span>Cliente</span><strong>${escapeHtml(sale.customer_name || "S/R")}</strong></div></div>
-  <table>${items.map((item) => `<tr><td>${escapeHtml(item.product_name)}<br><span class="muted">${num(item.quantity)} x ${money(item.unit_price)}</span></td><td>${money(item.total)}</td></tr>`).join("")}</table>
+  <table><thead><tr><th>Detalle</th><th>Total</th></tr></thead><tbody>${items.map((item) => `<tr><td>${escapeHtml(item.product_name)}<br><span class="muted">${num(item.quantity)} x ${money(item.unit_price)}</span></td><td>${money(item.total)}</td></tr>`).join("")}</tbody></table>
   <div class="ticket-box"><div class="row"><span>Subtotal</span><strong>${money(sale.subtotal)}</strong></div><div class="row"><span>Descuento</span><strong>${money(sale.discount)}</strong></div><div class="row"><span>Impuesto</span><strong>${money(sale.tax || 0)}</strong></div><div class="row total"><span>Total</span><strong>${money(sale.total)}</strong></div><div class="row"><span>Metodo</span><strong>${escapeHtml(paymentLabel(sale.payment_method || paymentDraft.method || "efectivo"))}</strong></div><div class="row"><span>Pagado</span><strong>${money(sale.amount_paid || sale.cash_received || 0)}</strong></div><div class="row"><span>Cambio</span><strong>${money(sale.change_amount)}</strong></div>${Number(sale.balance_due || 0) > 0 ? `<div class="row"><span>Saldo</span><strong>${money(sale.balance_due)}</strong></div>` : ""}</div>
   ${renderTicketPaymentDetail(sale)}
   ${sale.note ? `<p class="muted"><strong>Obs.:</strong> ${escapeHtml(sale.note)}</p>` : ""}
-  <div class="barcode"></div><p class="foot">${escapeHtml(storeSettings.ticketNote || "Gracias por su compra")}</p><p class="foot">Sistema ZOW SAAS / Wilmar Peinado B.</p></body></html>`);
+  <div class="qr-line"><div class="qr"></div><div><div class="barcode"></div><p class="muted">Codigo: ${escapeHtml(sale.code)}</p></div></div><p class="foot">${escapeHtml(storeSettings.ticketNote || "Gracias por su compra")}</p><p class="foot">Sistema ZOW SAAS / Wilmar Peinado B.</p></body></html>`);
   printable.document.close();
   printable.focus();
 }
@@ -2455,7 +2566,7 @@ function printDraftTicket() {
     created_at: new Date().toISOString(),
     note: saleNote.trim()
   };
-  const items = saleCart.map((item) => ({ product_name: item.name, quantity: item.quantity, total: item.quantity * item.salePrice - Number(item.discount || 0) }));
+  const items = saleCart.map((item) => ({ product_name: item.name, quantity: item.quantity, unit_price: item.salePrice, total: item.quantity * item.salePrice - Number(item.discount || 0) }));
   printTicket(sale, items);
 }
 
@@ -3581,8 +3692,8 @@ function can(permission) {
     managePurchases: ["admin", "ventas_admin", "almacen"],
     closeCash: ["admin", "ventas_admin", "cajero"],
     cashMovements: ["admin", "ventas_admin", "cajero"],
-    voidSales: ["admin", "ventas_admin", "supervisor", "cajero"],
-    returnSales: ["admin", "ventas_admin", "supervisor", "cajero"],
+    voidSales: ["admin", "ventas_admin", "supervisor"],
+    returnSales: ["admin", "ventas_admin", "supervisor"],
     manageCustomers: ["admin", "ventas_admin", "cajero", "vendedor"],
     seeProfit: ["admin", "ventas_admin", "supervisor"]
   };

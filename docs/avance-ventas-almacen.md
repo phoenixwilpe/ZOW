@@ -43,6 +43,12 @@ Avance estimado actual: 99%
 - Panel de promociones avanzado con crear, editar, duplicar, pausar, activar, eliminar y reglas por categoria.
 - Reportes CSV: ventas, inventario, clientes y respaldo operativo JSON.
 - Despliegue en Vercel y backend PostgreSQL/Supabase.
+- Comprobante de venta mas profesional con encabezado comercial, detalle, datos de pago, codigo visual y pie ZOW.
+- Cierre de caja mejorado con desglose por metodo, ingresos, egresos, esperado, contado y comprobante de cierre.
+- Permisos mas estrictos: cajero vende y cobra, pero anulaciones y devoluciones quedan para encargado/supervisor.
+- Panel de actividad operativa con estado de caja, ultima venta, alertas y auditoria visible.
+- Reporte de inventario valorizado con costo en stock, venta potencial, margen estimado y productos de mayor valor.
+- Kardex visual por producto con linea de movimientos, entrada/salida, responsable, referencia y saldo por movimiento.
 
 ## Faltante prioritario
 

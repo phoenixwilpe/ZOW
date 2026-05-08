@@ -1811,7 +1811,7 @@ app.get("/api/ventas/sales/:id", requireAuth, async (req, res) => {
 
 app.post("/api/ventas/sales/:id/void", requireAuth, async (req, res) => {
   if (!(await requireSystemAccess("ventas_almacen", req, res))) return;
-  if (!requireVentasRole(req, res, "admin", "ventas_admin", "supervisor", "cajero")) return;
+  if (!requireVentasRole(req, res, "admin", "ventas_admin", "supervisor")) return;
   await ensureVentasSchema();
   const sale = await pg.get("SELECT * FROM sales_orders WHERE id = ? AND company_id = ?", [req.params.id, req.user.company_id]);
   if (!sale) return res.status(404).json({ error: "Venta no encontrada" });
@@ -1893,7 +1893,7 @@ app.post("/api/ventas/sales/:id/pay", requireAuth, async (req, res) => {
 
 app.post("/api/ventas/sales/:id/returns", requireAuth, async (req, res) => {
   if (!(await requireSystemAccess("ventas_almacen", req, res))) return;
-  if (!requireVentasRole(req, res, "admin", "ventas_admin", "supervisor", "cajero")) return;
+  if (!requireVentasRole(req, res, "admin", "ventas_admin", "supervisor")) return;
   await ensureVentasSchema();
   const sale = await pg.get("SELECT * FROM sales_orders WHERE id = ? AND company_id = ?", [req.params.id, req.user.company_id]);
   if (!sale) return res.status(404).json({ error: "Venta no encontrada" });

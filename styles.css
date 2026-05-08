@@ -3218,6 +3218,14 @@ body.app-correspondencia .metrics article:hover {
   gap: 10px;
 }
 
+.cash-close-breakdown,
+.live-activity-grid,
+.kardex-summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 10px;
+}
+
 .payment-breakdown-grid article {
   border: 1px solid color-mix(in srgb, var(--accent) 16%, var(--line));
   border-radius: 8px;
@@ -3225,15 +3233,34 @@ body.app-correspondencia .metrics article:hover {
   background: linear-gradient(135deg, white, color-mix(in srgb, var(--accent-tint) 32%, white));
 }
 
+.cash-close-breakdown article,
+.live-activity-grid article,
+.kardex-summary article {
+  border: 1px solid color-mix(in srgb, var(--accent) 16%, var(--line));
+  border-radius: 8px;
+  padding: 12px;
+  background:
+    linear-gradient(135deg, rgb(255 255 255 / 96%), color-mix(in srgb, var(--accent-tint) 28%, white)),
+    radial-gradient(circle at 88% 12%, rgb(15 159 110 / 12%), transparent 34%);
+}
+
 .payment-breakdown-grid span,
-.payment-breakdown-grid small {
+.payment-breakdown-grid small,
+.cash-close-breakdown span,
+.cash-close-breakdown small,
+.live-activity-grid span,
+.live-activity-grid small,
+.kardex-summary span {
   display: block;
   color: var(--muted);
   font-size: 0.78rem;
   font-weight: 850;
 }
 
-.payment-breakdown-grid strong {
+.payment-breakdown-grid strong,
+.cash-close-breakdown strong,
+.live-activity-grid strong,
+.kardex-summary strong {
   display: block;
   margin: 5px 0;
   color: var(--accent-dark);
@@ -3812,6 +3839,77 @@ body.app-correspondencia .metrics article:hover {
 .last-sale-receipt strong {
   color: var(--accent-dark);
   font-size: 1.08rem;
+}
+
+.live-activity-panel {
+  position: relative;
+  overflow: hidden;
+}
+
+.live-activity-panel::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(110deg, transparent 0 42%, rgb(15 159 110 / 7%) 50%, transparent 58% 100%);
+  animation: zow-scan 7s linear infinite;
+}
+
+.activity-timeline,
+.kardex-timeline {
+  display: grid;
+  gap: 9px;
+  margin-top: 12px;
+}
+
+.activity-timeline-item,
+.kardex-timeline-row {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  border: 1px solid color-mix(in srgb, var(--accent) 12%, var(--line));
+  border-radius: 8px;
+  padding: 10px;
+  background: rgb(255 255 255 / 78%);
+}
+
+.activity-timeline-item > span,
+.kardex-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  background: var(--accent);
+  box-shadow: 0 0 0 5px color-mix(in srgb, var(--accent) 14%, transparent);
+}
+
+.activity-timeline-item strong,
+.kardex-timeline-row strong {
+  display: block;
+  color: var(--accent-dark);
+}
+
+.activity-timeline-item small,
+.kardex-timeline-row span,
+.kardex-timeline-row small {
+  display: block;
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+.kardex-timeline-row.is-out .kardex-dot {
+  background: #dc2626;
+  box-shadow: 0 0 0 5px rgb(220 38 38 / 13%);
+}
+
+.inventory-valuation-panel .admin-row {
+  background: linear-gradient(135deg, rgb(255 255 255 / 96%), rgb(236 253 245 / 72%));
+}
+
+@keyframes zow-scan {
+  from { transform: translateX(-120%); }
+  to { transform: translateX(120%); }
 }
 
 .pos-cash-warning,
