@@ -26,7 +26,7 @@ Avance estimado actual: 99%
 - Lotes y vencimientos: alerta, bloqueo de venta vencida y aviso de productos por vencer.
 - Devoluciones de clientes: parcial/total, reposicion de stock y egreso de caja.
 - Permisos finos por rol para acciones sensibles de caja, stock, compras, usuarios y configuracion.
-- Importacion masiva de productos por plantilla CSV con actualizacion por codigo.
+- Importacion masiva de productos por plantilla Excel/CSV con actualizacion por codigo desde backend.
 - Busqueda y escaneo por codigo de barras: foco POS, Enter automatico, cantidades rapidas y campo barcode por producto.
 - Caja amarrada a sesion real: cada venta queda ligada a la caja abierta y el cierre solo toma ventas de esa sesion.
 - Venta con datos historicos por item: descuento, subtotal y costo al momento de vender para utilidad real.
@@ -48,8 +48,7 @@ Avance estimado actual: 99%
 
 1. Combos comerciales avanzados: paquetes con varios productos y precio final fijo.
 2. Ajustes finales de experiencia movil.
-3. Importacion Excel directa con libreria dedicada, si el cliente no quiere convertir a CSV.
-4. Combos comerciales con varios productos y precio final fijo.
+3. Validacion asistida de importaciones grandes con vista previa de filas observadas.
 
 ## Omitido por ahora
 

@@ -137,6 +137,16 @@ Almacen mantiene productos, stock, compras, proveedores y alertas.
 
 Recomendacion: el codigo debe ser corto y facil de leer. El codigo de barras puede venir del producto fisico.
 
+### Importar productos desde Excel o CSV
+
+1. Entra a Inventario o Catalogos.
+2. Descarga la plantilla Excel/CSV.
+3. Completa codigo, codigo de barras, nombre, categoria, costo, precio, stock, lote y vencimiento si aplica.
+4. Presiona Importar Excel/CSV y selecciona el archivo.
+5. Revisa el mensaje final: productos nuevos, actualizados u omitidos.
+
+Si el codigo ya existe, el sistema actualiza el producto. Si el codigo de barras esta repetido, la fila se omite para proteger caja e inventario.
+
 ### Editar producto
 
 1. Busca el producto en Inventario o Catalogo.

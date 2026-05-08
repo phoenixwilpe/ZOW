@@ -5,6 +5,7 @@ const cors = require("cors");
 const multer = require("multer");
 const bcrypt = require("bcryptjs");
 const QRCode = require("qrcode");
+const ExcelJS = require("exceljs");
 const { createHash, randomUUID } = require("node:crypto");
 const { createClient } = require("@supabase/supabase-js");
 const pg = require("./pg");
@@ -42,6 +43,11 @@ const logoUpload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 600 * 1024, files: 1 },
   fileFilter: fileFilterForLogo
+});
+const productImportUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 8 * 1024 * 1024, files: 1 },
+  fileFilter: fileFilterForProductImport
 });
 const supabase =
   process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY
@@ -1077,6 +1083,7 @@ app.get("/api/ventas/audit", requireAuth, async (req, res) => {
     "product_create",
     "product_update",
     "product_status",
+    "product_import",
     "stock_movement"
   ];
   const events = await pg.all(
@@ -1381,6 +1388,53 @@ app.get("/api/ventas/products", requireAuth, async (req, res) => {
   await ensureVentasSchema();
   const products = await pg.all("SELECT * FROM inventory_products WHERE company_id = ? ORDER BY name", [req.user.company_id]);
   res.json({ products });
+});
+
+app.post("/api/ventas/products/import", requireAuth, productImportUpload.single("file"), async (req, res) => {
+  if (!(await requireSystemAccess("ventas_almacen", req, res))) return;
+  if (!requireVentasRole(req, res, "admin", "ventas_admin", "almacen")) return;
+  await ensureVentasSchema();
+  if (!req.file) return res.status(400).json({ error: "Selecciona un archivo CSV o Excel" });
+  const rows = (await parseProductImportRows(req.file)).slice(0, 1000);
+  if (!rows.length) return res.status(400).json({ error: "El archivo no tiene productos validos" });
+  let created = 0;
+  let updated = 0;
+  const skipped = [];
+  for (const product of rows) {
+    if (!product.code || !product.name) {
+      skipped.push({ code: product.code || "", reason: "Codigo y nombre son obligatorios" });
+      continue;
+    }
+    const existing = await pg.get("SELECT id FROM inventory_products WHERE company_id = ? AND upper(code) = upper(?)", [req.user.company_id, product.code]);
+    if (product.barcode) {
+      const duplicateBarcode = await pg.get(
+        "SELECT id FROM inventory_products WHERE company_id = ? AND barcode <> '' AND lower(barcode) = lower(?) AND (? = '' OR id <> ?)",
+        [req.user.company_id, product.barcode, existing?.id || "", existing?.id || ""]
+      );
+      if (duplicateBarcode) {
+        skipped.push({ code: product.code, reason: "Codigo de barras duplicado" });
+        continue;
+      }
+    }
+    if (existing) {
+      await pg.run(
+        `UPDATE inventory_products
+         SET barcode = ?, name = ?, category = ?, unit = ?, batch_number = ?, expires_at = ?, cost_price = ?, sale_price = ?, min_stock = ?, stock = ?, updated_at = now()
+         WHERE id = ? AND company_id = ?`,
+        [product.barcode, product.name, product.category, product.unit, product.batchNumber, product.expiresAt, product.costPrice, product.salePrice, product.minStock, product.stock, existing.id, req.user.company_id]
+      );
+      updated += 1;
+    } else {
+      await pg.run(
+        `INSERT INTO inventory_products (id, company_id, code, barcode, name, category, unit, batch_number, expires_at, cost_price, sale_price, min_stock, stock, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, now(), now())`,
+        [randomUUID(), req.user.company_id, product.code, product.barcode, product.name, product.category, product.unit, product.batchNumber, product.expiresAt, product.costPrice, product.salePrice, product.minStock, product.stock]
+      );
+      created += 1;
+    }
+  }
+  await recordAuditEvent({ req, action: "product_import", entityType: "product", entityId: "", description: `Importo productos: ${created} nuevos, ${updated} actualizados`, metadata: { created, updated, skipped: skipped.length, file: req.file.originalname } });
+  res.json({ created, updated, skipped, total: rows.length });
 });
 
 app.post("/api/ventas/products", requireAuth, async (req, res) => {
@@ -2324,6 +2378,18 @@ function fileFilterForLogo(_req, file, callback) {
   return callback(new Error("El logo institucional debe ser PNG."));
 }
 
+function fileFilterForProductImport(_req, file, callback) {
+  const allowedMimeTypes = new Set([
+    "text/csv",
+    "application/csv",
+    "application/vnd.ms-excel",
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+  ]);
+  const allowedExtensions = /\.(csv|xlsx|xls)$/i.test(file.originalname || "");
+  if (allowedMimeTypes.has(file.mimetype) || allowedExtensions) return callback(null, true);
+  return callback(new Error("Solo se permiten archivos CSV o Excel XLSX/XLS."));
+}
+
 async function attachUploadedFiles({ files, companyId, documentId, userId, uploadedAt }) {
   if (!files.length) return;
   for (const file of files) {
@@ -2768,6 +2834,135 @@ function mapSalesPromotion(row) {
     endsAt: String(row.ends_at || "").slice(0, 10),
     active: row.is_active !== false
   };
+}
+
+async function parseProductImportRows(file) {
+  if (isCsvImportFile(file)) return parseProductImportCsv(file.buffer).map(normalizeProductImportRow).filter(Boolean);
+  const workbook = new ExcelJS.Workbook();
+  await workbook.xlsx.load(file.buffer);
+  const sheet = workbook.worksheets[0];
+  if (!sheet) return [];
+  const headers = [];
+  sheet.getRow(1).eachCell({ includeEmpty: true }, (cell, column) => {
+    headers[column] = normalizeImportHeader(excelImportCellValue(cell));
+  });
+  const rows = [];
+  sheet.eachRow({ includeEmpty: false }, (row, rowNumber) => {
+    if (rowNumber === 1) return;
+    const object = {};
+    headers.forEach((header, column) => {
+      if (header) object[header] = excelImportCellValue(row.getCell(column));
+    });
+    rows.push(object);
+  });
+  return rows.map(normalizeProductImportRow).filter(Boolean);
+}
+
+function normalizeProductImportRow(row) {
+  const normalized = {};
+  Object.entries(row || {}).forEach(([key, value]) => {
+    normalized[normalizeImportHeader(key)] = value;
+  });
+  const code = String(normalized.codigo || normalized.code || "").trim().toUpperCase();
+  const name = String(normalized.nombre || normalized.name || "").trim();
+  if (!code && !name) return null;
+  return {
+    code,
+    barcode: String(normalized.barras || normalized.barcode || normalized.codigo_barras || "").trim().slice(0, 80),
+    name,
+    category: String(normalized.categoria || normalized.category || "").trim(),
+    unit: String(normalized.unidad || normalized.unit || "Unidad").trim() || "Unidad",
+    batchNumber: String(normalized.lote || normalized.batch || normalized.batch_number || "").trim().slice(0, 80),
+    expiresAt: normalizeImportDate(normalized.vencimiento || normalized.expires_at || normalized.fecha_vencimiento),
+    costPrice: decimalFromImport(normalized.costo || normalized.cost || normalized.cost_price),
+    salePrice: decimalFromImport(normalized.precio || normalized.sale || normalized.sale_price || normalized.precio_venta),
+    minStock: decimalFromImport(normalized.stock_minimo || normalized.min_stock),
+    stock: decimalFromImport(normalized.stock_inicial || normalized.stock || normalized.stock_actual)
+  };
+}
+
+function normalizeImportHeader(value) {
+  return String(value || "")
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "");
+}
+
+function normalizeImportDate(value) {
+  if (!value) return "";
+  if (value instanceof Date && Number.isFinite(value.getTime())) return value.toISOString().slice(0, 10);
+  if (typeof value === "number") {
+    const parsed = new Date(Math.round((value - 25569) * 86400 * 1000));
+    if (Number.isFinite(parsed.getTime())) return parsed.toISOString().slice(0, 10);
+  }
+  const text = String(value || "").trim();
+  return /^\d{4}-\d{2}-\d{2}$/.test(text) ? text : "";
+}
+
+function decimalFromImport(value) {
+  const number = Number(String(value ?? "0").replace(",", "."));
+  return Number.isFinite(number) ? Math.max(number, 0) : 0;
+}
+
+function isCsvImportFile(file) {
+  return /\.csv$/i.test(file.originalname || "") || String(file.mimetype || "").includes("csv");
+}
+
+function parseProductImportCsv(buffer) {
+  const text = buffer.toString("utf8").replace(/^\uFEFF/, "");
+  const firstLine = text.split(/\r?\n/, 1)[0] || "";
+  const delimiter = (firstLine.match(/;/g) || []).length > (firstLine.match(/,/g) || []).length ? ";" : ",";
+  const rows = parseDelimitedRows(text, delimiter);
+  if (rows.length < 2) return [];
+  const headers = rows[0].map(normalizeImportHeader);
+  return rows.slice(1).map((values) => headers.reduce((object, header, index) => {
+    if (header) object[header] = values[index] ?? "";
+    return object;
+  }, {}));
+}
+
+function parseDelimitedRows(text, delimiter) {
+  const rows = [];
+  let row = [];
+  let cell = "";
+  let quoted = false;
+  for (let index = 0; index < text.length; index += 1) {
+    const char = text[index];
+    const next = text[index + 1];
+    if (char === '"' && quoted && next === '"') {
+      cell += '"';
+      index += 1;
+    } else if (char === '"') {
+      quoted = !quoted;
+    } else if (char === delimiter && !quoted) {
+      row.push(cell);
+      cell = "";
+    } else if ((char === "\n" || char === "\r") && !quoted) {
+      if (char === "\r" && next === "\n") index += 1;
+      row.push(cell);
+      if (row.some((value) => String(value).trim())) rows.push(row);
+      row = [];
+      cell = "";
+    } else {
+      cell += char;
+    }
+  }
+  row.push(cell);
+  if (row.some((value) => String(value).trim())) rows.push(row);
+  return rows;
+}
+
+function excelImportCellValue(cell) {
+  const value = cell?.value;
+  if (value && typeof value === "object" && !(value instanceof Date)) {
+    if (value.result !== undefined) return value.result;
+    if (value.text !== undefined) return value.text;
+    if (Array.isArray(value.richText)) return value.richText.map((part) => part.text || "").join("");
+  }
+  return value ?? cell?.text ?? "";
 }
 
 function normalizePaymentDetail(input, total, paymentMethod) {
