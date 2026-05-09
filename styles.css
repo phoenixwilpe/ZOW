@@ -5629,6 +5629,40 @@ body.app-ventas .business-health-grid article {
   background: var(--accent-soft);
 }
 
+.payment-keypad {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.payment-keypad button {
+  min-height: 56px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: linear-gradient(160deg, #ffffff, #f4fbf8);
+  color: var(--accent-dark);
+  font-size: 1.05rem;
+  font-weight: 950;
+  box-shadow: 0 10px 20px rgb(13 84 70 / 8%);
+  transition:
+    transform 160ms ease,
+    border-color 160ms ease,
+    box-shadow 160ms ease;
+}
+
+.payment-keypad button:hover,
+.payment-keypad button:focus-visible {
+  transform: translateY(-1px);
+  border-color: rgb(16 185 129 / 45%);
+  box-shadow: 0 16px 30px rgb(13 84 70 / 14%);
+}
+
+.payment-keypad .is-strong {
+  border-color: transparent;
+  background: linear-gradient(135deg, #059669, #0f766e 60%, #f59e0b);
+  color: white;
+}
+
 .touch-payment-fields input {
   min-height: 58px;
   font-size: 1.08rem;
@@ -11302,7 +11336,8 @@ body.app-ventas .touch-payment-methods {
 }
 
 body.app-ventas .touch-payment-methods button,
-body.app-ventas .quick-cash-grid button {
+body.app-ventas .quick-cash-grid button,
+body.app-ventas .payment-keypad button {
   position: relative;
   overflow: hidden;
   min-height: 78px;
@@ -11317,7 +11352,8 @@ body.app-ventas .quick-cash-grid button {
 }
 
 body.app-ventas .touch-payment-methods button:hover,
-body.app-ventas .quick-cash-grid button:hover {
+body.app-ventas .quick-cash-grid button:hover,
+body.app-ventas .payment-keypad button:hover {
   transform: translateY(-2px);
   border-color: rgb(16 185 129 / 42%);
   box-shadow:
@@ -11339,6 +11375,22 @@ body.app-ventas .touch-payment-methods button span {
 
 body.app-ventas .quick-cash-grid {
   gap: 10px;
+}
+
+body.app-ventas .payment-keypad {
+  gap: 10px;
+}
+
+body.app-ventas .payment-keypad button {
+  text-align: center;
+  font-size: 1.16rem;
+}
+
+body.app-ventas .payment-keypad .is-strong {
+  background:
+    radial-gradient(circle at 24% 15%, rgb(255 255 255 / 24%), transparent 32%),
+    linear-gradient(135deg, #059669, #0f766e 58%, #f59e0b);
+  color: white;
 }
 
 body.app-ventas .quick-cash-grid button {
@@ -11910,7 +11962,8 @@ body.app-ventas .cloud-safe-note {
   }
 
   body.app-ventas .touch-payment-methods button,
-  body.app-ventas .quick-cash-grid button {
+  body.app-ventas .quick-cash-grid button,
+  body.app-ventas .payment-keypad button {
     min-height: 66px;
   }
 

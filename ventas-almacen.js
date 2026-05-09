@@ -2927,9 +2927,9 @@ function renderPaymentModal() {
       </div>
       ${isCredit ? `<div class="cloud-safe-note"><strong>Venta al credito</strong><span>Quedara saldo pendiente de ${money(balanceDue)} en cuentas por cobrar.</span></div>` : isMixed ? renderMixedPaymentFields(totals.total) : `<div class="payment-helper-row"><span>Pagos rapidos</span><button type="button" id="clearPaymentBtn">Limpiar monto</button></div><div class="quick-cash-grid">${quickOptions.map((option) => `<button type="button" data-quick-cash="${option.amount}"><span>${escapeHtml(option.label)}</span><strong>${money(option.amount)}</strong></button>`).join("")}</div>`}
       ${isMixed ? "" : `<div class="form-grid touch-payment-fields">
-        <label>${isCredit ? "Anticipo recibido" : "Monto recibido"}<input id="paymentReceived" type="number" inputmode="decimal" enterkeyhint="done" min="0" step="0.01" value="${Number(paymentDraft.received || 0).toFixed(2)}" /></label>
+        <label>${isCredit ? "Anticipo recibido" : "Monto recibido"}<input id="paymentReceived" type="text" inputmode="decimal" enterkeyhint="done" value="${Number(paymentDraft.received || 0).toFixed(2)}" /></label>
         <label>${isCredit ? "Saldo pendiente" : "Vuelto"}<input id="paymentResultValue" type="text" value="${money(isCredit ? balanceDue : change)}" readonly /></label>
-      </div>`}
+      </div>${renderPaymentKeypad(totals.total, isCredit)}`}
       <p class="form-error" id="paymentErrorText" ${insufficient ? "" : "hidden"}>${insufficient ? `Pago insuficiente. Falta ${money(totals.total - paidTotal)}.` : ""}</p>
       <div class="modal-actions touch-payment-actions"><button class="ghost-button" type="button" id="printDraftBtn">Precomprobante</button><button class="primary-button" type="submit" id="confirmPaymentBtn" ${insufficient ? "disabled" : ""}>Confirmar pago</button></div>
     </div>
@@ -2945,7 +2945,13 @@ function renderPaymentModal() {
     });
   });
   paymentModalContent.querySelector("#paymentReceived")?.addEventListener("input", (event) => {
-    paymentDraft.received = Number(event.target.value || 0);
+    const normalizedValue = String(event.target.value || "").replace(",", ".").replace(/[^\d.]/g, "");
+    const dotIndex = normalizedValue.indexOf(".");
+    const cleanedValue = dotIndex >= 0
+      ? `${normalizedValue.slice(0, dotIndex + 1)}${normalizedValue.slice(dotIndex + 1).replace(/\./g, "")}`
+      : normalizedValue;
+    event.target.value = cleanedValue;
+    paymentDraft.received = Number(cleanedValue || 0);
     updatePaymentLiveSummary(totals.total);
   });
   paymentModalContent.querySelectorAll("[data-quick-cash]").forEach((button) => {
@@ -2955,6 +2961,9 @@ function renderPaymentModal() {
       if (receivedInput) receivedInput.value = Number(paymentDraft.received || 0).toFixed(2);
       updatePaymentLiveSummary(totals.total);
     });
+  });
+  paymentModalContent.querySelectorAll("[data-payment-key]").forEach((button) => {
+    button.addEventListener("click", () => applyPaymentKey(button.dataset.paymentKey, totals.total));
   });
   paymentModalContent.querySelector("#clearPaymentBtn")?.addEventListener("click", () => {
     paymentDraft.received = 0;
@@ -2971,6 +2980,16 @@ function renderPaymentModal() {
   });
   paymentModalContent.querySelector("#printDraftBtn")?.addEventListener("click", printDraftTicket);
   paymentForm.onsubmit = submitSale;
+}
+
+function renderPaymentKeypad(total, isCredit = false) {
+  const keys = ["7", "8", "9", "4", "5", "6", "1", "2", "3", ".", "0", "del"];
+  return `<div class="payment-keypad" aria-label="Teclado de cobro">
+    ${keys.map((key) => `<button type="button" data-payment-key="${key}">${key === "del" ? "Borrar" : key}</button>`).join("")}
+    <button class="is-wide" type="button" data-payment-key="clear">Limpiar</button>
+    <button class="is-wide is-strong" type="button" data-payment-key="${isCredit ? "half" : "exact"}">${isCredit ? "50%" : "Exacto"}</button>
+    <button class="is-wide is-strong" type="button" data-payment-key="confirm">Listo</button>
+  </div>`;
 }
 
 function buildQuickCashOptions(total) {
@@ -2991,6 +3010,42 @@ function buildQuickCashOptions(total) {
     seen.add(key);
     return true;
   }).slice(0, 4);
+}
+
+function applyPaymentKey(key, total) {
+  const input = paymentModalContent.querySelector("#paymentReceived");
+  if (!input) return;
+  const normalized = String(key || "");
+  const setPaymentInput = (value) => {
+    const nextValue = String(value ?? "").replace(",", ".");
+    const parsed = Number(nextValue);
+    input.value = nextValue;
+    paymentDraft.received = Number.isFinite(parsed) ? parsed : 0;
+    updatePaymentLiveSummary(total);
+  };
+  if (normalized === "confirm") {
+    const confirmButton = paymentModalContent.querySelector("#confirmPaymentBtn");
+    if (confirmButton && !confirmButton.disabled) confirmButton.click();
+    return;
+  }
+  if (normalized === "exact") {
+    setPaymentInput(Number(total || 0).toFixed(2));
+  } else if (normalized === "half") {
+    setPaymentInput((Number(total || 0) / 2).toFixed(2));
+  } else if (normalized === "clear") {
+    setPaymentInput("");
+  } else if (normalized === "del") {
+    const current = input.value || "";
+    setPaymentInput(current.slice(0, -1));
+  } else if (/^\d$/.test(normalized) || normalized === ".") {
+    const current = String(input.value || "");
+    const shouldReplace = document.activeElement === input && input.selectionStart === 0 && input.selectionEnd === current.length;
+    const base = shouldReplace || current === "0.00" || current === "0" ? "" : current;
+    const next = normalized === "."
+      ? (base.includes(".") ? base : `${base || "0"}.`)
+      : `${base}${normalized}`;
+    setPaymentInput(next);
+  }
 }
 
 function focusPaymentReceived(selectText = false) {
