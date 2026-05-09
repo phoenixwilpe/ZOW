@@ -4790,6 +4790,29 @@ body.app-ventas .touch-product-card:not(:disabled):focus-visible {
     0 0 0 5px rgb(16 185 129 / 9%);
 }
 
+body.app-ventas .touch-product-card.is-recently-added {
+  border-color: rgb(245 158 11 / 64%);
+  box-shadow:
+    0 22px 54px rgb(245 158 11 / 18%),
+    0 0 0 6px rgb(245 158 11 / 12%);
+  animation: posAddedPulse 780ms ease-out 1;
+}
+
+body.app-ventas .touch-product-card.is-recently-added::before {
+  content: "Agregado";
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 2;
+  padding: 5px 8px;
+  border-radius: 999px;
+  background: linear-gradient(135deg, #f59e0b, #10b981);
+  color: white;
+  font-size: 0.7rem;
+  font-weight: 950;
+  box-shadow: 0 12px 24px rgb(8 30 26 / 14%);
+}
+
 body.app-ventas .combo-product-card {
   border-color: rgb(245 158 11 / 30%);
   background:
@@ -5351,6 +5374,12 @@ body.app-ventas .business-health-grid article {
 @keyframes documentStampPulse {
   0%, 100% { scale: 1; opacity: 0.72; }
   50% { scale: 1.08; opacity: 1; }
+}
+
+@keyframes posAddedPulse {
+  0% { transform: scale(0.98); }
+  45% { transform: scale(1.025); }
+  100% { transform: scale(1); }
 }
 
 .quick-cash-grid {

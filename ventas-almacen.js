@@ -44,6 +44,9 @@ let editingComboId = "";
 let productSearch = "";
 let productSearchTimer = 0;
 let ventasMessage = "";
+let posFeedbackMessage = "";
+let posFeedbackTargetId = "";
+let posFeedbackTimer = 0;
 let paymentDraft = { method: "efectivo", received: 0, split: { efectivo: 0, tarjeta: 0, transferencia: 0, qr: 0 } };
 let saleCustomerId = "";
 let saleGlobalDiscount = 0;
@@ -653,6 +656,7 @@ function renderAlerts() {
 
 function renderSell() {
   setCount(`${saleCart.length} item${saleCart.length === 1 ? "" : "s"}`);
+  const posNotice = posFeedbackMessage || ventasMessage;
   const sellProducts = filteredProducts().filter(isProductActive);
   const activeCombos = combos.filter((combo) => combo.active && comboAvailableStock(combo) > 0).slice(0, 8);
   const favoriteSellProducts = favoriteProducts
@@ -678,7 +682,7 @@ function renderSell() {
         <button class="ghost-button" type="button" data-pos-panel="cart">Ver carrito</button>
         <button class="primary-button" type="button" id="mobileCheckoutBtn" ${saleCart.length && isCashOpen ? "" : "disabled"}>Cobrar</button>
       </div>
-      ${ventasMessage ? `<div class="mobile-pos-toast">${escapeHtml(ventasMessage)}</div>` : ""}
+      ${posNotice ? `<div class="mobile-pos-toast">${escapeHtml(posNotice)}</div>` : ""}
       <section class="admin-panel pos-products touch-panel">
         <div class="touch-pos-head">
           <div>
@@ -687,7 +691,7 @@ function renderSell() {
           </div>
           <div class="touch-shortcuts"><span>${escapeHtml(cashState)}</span><span>F2 Buscar</span><span>F4 Cobrar</span></div>
         </div>
-        ${ventasMessage ? `<div class="pos-toast">${escapeHtml(ventasMessage)}</div>` : ""}
+        ${posNotice ? `<div class="pos-toast">${escapeHtml(posNotice)}</div>` : ""}
         ${lastSaleReceipt ? renderLastSaleReceipt() : ""}
         <div class="pos-quick-status">
           <article><span>Turno</span><strong>${isCashOpen ? `Caja ${num(cashSession.registerNumber)}` : "Sin caja"}</strong></article>
@@ -2096,7 +2100,8 @@ function renderSellProduct(product) {
   const expiry = expiryStatus(product);
   const blocked = stock <= 0 || expiry.level === "danger";
   const productCode = product.barcode ? `${product.code} / ${product.barcode}` : product.code;
-  return `<button class="pos-product-card touch-product-card" type="button" data-add-product="${product.id}" ${blocked ? "disabled" : ""}>
+  const recentClass = posFeedbackTargetId === product.id ? " is-recently-added" : "";
+  return `<button class="pos-product-card touch-product-card${recentClass}" type="button" data-add-product="${product.id}" ${blocked ? "disabled" : ""}>
     <span class="product-code">${escapeHtml(productCode)}</span>
     <strong>${escapeHtml(product.name)}</strong>
     <span class="product-meta"><span>${escapeHtml(product.category || "Sin categoria")}</span><small class="${stock <= Number(product.min_stock || 0) || expiry.level === "warning" ? "warn-text" : ""}">Stock ${num(stock)}${expiry.level !== "none" ? ` / ${escapeHtml(expiry.label)}` : ""}</small></span>
@@ -2107,7 +2112,8 @@ function renderSellProduct(product) {
 function renderSellCombo(combo) {
   const available = comboAvailableStock(combo);
   const baseTotal = combo.items.reduce((sum, item) => sum + Number(item.salePrice || 0) * Number(item.quantity || 0), 0);
-  return `<button class="pos-product-card touch-product-card combo-product-card" type="button" data-add-combo="${combo.id}" ${available <= 0 ? "disabled" : ""}>
+  const recentClass = posFeedbackTargetId === combo.id ? " is-recently-added" : "";
+  return `<button class="pos-product-card touch-product-card combo-product-card${recentClass}" type="button" data-add-combo="${combo.id}" ${available <= 0 ? "disabled" : ""}>
     <span class="product-code">${escapeHtml(combo.code)}</span>
     <strong>${escapeHtml(combo.name)}</strong>
     <span class="product-meta"><span>${combo.items.length} productos</span><small>Disponibles ${num(available)}</small></span>
@@ -2404,10 +2410,10 @@ function addToCart(productId, quantity = 1, options = {}) {
     ventasMessage = `Stock insuficiente para ${product.name}. Disponible: ${num(stock)}.`;
     return renderMain();
   }
-  ventasMessage = `${requestedQuantity} x ${product.name} agregado al carrito.${expiry.level === "warning" ? ` Atencion: ${expiry.label}.` : ""}`;
   if (existing) existing.quantity += requestedQuantity;
   else saleCart.push({ productId, name: product.name, quantity: requestedQuantity, salePrice: Number(product.sale_price || 0), discount: 0 });
   applyPromotionsToCart();
+  showPosFeedback(`${requestedQuantity} x ${product.name} agregado al carrito.${expiry.level === "warning" ? ` Atencion: ${expiry.label}.` : ""}`, product.id);
   if (isMobilePos()) posMobilePanel = "products";
   if (options.clearSearch || !isMobilePos()) productSearch = "";
   renderMain();
@@ -2440,18 +2446,32 @@ function addComboToCart(comboId, options = {}) {
       comboName: combo.name
     });
   });
-  ventasMessage = `Combo ${combo.name} agregado al carrito.`;
+  showPosFeedback(`Combo ${combo.name} agregado al carrito.`, combo.id);
   if (isMobilePos()) posMobilePanel = "products";
   if (options.clearSearch || !isMobilePos()) productSearch = "";
   renderMain();
 }
 
+function showPosFeedback(message, targetId = "") {
+  ventasMessage = "";
+  posFeedbackMessage = message;
+  posFeedbackTargetId = targetId;
+  clearTimeout(posFeedbackTimer);
+  posFeedbackTimer = window.setTimeout(() => {
+    posFeedbackMessage = "";
+    posFeedbackTargetId = "";
+    if (activeView === "sell") renderMain();
+  }, 1800);
+}
+
 function removeFromCart(productId) {
+  clearPosFeedback();
   saleCart = saleCart.filter((item) => item.productId !== productId);
   renderMain();
 }
 
 function updateCartQuantity(productId, delta) {
+  clearPosFeedback();
   const product = products.find((item) => item.id === productId);
   const stock = Number(product?.stock || 0);
   saleCart = saleCart
@@ -2470,7 +2490,14 @@ function updateCartQuantity(productId, delta) {
   renderMain();
 }
 
+function clearPosFeedback() {
+  clearTimeout(posFeedbackTimer);
+  posFeedbackMessage = "";
+  posFeedbackTargetId = "";
+}
+
 function updateCartDiscount(productId, discount) {
+  clearPosFeedback();
   if (!storeSettings.allowDiscounts) {
     ventasMessage = "Los descuentos estan desactivados para esta tienda.";
     return renderMain();
