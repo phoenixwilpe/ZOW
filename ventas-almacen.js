@@ -3252,10 +3252,57 @@ async function closeCashSession(event) {
 function printCashClosure(closureId) {
   const closure = cashClosures.find((item) => item.id === closureId);
   if (!closure) return;
-  const printable = window.open("", "_blank", "width=440,height=720");
+  const printable = window.open("", "_blank", "width=760,height=820");
   if (!printable) return;
   const difference = Number(closure.differenceAmount || 0);
-  printable.document.write(`<!doctype html><html><head><meta charset="UTF-8"><title>Cierre ${escapeHtml(closure.code)}</title><style>body{font-family:Arial,sans-serif;padding:20px;max-width:360px;color:#111}h1{font-size:18px;text-align:center;margin:0 0 8px}.muted{color:#555;font-size:12px;text-align:center}.row{display:flex;justify-content:space-between;border-bottom:1px dashed #aaa;padding:8px 0}.total{font-weight:800;font-size:17px}.diff{font-weight:800;color:${difference === 0 ? "#15803d" : "#b45309"}}button{margin-bottom:12px}.box{border:1px solid #111;border-radius:10px;padding:10px;margin:10px 0}.note{font-size:12px;border:1px dashed #777;border-radius:8px;padding:8px;margin-top:10px}.sign{margin-top:34px;border-top:1px solid #111;text-align:center;padding-top:8px;font-size:12px}@media print{button{display:none}}</style></head><body><button onclick="window.print()">Imprimir</button><h1>${escapeHtml(storeSettings.storeName || storeSettings.companyName || currentUser.companyName || "Zow Ventas-Almacen")}</h1><p class="muted">Cierre de caja ${escapeHtml(closure.code)}<br>Caja ${num(closure.registerNumber)} / ${formatDateTime(closure.createdAt)}</p><div class="box"><div class="row"><span>Monto apertura</span><strong>${money(closure.openingAmount)}</strong></div><div class="row"><span>Total ventas</span><strong>${money(closure.totalSales)}</strong></div><div class="row"><span>Movimientos</span><strong>${money(closure.movementTotal)}</strong></div><div class="row total"><span>Esperado</span><strong>${money(closure.expectedAmount)}</strong></div><div class="row"><span>Contado</span><strong>${money(closure.countedAmount)}</strong></div><div class="row diff"><span>Diferencia</span><strong>${money(difference)}</strong></div><div class="row"><span>Ventas cerradas</span><strong>${closure.saleCount}</strong></div></div>${closure.note ? `<div class="note"><strong>Observacion:</strong><br>${escapeHtml(closure.note)}</div>` : ""}<p class="muted">Reporte generado por ZOW SAAS. Revisar diferencias antes de entregar turno.</p><div class="sign">Firma cajero / responsable</div></body></html>`);
+  const title = storeSettings.storeName || storeSettings.companyName || currentUser.companyName || "Zow Ventas-Almacen";
+  const businessLines = [
+    storeSettings.taxId ? `NIT/CI: ${storeSettings.taxId}` : "",
+    storeSettings.address || "",
+    storeSettings.phone ? `Tel: ${storeSettings.phone}` : ""
+  ].filter(Boolean);
+  const differenceClass = difference === 0 ? "ok" : Math.abs(difference) <= 1 ? "warn" : "danger";
+  const manualIncome = Math.max(Number(closure.movementTotal || 0), 0);
+  const manualExpense = Math.max(-Number(closure.movementTotal || 0), 0);
+  printable.document.write(`<!doctype html><html><head><meta charset="UTF-8"><title>Cierre ${escapeHtml(closure.code)}</title><style>
+    *{box-sizing:border-box}body{font-family:Arial,sans-serif;margin:0;padding:28px;color:#111;background:#fff}
+    .toolbar{margin-bottom:16px}.toolbar button{border:0;border-radius:10px;padding:11px 18px;background:#0f172a;color:#fff;font-weight:900}
+    .head{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:20px;align-items:start;border-bottom:3px solid #111;padding-bottom:16px;margin-bottom:18px}
+    h1{font-size:24px;margin:0;text-transform:uppercase;letter-spacing:.04em}.muted{color:#555;font-size:12px;line-height:1.45}.badge{display:inline-block;border:1px solid #111;border-radius:999px;padding:7px 12px;font-weight:900;font-size:12px;text-transform:uppercase}
+    .grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:16px 0}.card{border:1px solid #ddd;border-radius:12px;padding:12px;min-height:82px}.card span{display:block;color:#555;font-size:11px;text-transform:uppercase;font-weight:800}.card strong{display:block;margin-top:8px;font-size:18px}.card.ok strong{color:#15803d}.card.warn strong{color:#b45309}.card.danger strong{color:#b91c1c}
+    .box{border:1px solid #111;border-radius:14px;padding:14px;margin:14px 0}.row{display:flex;justify-content:space-between;gap:14px;padding:8px 0;border-bottom:1px dashed #aaa}.row:last-child{border-bottom:0}.row span{color:#555}.row strong{text-align:right}.total{font-size:18px;font-weight:900;border-top:2px solid #111;margin-top:4px;padding-top:10px}.diff.ok strong{color:#15803d}.diff.warn strong{color:#b45309}.diff.danger strong{color:#b91c1c}
+    .note{border:1px dashed #777;border-radius:12px;padding:12px;margin-top:14px;background:#fafafa;font-size:13px}.signatures{display:grid;grid-template-columns:1fr 1fr;gap:34px;margin-top:54px}.sign{border-top:1px solid #111;text-align:center;padding-top:9px;font-size:12px;color:#444}
+    .foot{margin-top:22px;text-align:center;color:#555;font-size:12px}.status{margin-top:8px;font-size:13px;font-weight:900}
+    @media print{.toolbar{display:none}body{padding:0}.card,.box{break-inside:avoid}}
+  </style></head><body><div class="toolbar"><button onclick="window.print()">Imprimir cierre de caja</button></div>
+  <section class="head">
+    <div><h1>${escapeHtml(title)}</h1><p class="muted">${businessLines.map(escapeHtml).join("<br>") || "Datos de la tienda no configurados"}</p></div>
+    <div><span class="badge">${escapeHtml(closure.code)}</span><p class="muted"><strong>Caja:</strong> ${num(closure.registerNumber)}<br><strong>Fecha:</strong> ${formatDateTime(closure.createdAt)}</p></div>
+  </section>
+  <section class="grid">
+    <article class="card"><span>Apertura</span><strong>${money(closure.openingAmount)}</strong></article>
+    <article class="card"><span>Ventas</span><strong>${money(closure.totalSales)}</strong></article>
+    <article class="card"><span>Movimientos</span><strong>${money(closure.movementTotal)}</strong></article>
+    <article class="card ${differenceClass}"><span>Diferencia</span><strong>${money(difference)}</strong></article>
+  </section>
+  <section class="box">
+    <div class="row"><span>Monto inicial declarado</span><strong>${money(closure.openingAmount)}</strong></div>
+    <div class="row"><span>Total ventas cerradas</span><strong>${money(closure.totalSales)}</strong></div>
+    <div class="row"><span>Ingresos manuales</span><strong>${money(manualIncome)}</strong></div>
+    <div class="row"><span>Egresos manuales</span><strong>${money(manualExpense)}</strong></div>
+    <div class="row total"><span>Efectivo esperado</span><strong>${money(closure.expectedAmount)}</strong></div>
+    <div class="row"><span>Efectivo contado</span><strong>${money(closure.countedAmount)}</strong></div>
+    <div class="row diff ${differenceClass}"><span>Diferencia final</span><strong>${money(difference)}</strong></div>
+    <div class="row"><span>Ventas incluidas</span><strong>${num(closure.saleCount)}</strong></div>
+  </section>
+  <section class="box">
+    <div class="row"><span>Estado de arqueo</span><strong>${difference === 0 ? "Cuadrado" : Math.abs(difference) <= 1 ? "Diferencia menor" : "Requiere revision"}</strong></div>
+    <div class="row"><span>Generado por</span><strong>${escapeHtml(currentUser.name || currentUser.username || "Usuario")}</strong></div>
+    <div class="row"><span>Moneda</span><strong>${escapeHtml(storeSettings.currency || "BOB")}</strong></div>
+  </section>
+  ${closure.note ? `<div class="note"><strong>Observacion:</strong><br>${escapeHtml(closure.note)}</div>` : `<div class="note"><strong>Observacion:</strong><br>Sin observaciones registradas.</div>`}
+  <div class="signatures"><div class="sign">Firma cajero</div><div class="sign">Firma responsable</div></div>
+  <p class="foot">Reporte generado por ZOW SAAS. Revisar diferencias antes de entregar turno.</p></body></html>`);
   printable.document.close();
   printable.focus();
 }
