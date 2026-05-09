@@ -678,6 +678,7 @@ function renderSell() {
         <button class="ghost-button" type="button" data-pos-panel="cart">Ver carrito</button>
         <button class="primary-button" type="button" id="mobileCheckoutBtn" ${saleCart.length && isCashOpen ? "" : "disabled"}>Cobrar</button>
       </div>
+      ${ventasMessage ? `<div class="mobile-pos-toast">${escapeHtml(ventasMessage)}</div>` : ""}
       <section class="admin-panel pos-products touch-panel">
         <div class="touch-pos-head">
           <div>
