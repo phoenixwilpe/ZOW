@@ -2488,15 +2488,17 @@ function bindProductSearch() {
     productSearch = input.value;
     clearTimeout(productSearchTimer);
     const caretPosition = input.selectionStart || productSearch.length;
+    const mobile = isMobilePos();
     productSearchTimer = window.setTimeout(() => {
+      posMobilePanel = "products";
       renderMain();
       window.requestAnimationFrame(() => {
         const nextInput = document.querySelector("#productSearchInput");
         if (!nextInput || activeView !== "sell") return;
-        nextInput.focus({ preventScroll: true });
+        if (!mobile) nextInput.focus({ preventScroll: true });
         nextInput.setSelectionRange(caretPosition, caretPosition);
       });
-    }, 420);
+    }, mobile ? 720 : 420);
   });
   input.addEventListener("keydown", (event) => {
     if (event.key === "Enter") {
@@ -2626,7 +2628,7 @@ function addToCart(productId, quantity = 1, options = {}) {
   else saleCart.push({ productId, name: product.name, quantity: requestedQuantity, salePrice: Number(product.sale_price || 0), discount: 0 });
   applyPromotionsToCart();
   showPosFeedback(`${requestedQuantity} x ${product.name} agregado al carrito.${expiry.level === "warning" ? ` Atencion: ${expiry.label}.` : ""}`, product.id);
-  if (isMobilePos()) posMobilePanel = "products";
+  posMobilePanel = "products";
   if (options.clearSearch || !isMobilePos()) productSearch = "";
   renderMain();
 }
@@ -2659,7 +2661,7 @@ function addComboToCart(comboId, options = {}) {
     });
   });
   showPosFeedback(`Combo ${combo.name} agregado al carrito.`, combo.id);
-  if (isMobilePos()) posMobilePanel = "products";
+  posMobilePanel = "products";
   if (options.clearSearch || !isMobilePos()) productSearch = "";
   renderMain();
 }
@@ -2772,7 +2774,7 @@ function cartEstimatedProfit() {
 }
 
 function isMobilePos() {
-  return window.matchMedia("(max-width: 720px)").matches;
+  return window.matchMedia("(max-width: 760px)").matches;
 }
 
 function scanAddProduct() {
