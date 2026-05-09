@@ -673,6 +673,11 @@ function renderSell() {
         <button class="${posMobilePanel === "products" ? "is-active" : ""}" type="button" data-pos-panel="products">Productos</button>
         <button class="${posMobilePanel === "cart" ? "is-active" : ""}" type="button" data-pos-panel="cart">Carrito <strong>${saleCart.length}</strong></button>
       </div>
+      <div class="mobile-pos-summary">
+        <div><span>Carrito</span><strong>${num(saleCart.length)} item${saleCart.length === 1 ? "" : "s"} / ${money(totals.total)}</strong></div>
+        <button class="ghost-button" type="button" data-pos-panel="cart">Ver carrito</button>
+        <button class="primary-button" type="button" id="mobileCheckoutBtn" ${saleCart.length && isCashOpen ? "" : "disabled"}>Cobrar</button>
+      </div>
       <section class="admin-panel pos-products touch-panel">
         <div class="touch-pos-head">
           <div>
@@ -809,6 +814,7 @@ function renderSell() {
     posMobilePanel = button.dataset.posPanel || "products";
     renderMain();
   }));
+  document.querySelector("#mobileCheckoutBtn")?.addEventListener("click", openPaymentModal);
   document.querySelectorAll("[data-add-product]").forEach((button) => button.addEventListener("click", () => addToCart(button.dataset.addProduct)));
   document.querySelectorAll("[data-add-combo]").forEach((button) => button.addEventListener("click", () => addComboToCart(button.dataset.addCombo)));
   document.querySelectorAll("[data-toggle-favorite]").forEach((button) => button.addEventListener("click", () => toggleFavoriteProduct(button.dataset.toggleFavorite)));
@@ -2381,7 +2387,7 @@ function renderVentasUserRow(user) {
   </article>`;
 }
 
-function addToCart(productId, quantity = 1) {
+function addToCart(productId, quantity = 1, options = {}) {
   const product = products.find((item) => item.id === productId);
   if (!product) return;
   const existing = saleCart.find((item) => item.productId === productId);
@@ -2401,12 +2407,12 @@ function addToCart(productId, quantity = 1) {
   if (existing) existing.quantity += requestedQuantity;
   else saleCart.push({ productId, name: product.name, quantity: requestedQuantity, salePrice: Number(product.sale_price || 0), discount: 0 });
   applyPromotionsToCart();
-  if (isMobilePos()) posMobilePanel = "cart";
-  productSearch = "";
+  if (isMobilePos()) posMobilePanel = "products";
+  if (options.clearSearch || !isMobilePos()) productSearch = "";
   renderMain();
 }
 
-function addComboToCart(comboId) {
+function addComboToCart(comboId, options = {}) {
   const combo = combos.find((item) => item.id === comboId);
   if (!combo || !combo.active) return;
   if (combo.items.some((item) => saleCart.some((cartItem) => cartItem.productId === item.productId))) {
@@ -2434,7 +2440,8 @@ function addComboToCart(comboId) {
     });
   });
   ventasMessage = `Combo ${combo.name} agregado al carrito.`;
-  if (isMobilePos()) posMobilePanel = "cart";
+  if (isMobilePos()) posMobilePanel = "products";
+  if (options.clearSearch || !isMobilePos()) productSearch = "";
   renderMain();
 }
 
@@ -2532,7 +2539,7 @@ function scanAddProduct() {
   const parsed = parseProductSearch(productSearch);
   const term = parsed.term.toLowerCase();
   const product = products.find((item) => [item.code, item.barcode, item.name].some((value) => String(value || "").toLowerCase() === term)) || filteredProducts({ term: parsed.term })[0];
-  if (product) addToCart(product.id, parsed.quantity);
+  if (product) addToCart(product.id, parsed.quantity, { clearSearch: true });
   else {
     ventasMessage = "No encontre un producto con ese codigo, barras o nombre.";
     renderMain();
