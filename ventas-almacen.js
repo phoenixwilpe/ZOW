@@ -1521,8 +1521,26 @@ function renderCustomers() {
   const riskCustomers = buildCustomerRiskList().slice(0, 6);
   const collectionPlan = buildCollectionPlan();
   const followUpList = buildReceivableFollowUpList().slice(0, 6);
+  const customerHealth = buildCustomerPortfolioHealth(riskCustomers);
   setCount(`${customers.length} cliente${customers.length === 1 ? "" : "s"}`);
   mainList().innerHTML = `
+    <section class="customer-command-card">
+      <div>
+        <p class="eyebrow">Cartera comercial</p>
+        <h3>Clientes, creditos y cobros bajo control</h3>
+        <span>Prioriza clientes con saldo vencido, revisa limite usado y registra pagos sin salir del modulo.</span>
+      </div>
+      <div class="customer-command-actions">
+        <button class="primary-button" type="button" id="quickNewCustomer">Nuevo cliente</button>
+        <button class="ghost-button" type="button" id="exportCustomersCommandCsv">Exportar clientes</button>
+      </div>
+    </section>
+    <section class="customer-health-grid">
+      <article><span>Clientes activos</span><strong>${num(customerHealth.activeCustomers)}</strong><small>${num(customers.length)} registrados</small></article>
+      <article class="${customerHealth.highRisk ? "is-danger" : "is-ok"}"><span>Riesgo alto</span><strong>${num(customerHealth.highRisk)}</strong><small>Requieren cobro o bloqueo</small></article>
+      <article class="${totalDebt ? "is-warning" : "is-ok"}"><span>Cartera pendiente</span><strong>${money(totalDebt)}</strong><small>${num(receivables.length)} venta${receivables.length === 1 ? "" : "s"} al credito</small></article>
+      <article class="${customerHealth.oldestDays > 30 ? "is-danger" : customerHealth.oldestDays > 15 ? "is-warning" : "is-ok"}"><span>Mayor antiguedad</span><strong>${num(customerHealth.oldestDays)} dias</strong><small>${oldestDebt ? escapeHtml(oldestDebt.customer_name || "Cliente sin registrar") : "Sin deuda"}</small></article>
+    </section>
     <section class="setup-overview">
       <article><span>Clientes</span><strong>${customers.length}</strong></article>
       <article><span>Cuentas por cobrar</span><strong>${receivables.length}</strong></article>
@@ -1551,31 +1569,49 @@ function renderCustomers() {
     </section>
     <section class="admin-panel">
       <div class="admin-panel-head"><div><p class="eyebrow">Directorio</p><h3>Clientes registrados</h3></div><button class="ghost-button" type="button" id="exportCustomersFromCustomersCsv">Exportar clientes CSV</button></div>
-      <div class="admin-list">${customers.map((customer) => `
-        <article class="admin-row">
-          <div>
-            <strong>${escapeHtml(customer.name)}</strong>
-            <span>CI/NIT ${escapeHtml(customer.ci || "Sin dato")} / Cel. ${escapeHtml(customer.phone || "Sin celular")}</span>
-            <span>${escapeHtml(customer.address || "Sin direccion")}</span>
-          </div>
-          <div class="admin-row-meta">
-            <span>${escapeHtml(customer.email || "Sin email")}</span>
-            <span class="${customer.status === "bloqueado" ? "danger-text" : customer.status === "observado" ? "warn-text" : "ok-text"}">${escapeHtml(customer.status || "activo")}</span>
-            <span>Credito ${money(customer.credit_limit || 0)}</span>
-            <button class="ghost-button" type="button" data-edit-customer="${customer.id}">Editar</button>
-          </div>
-        </article>
-      `).join("") || empty("Sin clientes registrados")}</div>
+      <div class="admin-list customer-directory-list">${customers.map(renderCustomerDirectoryRow).join("") || empty("Sin clientes registrados")}</div>
     </section>
   `;
   document.querySelectorAll("[data-pay-receivable]").forEach((button) => {
     button.addEventListener("click", () => payReceivable(button.dataset.payReceivable));
   });
+  document.querySelectorAll("[data-pay-customer]").forEach((button) => {
+    button.addEventListener("click", () => payOldestReceivableForCustomer(button.dataset.payCustomer));
+  });
   document.querySelectorAll("[data-edit-customer]").forEach((button) => {
     button.addEventListener("click", () => openCustomerModal(button.dataset.editCustomer));
   });
+  document.querySelector("#quickNewCustomer")?.addEventListener("click", () => openCustomerModal());
+  document.querySelector("#exportCustomersCommandCsv")?.addEventListener("click", exportCustomersCsv);
   document.querySelector("#exportReceivablesCsv")?.addEventListener("click", exportReceivablesCsv);
   document.querySelector("#exportCustomersFromCustomersCsv")?.addEventListener("click", exportCustomersCsv);
+}
+
+function renderCustomerDirectoryRow(customer) {
+  const debt = receivables
+    .filter((sale) => (sale.customer_name || "Cliente sin registrar") === customer.name)
+    .reduce((sum, sale) => sum + Number(sale.balance_due || 0), 0);
+  const creditLimit = Number(customer.credit_limit || 0);
+  const usage = creditLimit > 0 ? Math.min(100, Math.round((debt / creditLimit) * 100)) : debt > 0 ? 100 : 0;
+  const statusClass = customer.status === "bloqueado" ? "danger-text" : customer.status === "observado" ? "warn-text" : "ok-text";
+  const usageClass = usage >= 90 ? "is-danger" : usage >= 65 ? "is-warning" : "is-ok";
+  return `<article class="admin-row customer-directory-row">
+    <div>
+      <strong>${escapeHtml(customer.name)}</strong>
+      <span>CI/NIT ${escapeHtml(customer.ci || "Sin dato")} / Cel. ${escapeHtml(customer.phone || "Sin celular")}</span>
+      <span>${escapeHtml(customer.address || "Sin direccion")}</span>
+      <div class="customer-credit-meter ${usageClass}"><i style="width:${usage}%"></i></div>
+    </div>
+    <div class="admin-row-meta">
+      <span>${escapeHtml(customer.email || "Sin email")}</span>
+      <span class="${statusClass}">${escapeHtml(customer.status || "activo")}</span>
+      <span>Credito ${money(creditLimit)}</span>
+      <span class="${usageClass}">Usado ${usage}%</span>
+      <span>Debe ${money(debt)}</span>
+      ${debt > 0 ? `<button class="primary-button" type="button" data-pay-customer="${escapeHtml(customer.name)}">Cobrar</button>` : ""}
+      <button class="ghost-button" type="button" data-edit-customer="${customer.id}">Editar</button>
+    </div>
+  </article>`;
 }
 
 function renderReceivableRow(sale) {
@@ -1633,6 +1669,7 @@ function renderCustomerRiskRow(item) {
     <div class="admin-row-meta">
       <span class="${levelClass}">Riesgo ${item.level}</span>
       <span>${item.recommendation}</span>
+      <button class="ghost-button" type="button" data-pay-customer="${escapeHtml(item.name)}">Cobrar</button>
     </div>
   </article>`;
 }
@@ -1795,11 +1832,19 @@ function buildCustomerRiskList() {
       : level === "medio"
         ? "Hacer seguimiento"
         : "Credito controlado";
-    return { ...item, creditLimit, level, recommendation };
+    return { ...item, creditLimit, usage, level, recommendation };
   }).sort((a, b) => {
     const order = { alto: 3, medio: 2, bajo: 1 };
     return order[b.level] - order[a.level] || b.debt - a.debt;
   });
+}
+
+function buildCustomerPortfolioHealth(riskList = buildCustomerRiskList()) {
+  return {
+    activeCustomers: customers.filter((customer) => (customer.status || "activo") === "activo").length,
+    highRisk: riskList.filter((item) => item.level === "alto").length,
+    oldestDays: receivables.reduce((max, sale) => Math.max(max, daysSince(sale.created_at)), 0)
+  };
 }
 
 function buildCollectionPlan() {
@@ -3983,6 +4028,14 @@ async function payReceivable(saleId) {
   `;
   document.querySelector("#receivablePaymentAmount").value = Number(sale.balance_due || 0).toFixed(2);
   receivablePaymentModal.showModal();
+}
+
+function payOldestReceivableForCustomer(customerName) {
+  const sale = receivables
+    .filter((item) => (item.customer_name || "Cliente sin registrar") === customerName)
+    .sort((a, b) => new Date(a.created_at) - new Date(b.created_at))[0];
+  if (!sale) return;
+  payReceivable(sale.id);
 }
 
 async function saveReceivablePayment(event) {

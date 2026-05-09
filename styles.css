@@ -2563,6 +2563,48 @@ body.app-correspondencia .metrics article:hover {
   margin-bottom: 14px;
 }
 
+.customer-command-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  margin-bottom: 14px;
+  padding: clamp(16px, 2.2vw, 22px);
+  border: 1px solid color-mix(in srgb, var(--accent) 18%, var(--line));
+  border-radius: 12px;
+  background:
+    linear-gradient(135deg, rgb(255 255 255 / 94%), color-mix(in srgb, var(--accent-tint) 48%, white)),
+    radial-gradient(circle at 92% 14%, color-mix(in srgb, var(--accent) 20%, transparent), transparent 34%);
+  box-shadow: 0 20px 54px rgb(15 32 28 / 8%);
+  overflow: hidden;
+}
+
+.customer-command-card h3 {
+  margin: 4px 0 5px;
+  color: var(--accent-dark);
+  font-size: clamp(1.15rem, 2vw, 1.7rem);
+}
+
+.customer-command-card span {
+  color: var(--muted);
+  font-size: 0.9rem;
+  font-weight: 780;
+}
+
+.customer-command-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 9px;
+}
+
+.customer-health-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
 .collection-plan-grid,
 .customer-workspace-grid {
   display: grid;
@@ -2609,7 +2651,8 @@ body.app-correspondencia .metrics article:hover {
 }
 
 .debt-aging-grid article,
-.collection-plan-grid article {
+.collection-plan-grid article,
+.customer-health-grid article {
   border: 1px solid color-mix(in srgb, var(--accent) 16%, var(--line));
   border-radius: 8px;
   padding: 12px;
@@ -2624,6 +2667,11 @@ body.app-correspondencia .metrics article:hover {
 }
 
 .debt-aging-grid article.is-ok {
+  border-color: rgb(22 163 74 / 22%);
+  background: linear-gradient(135deg, #f0fdf4, #ffffff);
+}
+
+.customer-health-grid article.is-ok {
   border-color: rgb(22 163 74 / 22%);
   background: linear-gradient(135deg, #f0fdf4, #ffffff);
 }
@@ -2649,6 +2697,11 @@ body.app-correspondencia .metrics article:hover {
   background: linear-gradient(135deg, #fffbeb, #ffffff);
 }
 
+.customer-health-grid article.is-warning {
+  border-color: rgb(245 158 11 / 28%);
+  background: linear-gradient(135deg, #fffbeb, #ffffff);
+}
+
 .collection-plan-grid article.is-warning {
   border-color: rgb(245 158 11 / 28%);
   background: linear-gradient(135deg, #fffbeb, #ffffff);
@@ -2660,6 +2713,11 @@ body.app-correspondencia .metrics article:hover {
 }
 
 .debt-aging-grid article.is-danger {
+  border-color: rgb(220 38 38 / 24%);
+  background: linear-gradient(135deg, #fef2f2, #ffffff);
+}
+
+.customer-health-grid article.is-danger {
   border-color: rgb(220 38 38 / 24%);
   background: linear-gradient(135deg, #fef2f2, #ffffff);
 }
@@ -2678,6 +2736,8 @@ body.app-correspondencia .metrics article:hover {
 .debt-aging-grid small,
 .collection-plan-grid span,
 .collection-plan-grid small,
+.customer-health-grid span,
+.customer-health-grid small,
 .inventory-insight-grid span,
 .inventory-insight-grid small {
   display: block;
@@ -2688,11 +2748,59 @@ body.app-correspondencia .metrics article:hover {
 
 .debt-aging-grid strong,
 .collection-plan-grid strong,
+.customer-health-grid strong,
 .inventory-insight-grid strong {
   display: block;
   margin: 6px 0;
   color: var(--accent-dark);
   font-size: 1.1rem;
+}
+
+.customer-directory-row {
+  grid-template-columns: minmax(0, 1fr) minmax(280px, auto);
+  align-items: center;
+  background:
+    linear-gradient(145deg, rgb(255 255 255 / 96%), color-mix(in srgb, var(--accent-tint) 26%, white));
+}
+
+.customer-credit-meter {
+  width: min(320px, 100%);
+  height: 8px;
+  margin-top: 8px;
+  border-radius: 999px;
+  background: rgb(15 32 28 / 10%);
+  overflow: hidden;
+}
+
+.customer-credit-meter i {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--ok), var(--accent));
+  transition: width 260ms ease;
+}
+
+.customer-credit-meter.is-warning i {
+  background: linear-gradient(90deg, #d97706, #fbbf24);
+}
+
+.customer-credit-meter.is-danger i {
+  background: linear-gradient(90deg, #b91c1c, #fb7185);
+}
+
+.customer-risk-row,
+.collection-action-row,
+.receivable-row {
+  transition: transform 180ms ease, border-color 180ms ease, box-shadow 180ms ease;
+}
+
+.customer-risk-row:hover,
+.collection-action-row:hover,
+.receivable-row:hover,
+.customer-directory-row:hover {
+  border-color: color-mix(in srgb, var(--accent) 28%, var(--line));
+  box-shadow: 0 14px 32px rgb(15 32 28 / 8%);
+  transform: translateY(-1px);
 }
 
 .setup-overview span,
@@ -10888,7 +10996,25 @@ body.system-zow-site .site-footer {
   .live-activity-grid,
   .kardex-summary,
   .setup-check-grid,
+  .customer-health-grid,
   .business-health-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .customer-command-card {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .customer-command-actions {
+    justify-content: stretch;
+  }
+
+  .customer-command-actions button {
+    flex: 1 1 160px;
+  }
+
+  .customer-directory-row {
     grid-template-columns: 1fr;
   }
 
