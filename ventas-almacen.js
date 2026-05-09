@@ -3357,29 +3357,39 @@ function openCategoryModal() {
 }
 
 function printTicket(sale, items) {
-  const printable = window.open("", "_blank", "width=420,height=720");
+  const printable = window.open("", "_blank", "width=460,height=760");
   if (!printable) return;
   const title = storeSettings.storeName || storeSettings.companyName || currentUser.companyName || "Zow Ventas-Almacen";
+  const businessLines = [
+    storeSettings.taxId ? `NIT/CI: ${storeSettings.taxId}` : "",
+    storeSettings.address || "",
+    storeSettings.phone ? `Tel: ${storeSettings.phone}` : ""
+  ].filter(Boolean);
+  const cashierName = sale.seller_name || currentUser.name || currentUser.username || "Cajero";
+  const registerNumber = sale.register_number || sale.cash_register_number || cashSession?.registerNumber || "";
+  const itemCount = items.reduce((sum, item) => sum + Number(item.quantity || 0), 0);
+  const paidAmount = Number(sale.amount_paid ?? sale.cash_received ?? 0);
+  const changeAmount = Number(sale.change_amount || 0);
   printable.document.write(`<!doctype html><html><head><meta charset="UTF-8"><title>Ticket ${escapeHtml(sale.code)}</title><style>
-    *{box-sizing:border-box}body{font-family:Arial,sans-serif;margin:0;padding:14px;max-width:360px;color:#111;background:#fff}
-    .toolbar{margin-bottom:10px}.toolbar button{width:100%;border:0;border-radius:8px;padding:10px;background:#111;color:#fff;font-weight:800}
-    .brand{border:2px solid #111;border-radius:14px;padding:12px;text-align:center;margin-bottom:10px}.brand b{display:block;font-size:18px;text-transform:uppercase;letter-spacing:.08em}.brand span{font-size:10px;color:#555}
-    h1{font-size:15px;text-align:center;margin:0 0 5px;text-transform:uppercase}.center{text-align:center}.muted{color:#555;font-size:11px;line-height:1.35}
-    .ticket-box{border:1px solid #111;border-radius:10px;padding:9px;margin:10px 0}.row{display:flex;justify-content:space-between;gap:10px;padding:5px 0;border-bottom:1px dashed #aaa}.row:last-child{border-bottom:0}
-    table{width:100%;border-collapse:collapse;margin-top:8px}th{font-size:10px;text-align:left;border-bottom:1px solid #111;padding:5px 0}th:last-child,td:last-child{text-align:right}td{padding:7px 0;border-bottom:1px dashed #aaa;font-size:12px;vertical-align:top}td:last-child{font-weight:700}
-    .total{font-weight:900;font-size:18px}.barcode{height:34px;margin:10px 24px;background:repeating-linear-gradient(90deg,#111 0 2px,transparent 2px 5px,#111 5px 6px,transparent 6px 10px)}
-    .qr-line{display:flex;gap:10px;align-items:center;justify-content:center}.qr{width:54px;height:54px;background:conic-gradient(#111 25%,transparent 0 50%,#111 0 75%,transparent 0);border:6px solid #fff;box-shadow:0 0 0 1px #111}
-    .foot{margin-top:10px;text-align:center;font-size:11px;color:#555}.sign{margin-top:18px;border-top:1px solid #111;text-align:center;padding-top:6px;font-size:10px;color:#444}
-    @media print{.toolbar{display:none}body{padding:0}}
+    *{box-sizing:border-box}body{font-family:Arial,sans-serif;margin:0;padding:14px;max-width:390px;color:#111;background:#fff}
+    .toolbar{margin-bottom:12px}.toolbar button{width:100%;border:0;border-radius:10px;padding:11px;background:#0f172a;color:#fff;font-weight:900}
+    .brand{padding:14px 10px 12px;text-align:center;border-bottom:2px solid #111}.brand b{display:block;font-size:19px;text-transform:uppercase;letter-spacing:.06em}.brand span{display:block;margin-top:4px;font-size:10px;color:#555;text-transform:uppercase;letter-spacing:.12em}
+    .business{margin:8px 0 12px;text-align:center;color:#555;font-size:11px;line-height:1.35}.stamp{display:inline-block;margin-top:7px;border:1px solid #111;border-radius:999px;padding:5px 10px;color:#111;font-size:10px;font-weight:900;text-transform:uppercase}
+    .ticket-box{border:1px solid #111;border-radius:12px;padding:9px;margin:10px 0}.row{display:flex;justify-content:space-between;gap:10px;padding:5px 0;border-bottom:1px dashed #aaa}.row:last-child{border-bottom:0}.row span{color:#555}.row strong{text-align:right}
+    .meta-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:10px 0}.meta-grid div{border:1px solid #ddd;border-radius:10px;padding:8px}.meta-grid span{display:block;color:#555;font-size:10px}.meta-grid strong{display:block;margin-top:3px;font-size:12px}
+    table{width:100%;border-collapse:collapse;margin-top:8px}th{font-size:10px;text-align:left;border-bottom:2px solid #111;padding:6px 0;text-transform:uppercase}th:last-child,td:last-child{text-align:right}td{padding:8px 0;border-bottom:1px dashed #bbb;font-size:12px;vertical-align:top}td:last-child{font-weight:800}.muted{color:#555;font-size:10px;line-height:1.35}
+    .total{margin-top:4px;padding-top:8px;border-top:2px solid #111;font-weight:900;font-size:18px}.payment{background:#f7f7f7}.barcode{height:36px;margin:10px 20px;background:repeating-linear-gradient(90deg,#111 0 2px,transparent 2px 5px,#111 5px 6px,transparent 6px 10px)}
+    .verify{display:grid;grid-template-columns:58px 1fr;gap:10px;align-items:center;margin:12px 0}.qr{width:58px;height:58px;background:linear-gradient(90deg,#111 50%,transparent 0),linear-gradient(#111 50%,transparent 0);background-size:14px 14px;border:7px solid #fff;box-shadow:0 0 0 1px #111}.foot{margin-top:10px;text-align:center;font-size:11px;color:#555}.thanks{color:#111;font-weight:900}
+    @media print{.toolbar{display:none}body{padding:0}.ticket-box,.meta-grid div{break-inside:avoid}}
   </style></head><body><div class="toolbar"><button onclick="window.print()">Imprimir comprobante</button></div>
-  <div class="brand"><b>${escapeHtml(title)}</b><span>Comprobante de venta</span></div>
-  <p class="center muted">${escapeHtml(storeSettings.taxId ? `NIT ${storeSettings.taxId}` : "")}<br>${escapeHtml(storeSettings.address || "")}<br>${escapeHtml(storeSettings.phone || "")}</p>
-  <div class="ticket-box"><div class="row"><span>Comprobante</span><strong>${escapeHtml(sale.code)}</strong></div><div class="row"><span>Fecha</span><strong>${formatDateTime(sale.created_at)}</strong></div><div class="row"><span>Cajero</span><strong>${escapeHtml(currentUser.name || sale.seller_name || "")}</strong></div><div class="row"><span>Cliente</span><strong>${escapeHtml(sale.customer_name || "S/R")}</strong></div></div>
-  <table><thead><tr><th>Detalle</th><th>Total</th></tr></thead><tbody>${items.map((item) => `<tr><td>${escapeHtml(item.product_name)}<br><span class="muted">${num(item.quantity)} x ${money(item.unit_price)}</span></td><td>${money(item.total)}</td></tr>`).join("")}</tbody></table>
-  <div class="ticket-box"><div class="row"><span>Subtotal</span><strong>${money(sale.subtotal)}</strong></div><div class="row"><span>Descuento</span><strong>${money(sale.discount)}</strong></div><div class="row"><span>Impuesto</span><strong>${money(sale.tax || 0)}</strong></div><div class="row total"><span>Total</span><strong>${money(sale.total)}</strong></div><div class="row"><span>Metodo</span><strong>${escapeHtml(paymentLabel(sale.payment_method || paymentDraft.method || "efectivo"))}</strong></div><div class="row"><span>Pagado</span><strong>${money(sale.amount_paid || sale.cash_received || 0)}</strong></div><div class="row"><span>Cambio</span><strong>${money(sale.change_amount)}</strong></div>${Number(sale.balance_due || 0) > 0 ? `<div class="row"><span>Saldo</span><strong>${money(sale.balance_due)}</strong></div>` : ""}</div>
+  <div class="brand"><b>${escapeHtml(title)}</b><span>Comprobante de venta</span><em class="stamp">${escapeHtml(sale.status === "anulada" ? "Anulado" : sale.code === "PREVENTA" ? "Preventa" : "Pagado")}</em></div>
+  <p class="business">${businessLines.map(escapeHtml).join("<br>") || "Datos de la tienda no configurados"}</p>
+  <div class="meta-grid"><div><span>Comprobante</span><strong>${escapeHtml(sale.code)}</strong></div><div><span>Fecha y hora</span><strong>${formatDateTime(sale.created_at)}</strong></div><div><span>Caja</span><strong>${registerNumber ? `Caja ${num(registerNumber)}` : "Sin caja"}</strong></div><div><span>Cajero</span><strong>${escapeHtml(cashierName)}</strong></div><div><span>Cliente</span><strong>${escapeHtml(sale.customer_name || "Cliente sin registrar")}</strong></div><div><span>Items</span><strong>${num(itemCount)}</strong></div></div>
+  <table><thead><tr><th>Detalle</th><th>Total</th></tr></thead><tbody>${items.map((item) => `<tr><td>${escapeHtml(item.product_name)}<br><span class="muted">${num(item.quantity)} x ${money(item.unit_price)}${Number(item.discount || 0) ? ` / Desc. ${money(item.discount)}` : ""}</span></td><td>${money(item.total)}</td></tr>`).join("")}</tbody></table>
+  <div class="ticket-box"><div class="row"><span>Subtotal</span><strong>${money(sale.subtotal)}</strong></div><div class="row"><span>Descuento</span><strong>${money(sale.discount)}</strong></div><div class="row"><span>Impuesto</span><strong>${money(sale.tax || 0)}</strong></div><div class="row total"><span>Total</span><strong>${money(sale.total)}</strong></div><div class="row payment"><span>Metodo</span><strong>${escapeHtml(paymentLabel(sale.payment_method || paymentDraft.method || "efectivo"))}</strong></div><div class="row"><span>Pagado</span><strong>${money(paidAmount)}</strong></div><div class="row"><span>Cambio</span><strong>${money(changeAmount)}</strong></div>${Number(sale.balance_due || 0) > 0 ? `<div class="row"><span>Saldo</span><strong>${money(sale.balance_due)}</strong></div>` : ""}</div>
   ${renderTicketPaymentDetail(sale)}
   ${sale.note ? `<p class="muted"><strong>Obs.:</strong> ${escapeHtml(sale.note)}</p>` : ""}
-  <div class="qr-line"><div class="qr"></div><div><div class="barcode"></div><p class="muted">Codigo: ${escapeHtml(sale.code)}</p></div></div><p class="foot">${escapeHtml(storeSettings.ticketNote || "Gracias por su compra")}</p><p class="foot">Comprobante generado por Sistema ZOW SAAS.</p></body></html>`);
+  <div class="verify"><div class="qr"></div><div><div class="barcode"></div><p class="muted">Codigo de control: ${escapeHtml(sale.code)}<br>Moneda: ${escapeHtml(storeSettings.currency || "BOB")}</p></div></div><p class="foot thanks">${escapeHtml(storeSettings.ticketNote || "Gracias por su compra")}</p><p class="foot">Sistema de venta y almacen ZOW SAAS</p></body></html>`);
   printable.document.close();
   printable.focus();
 }
