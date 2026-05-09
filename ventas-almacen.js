@@ -47,6 +47,7 @@ let ventasMessage = "";
 let posFeedbackMessage = "";
 let posFeedbackTargetId = "";
 let posFeedbackTimer = 0;
+let historySearchTimer = 0;
 let paymentDraft = { method: "efectivo", received: 0, split: { efectivo: 0, tarjeta: 0, transferencia: 0, qr: 0 } };
 let saleCustomerId = "";
 let saleGlobalDiscount = 0;
@@ -59,7 +60,7 @@ let selectedKardex = null;
 let localSaleMeta = loadJson(LOCAL_SALE_META_KEY, {});
 let favoriteProducts = loadJson(FAVORITE_PRODUCTS_KEY, []);
 let posFocusMode = localStorage.getItem(POS_FOCUS_KEY) === "1";
-let historyFilter = { status: "", method: "", date: "" };
+let historyFilter = { status: "", method: "", date: "", q: "" };
 let storeSettings = {
   companyName: "",
   storeName: "",
@@ -943,29 +944,65 @@ function renderHistory() {
   const visibleSales = sales.filter((sale) => {
     const meta = localSaleMeta[sale.id] || {};
     const status = saleStatus(sale);
+    const query = String(historyFilter.q || "").trim().toLowerCase();
     if (historyFilter.status && status !== historyFilter.status) return false;
     if (historyFilter.method && (sale.payment_method || meta.method) !== historyFilter.method) return false;
     if (historyFilter.date && !String(sale.created_at || "").startsWith(historyFilter.date)) return false;
+    if (query) {
+      const haystack = [sale.code, sale.customer_name, sale.seller_name, sale.payment_method, sale.total]
+        .map((value) => String(value || "").toLowerCase())
+        .join(" ");
+      if (!haystack.includes(query)) return false;
+    }
     return true;
   });
+  const historyStats = buildHistoryStats(visibleSales);
   setCount(`${visibleSales.length} venta${visibleSales.length === 1 ? "" : "s"}`);
   mainList().innerHTML = `
-    <section class="admin-panel">
-      <div class="admin-panel-head"><div><p class="eyebrow">Historial</p><h3>Ventas del turno</h3></div></div>
+    <section class="admin-panel sales-history-panel">
+      <div class="admin-panel-head"><div><p class="eyebrow">Historial</p><h3>Ventas y comprobantes</h3></div><button class="ghost-button" type="button" id="clearHistoryFilters">Limpiar filtros</button></div>
+      <div class="history-kpi-grid">
+        <article><span>Ventas visibles</span><strong>${num(historyStats.count)}</strong><small>${num(historyStats.voided)} anulada${historyStats.voided === 1 ? "" : "s"}</small></article>
+        <article><span>Total vendido</span><strong>${money(historyStats.total)}</strong><small>Sin anuladas</small></article>
+        <article><span>Cobrado</span><strong>${money(historyStats.paid)}</strong><small>${money(historyStats.pending)} pendiente</small></article>
+        <article><span>Ticket promedio</span><strong>${money(historyStats.average)}</strong><small>Ventas validas</small></article>
+      </div>
       <div class="history-filters">
+        <label>Buscar<input id="historySearch" type="search" inputmode="search" autocomplete="off" placeholder="Codigo, cliente, cajero..." value="${escapeHtml(historyFilter.q)}" /></label>
         <label>Fecha<input id="historyDate" type="date" value="${escapeHtml(historyFilter.date)}" /></label>
         <label>Metodo<select id="historyMethod"><option value="">Todos</option>${paymentMethods().map((method) => `<option value="${method.id}" ${historyFilter.method === method.id ? "selected" : ""}>${method.label}</option>`).join("")}</select></label>
         <label>Estado<select id="historyStatus"><option value="">Todos</option><option value="pagada" ${historyFilter.status === "pagada" ? "selected" : ""}>Pagada</option><option value="pendiente" ${historyFilter.status === "pendiente" ? "selected" : ""}>Pendiente</option><option value="anulada" ${historyFilter.status === "anulada" ? "selected" : ""}>Anulada</option></select></label>
       </div>
-      <div class="admin-list">${visibleSales.map(renderHistorySaleRow).join("") || empty("Sin ventas con esos filtros")}</div>
+      <div class="sales-history-list">${visibleSales.map(renderHistorySaleRow).join("") || empty("Sin ventas con esos filtros")}</div>
     </section>
   `;
+  document.querySelector("#historySearch")?.addEventListener("input", (event) => {
+    historyFilter.q = event.target.value;
+    window.clearTimeout(historySearchTimer);
+    historySearchTimer = window.setTimeout(renderMain, 220);
+  });
   document.querySelector("#historyDate")?.addEventListener("change", (event) => { historyFilter.date = event.target.value; renderMain(); });
   document.querySelector("#historyMethod")?.addEventListener("change", (event) => { historyFilter.method = event.target.value; renderMain(); });
   document.querySelector("#historyStatus")?.addEventListener("change", (event) => { historyFilter.status = event.target.value; renderMain(); });
+  document.querySelector("#clearHistoryFilters")?.addEventListener("click", () => { historyFilter = { status: "", method: "", date: "", q: "" }; renderMain(); });
   document.querySelectorAll("[data-detail-sale]").forEach((button) => button.addEventListener("click", () => showSaleDetail(button.dataset.detailSale)));
   document.querySelectorAll("[data-reprint-sale]").forEach((button) => button.addEventListener("click", () => reprintSale(button.dataset.reprintSale)));
   document.querySelectorAll("[data-void-sale]").forEach((button) => button.addEventListener("click", () => voidSale(button.dataset.voidSale)));
+}
+
+function buildHistoryStats(rows) {
+  const validSales = rows.filter((sale) => saleStatus(sale) !== "anulada");
+  const total = validSales.reduce((sum, sale) => sum + Number(sale.total || 0), 0);
+  const paid = validSales.reduce((sum, sale) => sum + Number(sale.amount_paid || sale.cash_received || 0), 0);
+  const pending = validSales.reduce((sum, sale) => sum + Number(sale.balance_due || 0), 0);
+  return {
+    count: rows.length,
+    voided: rows.length - validSales.length,
+    total,
+    paid,
+    pending,
+    average: validSales.length ? total / validSales.length : 0
+  };
 }
 
 function buildCashHealth(expectedCash, movementsTotal, totalClosureDifference) {
@@ -2173,9 +2210,29 @@ function renderHistorySaleRow(sale) {
   const meta = localSaleMeta[sale.id] || {};
   const status = saleStatus(sale);
   const canVoid = status !== "anulada" && !sale.cash_closed && can("voidSales");
-  return `<article class="admin-row">
-    <div><strong>${escapeHtml(sale.code)}</strong><span>${escapeHtml(sale.customer_name || "Cliente sin registrar")} / ${formatDateTime(sale.created_at)}</span><span>Metodo: ${escapeHtml(paymentLabel(sale.payment_method || meta.method || "efectivo"))} / Pagado ${money(sale.amount_paid || sale.cash_received || 0)}</span></div>
-    <div class="admin-row-meta"><span>Total ${money(sale.total)}</span>${Number(sale.balance_due || 0) > 0 ? `<span class="warn-text">Debe ${money(sale.balance_due)}</span>` : ""}<span class="${status === "anulada" ? "danger-text" : status === "pagada" ? "ok-text" : "warn-text"}">${status}</span><button class="ghost-button" type="button" data-detail-sale="${sale.id}">Ver detalle</button><button class="ghost-button" type="button" data-reprint-sale="${sale.id}">Reimprimir</button>${canVoid ? `<button class="ghost-button danger-action" type="button" data-void-sale="${sale.id}">Anular</button>` : `<span class="muted-text">${status === "anulada" ? "Stock devuelto" : "Caja cerrada"}</span>`}</div>
+  const method = paymentLabel(sale.payment_method || meta.method || "efectivo");
+  const statusClass = status === "anulada" ? "danger-text" : status === "pagada" ? "ok-text" : "warn-text";
+  return `<article class="sales-history-row ${status === "anulada" ? "is-voided" : ""}">
+    <div class="sales-history-main">
+      <span class="sales-history-code">${escapeHtml(sale.code)}</span>
+      <strong>${escapeHtml(sale.customer_name || "Cliente sin registrar")}</strong>
+      <span>${formatDateTime(sale.created_at)} / ${escapeHtml(sale.seller_name || "Cajero")}</span>
+    </div>
+    <div class="sales-history-money">
+      <span>Total</span>
+      <strong>${money(sale.total)}</strong>
+      <small>${escapeHtml(method)} / Pagado ${money(sale.amount_paid || sale.cash_received || 0)}</small>
+      ${Number(sale.balance_due || 0) > 0 ? `<small class="warn-text">Debe ${money(sale.balance_due)}</small>` : ""}
+    </div>
+    <div class="sales-history-state">
+      <span class="${statusClass}">${escapeHtml(status)}</span>
+      <small>${status === "anulada" ? "Stock devuelto" : sale.cash_closed ? "Caja cerrada" : "Editable en turno"}</small>
+    </div>
+    <div class="sales-history-actions">
+      <button class="ghost-button" type="button" data-detail-sale="${sale.id}">Detalle</button>
+      <button class="ghost-button" type="button" data-reprint-sale="${sale.id}">Reimprimir</button>
+      ${canVoid ? `<button class="ghost-button danger-action" type="button" data-void-sale="${sale.id}">Anular</button>` : ""}
+    </div>
   </article>`;
 }
 
@@ -3130,6 +3187,8 @@ async function showSaleDetail(saleId) {
 function renderSaleDetail(sale, items) {
   const status = saleStatus(sale);
   const canReturn = !["anulada", "devuelta"].includes(status) && can("returnSales");
+  const itemTotal = items.reduce((sum, item) => sum + Number(item.total || 0), 0);
+  const quantityTotal = items.reduce((sum, item) => sum + Number(item.quantity || 0), 0);
   saleDetailTitle.textContent = sale.code || "Comprobante";
   saleDetailContent.innerHTML = `
     <section class="sale-detail-summary">
@@ -3138,6 +3197,7 @@ function renderSaleDetail(sale, items) {
       <article><span>Metodo</span><strong>${escapeHtml(paymentLabel(sale.payment_method || "efectivo"))}</strong></article>
       <article><span>Fecha</span><strong>${formatDateTime(sale.created_at)}</strong></article>
     </section>
+    ${status === "anulada" ? `<div class="voided-sale-banner"><strong>Venta anulada</strong><span>Esta operacion queda en auditoria y su stock fue reintegrado.</span></div>` : ""}
     <section class="sale-detail-card">
       <div>
         <span>Cliente</span>
@@ -3155,13 +3215,21 @@ function renderSaleDetail(sale, items) {
         <span>Impuesto</span>
         <strong>${money(sale.tax || 0)}</strong>
       </div>
+      <div>
+        <span>Productos</span>
+        <strong>${num(quantityTotal)} unidades / ${items.length} linea${items.length === 1 ? "" : "s"}</strong>
+      </div>
+      <div>
+        <span>Subtotal productos</span>
+        <strong>${money(itemTotal)}</strong>
+      </div>
       ${sale.note ? `<div><span>Observacion</span><strong>${escapeHtml(sale.note)}</strong></div>` : ""}
       ${Number(sale.balance_due || 0) > 0 ? `<div><span>Saldo pendiente</span><strong class="warn-text">${money(sale.balance_due)}</strong></div>` : ""}
     </section>
     <div class="sale-detail-items">
       ${items.map((item) => `
         <article>
-          <div><strong>${escapeHtml(item.product_name)}</strong><span>${num(item.quantity)} x ${money(item.unit_price)}</span></div>
+          <div><strong>${escapeHtml(item.product_name)}</strong><span>${num(item.quantity)} x ${money(item.unit_price)}${Number(item.discount || 0) > 0 ? ` / Desc. ${money(item.discount)}` : ""}</span></div>
           <b>${money(item.total)}</b>
         </article>
       `).join("") || empty("Sin productos registrados")}
