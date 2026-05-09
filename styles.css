@@ -11635,6 +11635,10 @@ body.app-ventas .pos-focus-mode .cart-line-controls {
   display: none;
 }
 
+.mobile-back-products {
+  display: none;
+}
+
 @media (max-width: 760px) {
   body.app-ventas .pos-toast {
     display: none;
@@ -11679,6 +11683,29 @@ body.app-ventas .pos-focus-mode .cart-line-controls {
     border-radius: 12px;
     padding: 0 12px;
     white-space: nowrap;
+  }
+
+  body.app-ventas .mobile-back-products {
+    display: inline-flex;
+    width: 100%;
+    min-height: 48px;
+    justify-content: center;
+    margin-bottom: 10px;
+    border-radius: 14px;
+    background: rgb(255 255 255 / 88%);
+  }
+
+  body.app-ventas .touch-pos-shell.pos-mode-products .mobile-back-products {
+    display: none;
+  }
+
+  body.app-ventas .touch-pos-shell.pos-mode-cart .touch-charge-button {
+    position: sticky;
+    bottom: 8px;
+    z-index: 3;
+    box-shadow:
+      0 22px 56px rgb(15 118 110 / 28%),
+      0 0 0 6px rgb(255 255 255 / 72%);
   }
 
   body.app-ventas .mobile-pos-toast {

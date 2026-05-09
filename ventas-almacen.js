@@ -679,7 +679,7 @@ function renderSell() {
       </div>
       <div class="mobile-pos-summary">
         <div><span>Carrito</span><strong>${num(saleCart.length)} item${saleCart.length === 1 ? "" : "s"} / ${money(totals.total)}</strong></div>
-        <button class="ghost-button" type="button" data-pos-panel="cart">Ver carrito</button>
+        <button class="ghost-button" type="button" data-pos-panel="${posMobilePanel === "cart" ? "products" : "cart"}">${posMobilePanel === "cart" ? "Agregar mas" : "Ver carrito"}</button>
         <button class="primary-button" type="button" id="mobileCheckoutBtn" ${saleCart.length && isCashOpen ? "" : "disabled"}>Cobrar</button>
       </div>
       ${posNotice ? `<div class="mobile-pos-toast">${escapeHtml(posNotice)}</div>` : ""}
@@ -736,6 +736,7 @@ function renderSell() {
         </div>
       </section>
       <section class="admin-panel pos-cart touch-cart-panel">
+        <button class="ghost-button mobile-back-products" type="button" data-pos-panel="products">Seguir agregando productos</button>
         <div class="touch-cart-head">
           <div><p class="eyebrow">Carrito actual</p><h3>${saleCart.length} producto${saleCart.length === 1 ? "" : "s"}</h3></div>
           <strong>${money(totals.total)}</strong>
