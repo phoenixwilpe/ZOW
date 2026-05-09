@@ -1936,6 +1936,15 @@ function renderInventory() {
   const inventoryValue = products.filter(isProductActive).reduce((sum, product) => sum + Number(product.stock || 0) * Number(product.cost_price || 0), 0);
   const potentialProfit = products.filter(isProductActive).reduce((sum, product) => sum + Number(product.stock || 0) * Math.max(Number(product.sale_price || 0) - Number(product.cost_price || 0), 0), 0);
   const highValueProducts = inventoryProducts.filter((product) => inventoryClass(product) === "A").length;
+  const expiringProducts = products
+    .filter((product) => isProductActive(product) && ["danger", "warning"].includes(expiryStatus(product).level))
+    .sort((a, b) => daysUntil(a.expires_at) - daysUntil(b.expires_at));
+  const overstockProducts = products
+    .filter((product) => isProductActive(product) && Number(product.min_stock || 0) > 0 && Number(product.stock || 0) >= Number(product.min_stock || 0) * 4)
+    .sort((a, b) => Number(b.stock || 0) * Number(b.cost_price || 0) - Number(a.stock || 0) * Number(a.cost_price || 0));
+  const marginRiskProducts = products
+    .filter((product) => isProductActive(product) && Number(product.sale_price || 0) <= Number(product.cost_price || 0))
+    .sort((a, b) => Number(b.stock || 0) * Number(b.cost_price || 0) - Number(a.stock || 0) * Number(a.cost_price || 0));
   const reorderProducts = products
     .filter((product) => isProductActive(product) && Number(product.stock || 0) <= Number(product.min_stock || 0))
     .sort((a, b) => {
@@ -1957,6 +1966,7 @@ function renderInventory() {
       <article><span>Productos clase A</span><strong>${num(highValueProducts)}</strong><small>Mayor valor inmovilizado</small></article>
       <article><span>Salud inventario</span><strong class="${outOfStock || lowStock ? "warn-text" : "ok-text"}">${outOfStock ? "Critico" : lowStock ? "Revisar" : "Estable"}</strong><small>Basado en stock minimo</small></article>
     </section>
+    ${renderInventoryRiskBoard({ expiringProducts, overstockProducts, marginRiskProducts })}
     <section class="admin-panel inventory-reorder-panel">
       <div class="admin-panel-head">
         <div><p class="eyebrow">Reposicion inteligente</p><h3>Productos que necesitan atencion</h3></div>
@@ -2021,6 +2031,45 @@ function renderInventoryReorderCard(product) {
       <strong>${money(estimated)}</strong>
     </div>
   </article>`;
+}
+
+function renderInventoryRiskBoard({ expiringProducts, overstockProducts, marginRiskProducts }) {
+  const totalRisk = expiringProducts.length + overstockProducts.length + marginRiskProducts.length;
+  return `<section class="admin-panel inventory-risk-board">
+    <div class="admin-panel-head">
+      <div><p class="eyebrow">Radar de inventario</p><h3>Riesgos que conviene revisar hoy</h3></div>
+      <span>${num(totalRisk)} alerta${totalRisk === 1 ? "" : "s"}</span>
+    </div>
+    <div class="inventory-risk-grid">
+      <article class="inventory-risk-column is-danger">
+        <div><strong>Vencimiento</strong><span>Prioriza salida o bloqueo antes de vender.</span></div>
+        ${expiringProducts.slice(0, 4).map((product) => renderInventoryRiskItem(product, expiryStatus(product).label, "danger")).join("") || empty("Sin vencimientos proximos")}
+      </article>
+      <article class="inventory-risk-column is-warning">
+        <div><strong>Exceso de stock</strong><span>Capital detenido por encima del minimo.</span></div>
+        ${overstockProducts.slice(0, 4).map((product) => renderInventoryRiskItem(product, `Stock ${num(product.stock)} / Min. ${num(product.min_stock)}`, "warning")).join("") || empty("Sin sobrestock relevante")}
+      </article>
+      <article class="inventory-risk-column is-info">
+        <div><strong>Precio y margen</strong><span>Productos vendidos sin ganancia visible.</span></div>
+        ${marginRiskProducts.slice(0, 4).map((product) => renderInventoryRiskItem(product, `Costo ${money(product.cost_price)} / Venta ${money(product.sale_price)}`, "info")).join("") || empty("Margenes saludables")}
+      </article>
+    </div>
+  </section>`;
+}
+
+function renderInventoryRiskItem(product, detail, type) {
+  const stockValue = Number(product.stock || 0) * Number(product.cost_price || 0);
+  return `<div class="inventory-risk-item is-${type}">
+    <div>
+      <strong>${escapeHtml(product.name)}</strong>
+      <span>${escapeHtml(product.code)} / ${escapeHtml(product.category || "Sin categoria")}</span>
+      <small>${escapeHtml(detail)} / Valor ${money(stockValue)}</small>
+    </div>
+    <div class="mini-action-row">
+      <button class="ghost-button" type="button" data-stock-history="${product.id}">Kardex</button>
+      ${can("manageInventory") ? `<button class="ghost-button" type="button" data-edit-product="${product.id}">Editar</button>` : ""}
+    </div>
+  </div>`;
 }
 
 function renderUsers() {
