@@ -11471,9 +11471,232 @@ body.app-ventas .pos-products {
   min-width: 0;
 }
 
+body.app-ventas .icon-text-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+body.app-ventas .ui-ico {
+  width: 24px;
+  height: 24px;
+  display: inline-grid;
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: 8px;
+  background: rgb(15 118 110 / 10%);
+  color: currentColor;
+  font-size: 0.76rem;
+  font-weight: 950;
+  line-height: 1;
+}
+
 body.app-ventas .touch-pos-shell {
+  position: relative;
   grid-template-columns: minmax(0, 1.42fr) minmax(360px, 0.78fr);
 }
+
+body.app-ventas .touch-panel,
+body.app-ventas .touch-cart-panel {
+  position: relative;
+  border-color: rgb(15 118 110 / 12%);
+  background:
+    linear-gradient(145deg, rgb(255 255 255 / 94%), rgb(248 253 250 / 82%));
+  box-shadow:
+    0 22px 56px rgb(8 30 26 / 9%),
+    inset 0 1px 0 rgb(255 255 255 / 82%);
+}
+
+body.app-ventas .touch-panel {
+  overflow: hidden;
+}
+
+body.app-ventas .touch-panel::before,
+body.app-ventas .touch-cart-panel::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto;
+  height: 4px;
+  background: linear-gradient(90deg, #10b981, #0f766e, #f59e0b);
+  opacity: 0.75;
+}
+
+body.app-ventas .touch-pos-head,
+body.app-ventas .touch-cart-head {
+  align-items: center;
+  border-bottom: 1px solid rgb(15 118 110 / 10%);
+  padding-bottom: 12px;
+}
+
+body.app-ventas .touch-cart-head > strong {
+  padding: 10px 14px;
+  border-radius: 14px;
+  background: linear-gradient(135deg, #10251f, #0f766e 70%, #f59e0b);
+  color: white;
+  box-shadow: 0 14px 30px rgb(15 118 110 / 18%);
+}
+
+body.app-ventas .touch-shortcuts {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+body.app-ventas .touch-shortcuts span {
+  border: 1px solid rgb(15 118 110 / 10%);
+  border-radius: 999px;
+  padding: 6px 9px;
+  background: rgb(255 255 255 / 72%);
+  color: var(--muted);
+  font-size: 0.74rem;
+  font-weight: 950;
+}
+
+body.app-ventas .pos-quick-status article {
+  position: relative;
+  overflow: hidden;
+  border-color: rgb(15 118 110 / 12%);
+  background:
+    radial-gradient(circle at 92% 12%, rgb(245 158 11 / 11%), transparent 36%),
+    linear-gradient(145deg, rgb(255 255 255 / 96%), rgb(236 253 245 / 74%));
+}
+
+body.app-ventas .pos-quick-status article::after {
+  content: "";
+  position: absolute;
+  right: -18px;
+  bottom: -22px;
+  width: 62px;
+  aspect-ratio: 1;
+  border-radius: 18px;
+  background: rgb(16 185 129 / 10%);
+  transform: rotate(12deg);
+}
+
+body.app-ventas .pos-search-row {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  margin: 0 -6px;
+  padding: 6px;
+  border: 1px solid rgb(15 118 110 / 9%);
+  border-radius: 18px;
+  background: rgb(248 253 250 / 88%);
+  backdrop-filter: blur(14px);
+}
+
+body.app-ventas .touch-search input {
+  min-height: 56px;
+  border-radius: 14px;
+  font-weight: 900;
+}
+
+body.app-ventas .scanner-status,
+body.app-ventas .pos-input-hint {
+  border-radius: 14px;
+}
+
+body.app-ventas .pos-category-rail {
+  display: flex;
+  gap: 9px;
+  overflow-x: auto;
+  padding-bottom: 2px;
+  scrollbar-width: thin;
+}
+
+body.app-ventas .pos-category-rail button {
+  flex: 0 0 auto;
+  min-height: 42px;
+  border: 1px solid rgb(15 118 110 / 14%);
+  border-radius: 999px;
+  padding: 0 17px;
+  background: rgb(255 255 255 / 82%);
+  color: var(--muted);
+  font-weight: 950;
+  transition: transform 140ms ease, background 140ms ease, color 140ms ease, box-shadow 140ms ease;
+}
+
+body.app-ventas .pos-category-rail button:hover,
+body.app-ventas .pos-category-rail button.is-active {
+  transform: translateY(-1px);
+  background: linear-gradient(135deg, #10b981, #0f766e);
+  color: white;
+  box-shadow: 0 12px 26px rgb(15 118 110 / 16%);
+}
+
+body.app-ventas .pos-section-block {
+  border-color: rgb(15 118 110 / 10%);
+  background:
+    linear-gradient(145deg, rgb(255 255 255 / 70%), rgb(236 253 245 / 46%));
+}
+
+body.app-ventas .pos-section-title {
+  align-items: start;
+  border-bottom-color: rgb(15 118 110 / 12%);
+}
+
+body.app-ventas .pos-section-title strong {
+  color: #10251f;
+}
+
+body.app-ventas .quick-action-row .ghost-button {
+  min-height: 48px;
+  border-radius: 14px;
+  background: rgb(255 255 255 / 80%);
+}
+
+body.app-ventas .touch-charge-button {
+  position: relative;
+  overflow: hidden;
+  min-height: 72px;
+  border-radius: 20px;
+  font-size: clamp(1.04rem, 2vw, 1.28rem);
+  box-shadow:
+    0 22px 54px rgb(15 118 110 / 26%),
+    inset 0 1px 0 rgb(255 255 255 / 24%);
+}
+
+body.app-ventas .touch-charge-button::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(110deg, transparent 0 35%, rgb(255 255 255 / 18%) 42%, transparent 52% 100%);
+  transform: translateX(-110%);
+  transition: transform 420ms ease;
+}
+
+body.app-ventas .touch-charge-button:hover::after {
+  transform: translateX(110%);
+}
+
+body.app-ventas .pos-ambient-strip {
+  position: absolute;
+  inset: 12px;
+  z-index: -1;
+  overflow: hidden;
+  border-radius: 28px;
+  pointer-events: none;
+}
+
+body.app-ventas .pos-ambient-strip span {
+  position: absolute;
+  width: 160px;
+  height: 42px;
+  border: 1px solid rgb(15 118 110 / 11%);
+  border-radius: 18px;
+  background:
+    linear-gradient(90deg, transparent 48%, rgb(15 118 110 / 8%) 49% 51%, transparent 52%),
+    repeating-linear-gradient(90deg, rgb(15 118 110 / 10%) 0 2px, transparent 2px 10px);
+  opacity: 0.5;
+  transform: rotate(-14deg);
+}
+
+body.app-ventas .pos-ambient-strip span:nth-child(1) { left: 4%; top: 3%; }
+body.app-ventas .pos-ambient-strip span:nth-child(2) { right: 34%; top: 9%; width: 110px; opacity: 0.28; }
+body.app-ventas .pos-ambient-strip span:nth-child(3) { left: 28%; bottom: 8%; width: 130px; opacity: 0.32; }
+body.app-ventas .pos-ambient-strip span:nth-child(4) { right: 4%; bottom: 14%; opacity: 0.38; }
 
 body.app-ventas .touch-cart-panel {
   position: sticky;
@@ -11494,13 +11717,42 @@ body.app-ventas .pos-products-block .touch-product-grid {
 }
 
 body.app-ventas .touch-product-card {
+  position: relative;
   grid-template-columns: 1fr;
-  grid-template-rows: auto auto 1fr auto;
+  grid-template-rows: auto auto 1fr auto auto;
   align-content: stretch;
   align-items: start;
   gap: 9px;
-  min-height: 168px;
-  padding: 14px;
+  min-height: 184px;
+  padding: 14px 14px 12px;
+  border-color: rgb(15 118 110 / 14%);
+  background:
+    radial-gradient(circle at 92% 12%, rgb(16 185 129 / 12%), transparent 30%),
+    linear-gradient(145deg, rgb(255 255 255 / 96%), rgb(240 253 250 / 82%));
+  box-shadow:
+    0 14px 34px rgb(8 30 26 / 8%),
+    inset 0 1px 0 rgb(255 255 255 / 86%);
+  transition: transform 150ms ease, box-shadow 150ms ease, border-color 150ms ease, filter 150ms ease;
+  isolation: isolate;
+}
+
+body.app-ventas .touch-product-card:hover,
+body.app-ventas .touch-product-card:focus-visible {
+  transform: translateY(-3px);
+  border-color: rgb(16 185 129 / 40%);
+  box-shadow:
+    0 20px 48px rgb(8 30 26 / 12%),
+    0 0 0 5px rgb(16 185 129 / 8%);
+}
+
+body.app-ventas .touch-product-card:active {
+  transform: translateY(0) scale(0.985);
+}
+
+body.app-ventas .touch-product-card:disabled {
+  cursor: not-allowed;
+  filter: grayscale(0.35);
+  opacity: 0.68;
 }
 
 body.app-ventas .touch-product-card > * {
@@ -11509,10 +11761,51 @@ body.app-ventas .touch-product-card > * {
   z-index: 1;
 }
 
+body.app-ventas .product-visual {
+  position: absolute;
+  right: 12px;
+  bottom: 12px;
+  z-index: 0;
+  width: 58px;
+  height: 58px;
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 5px;
+  opacity: 0.7;
+  transform: rotate(8deg);
+}
+
+body.app-ventas .product-visual i {
+  border-radius: 9px;
+  background:
+    linear-gradient(135deg, rgb(16 185 129 / 28%), rgb(245 158 11 / 18%));
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 54%);
+}
+
+body.app-ventas .product-visual i:nth-child(1) {
+  grid-row: span 2;
+}
+
+body.app-ventas .product-visual i:nth-child(3) {
+  background: linear-gradient(135deg, rgb(245 158 11 / 24%), rgb(16 185 129 / 18%));
+}
+
+body.app-ventas .combo-visual i {
+  background: linear-gradient(135deg, rgb(34 197 94 / 32%), rgb(14 165 233 / 16%));
+}
+
 body.app-ventas .touch-product-card .product-code {
-  max-width: 100%;
+  width: max-content;
+  max-width: calc(100% - 56px);
   margin: 0;
+  padding: 5px 9px;
+  border: 1px solid rgb(15 118 110 / 10%);
+  border-radius: 999px;
+  background: rgb(255 255 255 / 76%);
   overflow: hidden;
+  color: var(--accent-dark);
+  font-size: 0.72rem;
+  font-weight: 950;
   text-overflow: ellipsis;
 }
 
@@ -11543,12 +11836,58 @@ body.app-ventas .touch-product-card .product-meta small {
   margin: 0;
 }
 
+body.app-ventas .stock-chip {
+  width: max-content;
+  max-width: 100%;
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: rgb(16 185 129 / 10%);
+  color: #0f766e;
+  font-weight: 950;
+}
+
+body.app-ventas .stock-chip.is-warning {
+  background: rgb(245 158 11 / 13%);
+  color: #92400e;
+}
+
+body.app-ventas .stock-chip.is-danger {
+  background: rgb(239 68 68 / 12%);
+  color: #991b1b;
+}
+
 body.app-ventas .touch-product-card b {
   justify-self: start;
   max-width: 100%;
   margin: 0;
+  padding: 8px 12px;
+  border-radius: 999px;
+  background: linear-gradient(135deg, #10251f, #0f766e);
+  color: white;
+  font-size: 1.08rem;
   overflow-wrap: anywhere;
   white-space: normal;
+  box-shadow: 0 10px 22px rgb(8 30 26 / 16%);
+}
+
+body.app-ventas .product-add-hint {
+  justify-self: end;
+  margin-top: -44px;
+  padding: 7px 10px;
+  border-radius: 999px;
+  background: rgb(255 255 255 / 78%);
+  color: var(--muted);
+  font-size: 0.76rem;
+  font-weight: 950;
+  opacity: 0;
+  transform: translateY(6px);
+  transition: opacity 150ms ease, transform 150ms ease;
+}
+
+body.app-ventas .touch-product-card:hover .product-add-hint,
+body.app-ventas .touch-product-card:focus-visible .product-add-hint {
+  opacity: 1;
+  transform: translateY(0);
 }
 
 body.app-ventas .touch-cart-panel .pos-cart-list {
@@ -11678,8 +12017,59 @@ body.app-ventas .pos-customer-row select {
 }
 
 @media (max-width: 760px) {
+  body.app-ventas .pos-ambient-strip {
+    display: none;
+  }
+
+  body.app-ventas .pos-mobile-switch {
+    position: sticky;
+    top: 8px;
+    z-index: 5;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    padding: 7px;
+    border: 1px solid rgb(15 118 110 / 14%);
+    border-radius: 18px;
+    background: rgb(248 253 250 / 92%);
+    box-shadow: 0 16px 34px rgb(8 30 26 / 10%);
+    backdrop-filter: blur(14px);
+  }
+
+  body.app-ventas .pos-mobile-switch button {
+    min-height: 46px;
+    border: 0;
+    border-radius: 13px;
+    background: transparent;
+    color: var(--muted);
+    font-weight: 950;
+  }
+
+  body.app-ventas .pos-mobile-switch button.is-active {
+    background: linear-gradient(135deg, #10b981, #0f766e);
+    color: white;
+    box-shadow: 0 10px 24px rgb(15 118 110 / 18%);
+  }
+
+  body.app-ventas .touch-shortcuts {
+    justify-content: flex-start;
+  }
+
+  body.app-ventas .pos-search-row {
+    top: 68px;
+    grid-template-columns: 1fr;
+  }
+
   body.app-ventas .touch-pos-shell {
     overflow: visible;
+  }
+
+  body.app-ventas .touch-product-card {
+    min-height: 164px;
+  }
+
+  body.app-ventas .product-add-hint {
+    display: none;
   }
 
   body.app-ventas .pos-products-block .touch-product-grid {

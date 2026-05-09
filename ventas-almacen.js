@@ -674,9 +674,12 @@ function renderSell() {
     .filter((product) => product && Number(product.stock || 0) <= Number(product.min_stock || 0));
   mainList().innerHTML = `
     <section class="pos-shell touch-pos-shell pos-mode-${posMobilePanel}">
+      <div class="pos-ambient-strip" aria-hidden="true">
+        <span></span><span></span><span></span><span></span>
+      </div>
       <div class="pos-mobile-switch" aria-label="Vista de venta movil">
-        <button class="${posMobilePanel === "products" ? "is-active" : ""}" type="button" data-pos-panel="products">Productos</button>
-        <button class="${posMobilePanel === "cart" ? "is-active" : ""}" type="button" data-pos-panel="cart">Carrito <strong>${saleCart.length}</strong></button>
+        <button class="${posMobilePanel === "products" ? "is-active" : ""}" type="button" data-pos-panel="products"><span class="ui-ico">#</span>Productos</button>
+        <button class="${posMobilePanel === "cart" ? "is-active" : ""}" type="button" data-pos-panel="cart"><span class="ui-ico">$</span>Carrito <strong>${saleCart.length}</strong></button>
       </div>
       <div class="mobile-pos-summary">
         <div><span>Carrito</span><strong>${num(saleCart.length)} item${saleCart.length === 1 ? "" : "s"} / ${money(totals.total)}</strong></div>
@@ -702,13 +705,13 @@ function renderSell() {
         ${!isCashOpen ? `
           <div class="pos-cash-warning">
             <div><strong>Abre una caja antes de vender</strong><span>El sistema necesita una caja activa para registrar pagos y cierres.</span></div>
-            <button class="primary-button" type="button" id="goOpenCashBtn">Abrir caja</button>
+            <button class="primary-button icon-text-button" type="button" id="goOpenCashBtn"><span class="ui-ico">+</span>Abrir caja</button>
           </div>
         ` : ""}
         <div class="pos-search-row">
           <label class="toolbar-search touch-search">Buscar o escanear<input id="productSearchInput" type="search" value="${escapeHtml(productSearch)}" placeholder="Codigo, barras o nombre del producto" /></label>
-          <button class="primary-button touch-action" type="button" id="scanAddBtn">Agregar</button>
-          ${productSearch ? `<button class="ghost-button touch-action" type="button" id="clearSearchBtn">Limpiar</button>` : ""}
+          <button class="primary-button touch-action icon-text-button" type="button" id="scanAddBtn"><span class="ui-ico">+</span>Agregar</button>
+          ${productSearch ? `<button class="ghost-button touch-action icon-text-button" type="button" id="clearSearchBtn"><span class="ui-ico">x</span>Limpiar</button>` : ""}
         </div>
         <div class="scanner-status"><strong>Lector listo</strong><span>F2 enfoca / escanea y Enter agrega</span></div>
         <div class="pos-input-hint">Acepta cantidad rapida: <strong>3x codigo</strong>, <strong>codigo*3</strong> o lector de barras USB.</div>
@@ -737,7 +740,7 @@ function renderSell() {
         </div>
       </section>
       <section class="admin-panel pos-cart touch-cart-panel">
-        <button class="ghost-button mobile-back-products" type="button" data-pos-panel="products">Seguir agregando productos</button>
+        <button class="ghost-button mobile-back-products icon-text-button" type="button" data-pos-panel="products"><span class="ui-ico">+</span>Seguir agregando productos</button>
         <div class="touch-cart-head">
           <div><p class="eyebrow">Carrito actual</p><h3>${saleCart.length} producto${saleCart.length === 1 ? "" : "s"}</h3></div>
           <strong>${money(totals.total)}</strong>
@@ -745,7 +748,7 @@ function renderSell() {
         <form class="admin-form" id="saleForm">
           <div class="pos-customer-row">
             <label class="touch-customer-select">Cliente<select id="saleCustomer"><option value="">Cliente sin registrar</option>${customers.map((c) => `<option value="${c.id}" ${c.id === saleCustomerId ? "selected" : ""}>${escapeHtml(c.name)}</option>`).join("")}</select></label>
-            <button class="ghost-button" type="button" id="quickCustomerBtn">Nuevo cliente</button>
+            <button class="ghost-button icon-text-button" type="button" id="quickCustomerBtn"><span class="ui-ico">+</span>Nuevo cliente</button>
           </div>
           <div class="pos-sale-options">
             <label>Descuento general<input id="saleGlobalDiscount" type="number" min="0" step="0.01" value="${Number(saleGlobalDiscount || 0)}" ${storeSettings.allowDiscounts ? "" : "disabled"} /></label>
@@ -768,14 +771,14 @@ function renderSell() {
           <div class="pos-section-block pos-actions-block">
             <div class="pos-section-title"><strong>Acciones de venta</strong><span>Gestiona la operacion sin salir de caja</span></div>
             <div class="quick-action-row touch-sale-actions">
-              <button class="ghost-button" type="button" id="newSaleBtn">Nueva</button>
-              <button class="ghost-button" type="button" id="quickCashBtn" ${saleCart.length && isCashOpen ? "" : "disabled"}>Efectivo exacto</button>
-              <button class="ghost-button" type="button" id="suspendSaleBtn">Suspender</button>
-              <button class="ghost-button" type="button" id="recoverSaleBtn">Recuperar (${suspendedSales.length})</button>
-              <button class="ghost-button danger-action" type="button" id="cancelSaleBtn">Cancelar</button>
+              <button class="ghost-button icon-text-button" type="button" id="newSaleBtn"><span class="ui-ico">+</span>Nueva</button>
+              <button class="ghost-button icon-text-button" type="button" id="quickCashBtn" ${saleCart.length && isCashOpen ? "" : "disabled"}><span class="ui-ico">$</span>Efectivo exacto</button>
+              <button class="ghost-button icon-text-button" type="button" id="suspendSaleBtn"><span class="ui-ico">||</span>Suspender</button>
+              <button class="ghost-button icon-text-button" type="button" id="recoverSaleBtn"><span class="ui-ico">R</span>Recuperar (${suspendedSales.length})</button>
+              <button class="ghost-button danger-action icon-text-button" type="button" id="cancelSaleBtn"><span class="ui-ico">x</span>Cancelar</button>
             </div>
           </div>
-          <button class="primary-button touch-charge-button" type="button" id="chargeSaleBtn" ${saleCart.length && isCashOpen ? "" : "disabled"}>${isCashOpen ? `Cobrar ${money(totals.total)}` : "Abre caja para cobrar"}</button>
+          <button class="primary-button touch-charge-button icon-text-button" type="button" id="chargeSaleBtn" ${saleCart.length && isCashOpen ? "" : "disabled"}><span class="ui-ico">$</span>${isCashOpen ? `Cobrar ${money(totals.total)}` : "Abre caja para cobrar"}</button>
         </form>
       </section>
     </section>
@@ -2139,11 +2142,14 @@ function renderSellProduct(product) {
   const blocked = stock <= 0 || expiry.level === "danger";
   const productCode = product.barcode ? `${product.code} / ${product.barcode}` : product.code;
   const recentClass = posFeedbackTargetId === product.id ? " is-recently-added" : "";
+  const stockLevel = stock <= 0 ? "danger" : stock <= Number(product.min_stock || 0) || expiry.level === "warning" ? "warning" : "ok";
   return `<button class="pos-product-card touch-product-card${recentClass}" type="button" data-add-product="${product.id}" ${blocked ? "disabled" : ""}>
+    <span class="product-visual" aria-hidden="true"><i></i><i></i><i></i></span>
     <span class="product-code">${escapeHtml(productCode)}</span>
     <strong>${escapeHtml(product.name)}</strong>
-    <span class="product-meta"><span>${escapeHtml(product.category || "Sin categoria")}</span><small class="${stock <= Number(product.min_stock || 0) || expiry.level === "warning" ? "warn-text" : ""}">Stock ${num(stock)}${expiry.level !== "none" ? ` / ${escapeHtml(expiry.label)}` : ""}</small></span>
+    <span class="product-meta"><span>${escapeHtml(product.category || "Sin categoria")}</span><small class="stock-chip is-${stockLevel}">Stock ${num(stock)}${expiry.level !== "none" ? ` / ${escapeHtml(expiry.label)}` : ""}</small></span>
     <b>${money(product.sale_price)}</b>
+    <span class="product-add-hint">Agregar</span>
   </button>`;
 }
 
@@ -2152,6 +2158,7 @@ function renderSellCombo(combo) {
   const baseTotal = combo.items.reduce((sum, item) => sum + Number(item.salePrice || 0) * Number(item.quantity || 0), 0);
   const recentClass = posFeedbackTargetId === combo.id ? " is-recently-added" : "";
   return `<button class="pos-product-card touch-product-card combo-product-card${recentClass}" type="button" data-add-combo="${combo.id}" ${available <= 0 ? "disabled" : ""}>
+    <span class="product-visual combo-visual" aria-hidden="true"><i></i><i></i><i></i></span>
     <span class="product-code">${escapeHtml(combo.code)}</span>
     <strong>${escapeHtml(combo.name)}</strong>
     <span class="product-meta"><span>${combo.items.length} productos</span><small>Disponibles ${num(available)}</small></span>
