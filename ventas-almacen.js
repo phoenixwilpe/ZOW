@@ -3201,7 +3201,7 @@ function printTicket(sale, items) {
   <div class="ticket-box"><div class="row"><span>Subtotal</span><strong>${money(sale.subtotal)}</strong></div><div class="row"><span>Descuento</span><strong>${money(sale.discount)}</strong></div><div class="row"><span>Impuesto</span><strong>${money(sale.tax || 0)}</strong></div><div class="row total"><span>Total</span><strong>${money(sale.total)}</strong></div><div class="row"><span>Metodo</span><strong>${escapeHtml(paymentLabel(sale.payment_method || paymentDraft.method || "efectivo"))}</strong></div><div class="row"><span>Pagado</span><strong>${money(sale.amount_paid || sale.cash_received || 0)}</strong></div><div class="row"><span>Cambio</span><strong>${money(sale.change_amount)}</strong></div>${Number(sale.balance_due || 0) > 0 ? `<div class="row"><span>Saldo</span><strong>${money(sale.balance_due)}</strong></div>` : ""}</div>
   ${renderTicketPaymentDetail(sale)}
   ${sale.note ? `<p class="muted"><strong>Obs.:</strong> ${escapeHtml(sale.note)}</p>` : ""}
-  <div class="qr-line"><div class="qr"></div><div><div class="barcode"></div><p class="muted">Codigo: ${escapeHtml(sale.code)}</p></div></div><p class="foot">${escapeHtml(storeSettings.ticketNote || "Gracias por su compra")}</p><p class="foot">Sistema ZOW SAAS / Wilmar Peinado B.</p></body></html>`);
+  <div class="qr-line"><div class="qr"></div><div><div class="barcode"></div><p class="muted">Codigo: ${escapeHtml(sale.code)}</p></div></div><p class="foot">${escapeHtml(storeSettings.ticketNote || "Gracias por su compra")}</p><p class="foot">Comprobante generado por Sistema ZOW SAAS.</p></body></html>`);
   printable.document.close();
   printable.focus();
 }
@@ -3639,7 +3639,7 @@ function printPurchaseOrder() {
   </tbody></table>
   <div class="total"><div><span>Total estimado</span><strong>${money(total)}</strong></div></div>
   <section class="signs"><div class="sign">Solicitado por</div><div class="sign">Autorizado por</div><div class="sign">Recibido almacen</div></section>
-  <p class="foot">Orden generada por Sistema ZOW SAAS / Wilmar Peinado B.</p>
+  <p class="foot">Orden generada por Sistema ZOW SAAS.</p>
   </body></html>`);
   printable.document.close();
   printable.focus();
