@@ -12827,6 +12827,10 @@ body.app-ventas .pos-focus-mode .cart-line-controls {
   display: none;
 }
 
+.pos-mini-cart-preview {
+  display: none;
+}
+
 .mobile-back-products {
   display: none;
 }
@@ -12888,6 +12892,74 @@ body.app-ventas .pos-focus-mode .cart-line-controls {
 
   body.app-ventas .mobile-pos-summary .primary-button {
     box-shadow: 0 14px 30px rgb(15 118 110 / 26%);
+  }
+
+  body.app-ventas .pos-mini-cart-preview {
+    display: grid;
+    gap: 10px;
+    margin: 0 0 12px;
+    padding: 12px;
+    border: 1px solid rgb(15 118 110 / 13%);
+    border-radius: 18px;
+    background:
+      radial-gradient(circle at 94% 12%, rgb(245 158 11 / 16%), transparent 34%),
+      linear-gradient(135deg, rgb(255 255 255 / 92%), rgb(236 253 245 / 82%));
+    box-shadow: 0 14px 34px rgb(8 30 26 / 9%);
+  }
+
+  body.app-ventas .mini-cart-preview-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+  }
+
+  body.app-ventas .mini-cart-preview-head span,
+  body.app-ventas .mini-cart-preview-list small {
+    color: var(--muted);
+    font-size: 0.76rem;
+    font-weight: 900;
+  }
+
+  body.app-ventas .mini-cart-preview-head strong {
+    display: block;
+    color: #10251f;
+    font-size: 1.32rem;
+  }
+
+  body.app-ventas .mini-cart-preview-list {
+    display: grid;
+    gap: 6px;
+  }
+
+  body.app-ventas .mini-cart-preview-list div {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 10px;
+    align-items: center;
+    padding: 7px 9px;
+    border: 1px solid rgb(15 118 110 / 9%);
+    border-radius: 12px;
+    background: rgb(255 255 255 / 72%);
+  }
+
+  body.app-ventas .mini-cart-preview-list span {
+    min-width: 0;
+    overflow: hidden;
+    color: #10251f;
+    font-weight: 900;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  body.app-ventas .mini-cart-preview-list strong {
+    color: #0f766e;
+    font-weight: 950;
+  }
+
+  body.app-ventas .pos-mini-cart-preview .primary-button {
+    min-height: 50px;
+    border-radius: 14px;
   }
 
   body.app-ventas .mobile-back-products {

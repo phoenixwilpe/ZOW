@@ -753,6 +753,7 @@ function renderSell() {
             <button class="primary-button icon-text-button" type="button" id="goOpenCashBtn"><span class="ui-ico">+</span>Abrir caja</button>
           </div>
         ` : ""}
+        ${saleCart.length ? renderPosMiniCartPreview(totals, isCashOpen) : ""}
         <div class="pos-search-row">
           <label class="toolbar-search touch-search">Buscar o escanear<input id="productSearchInput" type="search" value="${escapeHtml(productSearch)}" placeholder="Codigo, barras o nombre del producto" /></label>
           <button class="primary-button touch-action icon-text-button" type="button" id="scanAddBtn"><span class="ui-ico">+</span>Agregar</button>
@@ -866,6 +867,7 @@ function renderSell() {
   document.querySelector("[data-last-sale-reprint]")?.addEventListener("click", () => {
     if (lastSaleReceipt) printTicket(lastSaleReceipt.sale, lastSaleReceipt.items);
   });
+  document.querySelector("[data-mini-checkout]")?.addEventListener("click", openPaymentModal);
   document.querySelectorAll("[data-pos-panel]").forEach((button) => button.addEventListener("click", () => {
     posMobilePanel = button.dataset.posPanel || "products";
     renderMain();
@@ -2328,6 +2330,22 @@ function renderLastSaleReceipt() {
     </div>
     <button class="ghost-button" type="button" data-last-sale-reprint>Reimprimir</button>
   </article>`;
+}
+
+function renderPosMiniCartPreview(totals, isCashOpen) {
+  const previewItems = saleCart.slice(-3).reverse();
+  const hiddenCount = Math.max(saleCart.length - previewItems.length, 0);
+  return `<aside class="pos-mini-cart-preview" aria-label="Resumen rapido del carrito">
+    <div class="mini-cart-preview-head">
+      <div><span>Carrito activo</span><strong>${money(totals.total)}</strong></div>
+      <button class="ghost-button" type="button" data-pos-panel="cart">Ver detalle</button>
+    </div>
+    <div class="mini-cart-preview-list">
+      ${previewItems.map((item) => `<div><span>${num(item.quantity)}x ${escapeHtml(item.name)}</span><strong>${money(Math.max(item.quantity * item.salePrice - Number(item.discount || 0), 0))}</strong></div>`).join("")}
+      ${hiddenCount ? `<small>+ ${num(hiddenCount)} producto${hiddenCount === 1 ? "" : "s"} mas en carrito</small>` : ""}
+    </div>
+    <button class="primary-button icon-text-button" type="button" data-mini-checkout ${isCashOpen ? "" : "disabled"}><span class="ui-ico">$</span>Cobrar ahora</button>
+  </aside>`;
 }
 
 function renderCartItem(item) {
