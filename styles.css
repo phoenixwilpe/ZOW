@@ -11080,8 +11080,91 @@ body.app-ventas .quick-cash-grid {
 }
 
 body.app-ventas .quick-cash-grid button {
+  display: grid;
+  align-content: center;
+  gap: 5px;
+  text-align: left;
   color: #10251f;
   font-size: 1.04rem;
+}
+
+body.app-ventas .quick-cash-grid button span {
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+body.app-ventas .quick-cash-grid button strong {
+  color: #10251f;
+  font-size: clamp(1rem, 2.4vw, 1.34rem);
+}
+
+body.app-ventas .payment-helper-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  color: var(--muted);
+  font-size: 0.86rem;
+  font-weight: 900;
+}
+
+body.app-ventas .payment-helper-row button {
+  border: 1px solid rgb(15 118 110 / 16%);
+  border-radius: 999px;
+  padding: 8px 12px;
+  background: rgb(255 255 255 / 82%);
+  color: var(--accent-dark);
+  font-weight: 900;
+}
+
+body.app-ventas .payment-flow-summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+body.app-ventas .payment-flow-summary article {
+  min-width: 0;
+  border: 1px solid rgb(15 118 110 / 12%);
+  border-radius: 16px;
+  padding: 12px;
+  background:
+    linear-gradient(145deg, rgb(255 255 255 / 95%), rgb(236 253 245 / 72%));
+  box-shadow: 0 12px 28px rgb(8 30 26 / 7%);
+}
+
+body.app-ventas .payment-flow-summary span {
+  display: block;
+  margin-bottom: 4px;
+  color: var(--muted);
+  font-size: 0.75rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+body.app-ventas .payment-flow-summary strong {
+  display: block;
+  overflow: hidden;
+  color: #10251f;
+  font-size: clamp(1rem, 2vw, 1.24rem);
+  font-weight: 950;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+body.app-ventas .payment-flow-summary article.is-warning {
+  border-color: rgb(245 158 11 / 32%);
+  background: linear-gradient(145deg, rgb(255 251 235 / 95%), rgb(254 243 199 / 72%));
+}
+
+body.app-ventas .payment-flow-summary article.is-warning strong {
+  color: #92400e;
+}
+
+body.app-ventas .payment-flow-summary article.is-ok {
+  border-color: rgb(16 185 129 / 24%);
 }
 
 body.app-ventas .touch-payment-fields {
@@ -11180,6 +11263,7 @@ body.app-ventas .cloud-safe-note {
   body.app-ventas .modal-body .form-grid,
   body.app-ventas .touch-payment-fields,
   body.app-ventas .touch-payment-actions,
+  body.app-ventas .payment-flow-summary,
   body.app-ventas .sale-detail-card,
   body.app-ventas .sale-detail-summary,
   body.app-ventas .receivable-payment-card {
@@ -11209,12 +11293,28 @@ body.app-ventas .cloud-safe-note {
   body.app-ventas .modal-actions > * {
     width: 100%;
   }
+
+  body.app-ventas .touch-payment-actions {
+    position: sticky;
+    bottom: -14px;
+    z-index: 4;
+    margin: 0 -4px -4px;
+    padding: 10px 4px 4px;
+    background:
+      linear-gradient(180deg, rgb(248 253 250 / 0%), rgb(248 253 250 / 94%) 22%, rgb(248 253 250));
+    backdrop-filter: blur(12px);
+  }
 }
 
 @media (max-width: 430px) {
   body.app-ventas .touch-payment-methods,
   body.app-ventas .quick-cash-grid {
     grid-template-columns: 1fr;
+  }
+
+  body.app-ventas .payment-helper-row {
+    align-items: stretch;
+    flex-direction: column;
   }
 
   body.app-ventas .touch-payment-total strong {
