@@ -2131,11 +2131,21 @@ function renderCartItem(item) {
   const minStock = Number(product?.min_stock || 0);
   const stockClass = stockAfterSale < 0 ? "danger-text" : stockAfterSale <= minStock ? "warn-text" : "ok-text";
   return `<article class="cart-line touch-cart-line">
-    <div class="cart-item-name"><strong>${escapeHtml(item.name)}</strong><span>${money(item.salePrice)} c/u</span><small class="${stockClass}">Stock despues: ${num(stockAfterSale)}</small>${item.comboName ? `<small class="ok-text">Combo: ${escapeHtml(item.comboName)}</small>` : ""}${item.promotionName ? `<small class="ok-text">${escapeHtml(item.promotionName)}</small>` : ""}</div>
-    <div class="cart-qty touch-qty"><button class="ghost-button" type="button" data-cart-dec="${item.productId}">-</button><strong>${item.quantity}</strong><button class="ghost-button" type="button" data-cart-inc="${item.productId}">+</button></div>
-    <label>Descuento<input type="number" min="0" step="0.01" value="${Number(lineDiscount || 0)}" data-cart-discount="${item.productId}" ${storeSettings.allowDiscounts && !item.comboId ? "" : "disabled"} /></label>
-    <strong>${money(Math.max(lineSubtotal - lineDiscount, 0))}</strong>
-    <button class="ghost-button danger-action" type="button" data-remove-cart="${item.productId}">Quitar</button>
+    <div class="cart-item-name">
+      <strong>${escapeHtml(item.name)}</strong>
+      <span>${money(item.salePrice)} c/u</span>
+      <small class="${stockClass}">Stock despues: ${num(stockAfterSale)}</small>
+      ${item.comboName ? `<small class="ok-text">Combo: ${escapeHtml(item.comboName)}</small>` : ""}
+      ${item.promotionName ? `<small class="ok-text">${escapeHtml(item.promotionName)}</small>` : ""}
+    </div>
+    <div class="cart-line-controls">
+      <div class="cart-qty touch-qty"><button class="ghost-button" type="button" data-cart-dec="${item.productId}" aria-label="Restar cantidad">-</button><strong>${item.quantity}</strong><button class="ghost-button" type="button" data-cart-inc="${item.productId}" aria-label="Sumar cantidad">+</button></div>
+      <label class="cart-discount-field">Descuento<input type="number" min="0" step="0.01" value="${Number(lineDiscount || 0)}" data-cart-discount="${item.productId}" ${storeSettings.allowDiscounts && !item.comboId ? "" : "disabled"} /></label>
+    </div>
+    <div class="cart-line-footer">
+      <strong>${money(Math.max(lineSubtotal - lineDiscount, 0))}</strong>
+      <button class="ghost-button danger-action" type="button" data-remove-cart="${item.productId}">Quitar</button>
+    </div>
   </article>`;
 }
 

@@ -11505,3 +11505,108 @@ body.app-ventas .ventas-touch-shell.pos-focus-mode[data-active-view="sell"] .tou
   }
 }
 
+/* Faster cart lines for daily cashier work. */
+body.app-ventas .touch-cart-line {
+  gap: 12px;
+  padding: 12px;
+}
+
+body.app-ventas .cart-item-name {
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 6px 10px;
+}
+
+body.app-ventas .cart-item-name strong {
+  min-width: 0;
+  overflow: hidden;
+  color: #10251f;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+body.app-ventas .cart-item-name > span {
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: rgb(16 185 129 / 10%);
+  color: #0f766e;
+  font-size: 0.78rem;
+  font-weight: 950;
+  white-space: nowrap;
+}
+
+body.app-ventas .cart-line-controls {
+  display: grid;
+  grid-template-columns: minmax(170px, 1fr) minmax(112px, 0.64fr);
+  gap: 10px;
+  align-items: end;
+}
+
+body.app-ventas .cart-discount-field {
+  min-width: 0;
+}
+
+body.app-ventas .cart-discount-field input {
+  min-height: 52px;
+  font-weight: 900;
+}
+
+body.app-ventas .touch-qty {
+  grid-template-columns: 54px minmax(46px, 1fr) 54px;
+}
+
+body.app-ventas .touch-qty .ghost-button {
+  border-radius: 14px;
+  background: rgb(255 255 255 / 92%);
+}
+
+body.app-ventas .touch-qty strong {
+  border-radius: 14px;
+  font-size: 1.18rem;
+  font-variant-numeric: tabular-nums;
+}
+
+body.app-ventas .cart-line-footer {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+}
+
+body.app-ventas .cart-line-footer > strong {
+  min-height: 48px;
+  display: grid;
+  align-items: center;
+  padding: 8px 12px;
+  border-radius: 14px;
+  background: linear-gradient(135deg, #10251f, #0f766e);
+  color: white;
+  font-size: 1rem;
+  font-variant-numeric: tabular-nums;
+}
+
+body.app-ventas .cart-line-footer .danger-action {
+  min-height: 48px;
+  border-radius: 14px;
+  white-space: nowrap;
+}
+
+body.app-ventas .pos-focus-mode .touch-cart-line {
+  padding: 10px;
+}
+
+body.app-ventas .pos-focus-mode .cart-line-controls {
+  grid-template-columns: 1fr;
+}
+
+@media (max-width: 760px) {
+  body.app-ventas .cart-item-name,
+  body.app-ventas .cart-line-controls,
+  body.app-ventas .cart-line-footer {
+    grid-template-columns: 1fr;
+  }
+
+  body.app-ventas .cart-item-name strong {
+    white-space: normal;
+  }
+}
+
