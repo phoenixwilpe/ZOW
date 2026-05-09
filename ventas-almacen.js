@@ -576,7 +576,18 @@ function renderSummary() {
   const todayIncome = todaySales.reduce((sum, sale) => sum + Number(sale.amount_paid || sale.cash_received || sale.total || 0), 0);
   const criticalProducts = products.filter((product) => isProductActive(product) && Number(product.stock || 0) <= Number(product.min_stock || 0));
   const latestSale = sales.find((sale) => sale.status !== "anulada");
+  const debtTotal = receivables.reduce((sum, sale) => sum + Number(sale.balance_due || 0), 0);
+  const cashOpen = cashSession?.status === "abierta";
+  const executiveScore = buildExecutiveScore({ todaySales, criticalProducts, debtTotal, cashOpen });
   mainList().innerHTML = `
+    <section class="ventas-executive-hero">
+      <div>
+        <p class="eyebrow">Centro de control</p>
+        <h3>${escapeHtml(storeSettings.storeName || storeSettings.companyName || currentUser.companyName || "Zow Ventas-Almacen")}</h3>
+        <span>${executiveScore.message}</span>
+      </div>
+      <strong>${executiveScore.score}/100</strong>
+    </section>
     <section class="setup-overview">
       <article><span>Clientes</span><strong>${customers.length}</strong></article>
       <article><span>${scopeText}</span><strong>${summary.sales || 0}</strong></article>
@@ -587,8 +598,9 @@ function renderSummary() {
       <article><span>Caja</span><strong>${cashSession?.status === "abierta" ? `Caja ${num(cashSession.registerNumber)}` : "Sin abrir"}</strong><small>${cashSession?.status === "abierta" ? money(cashExpectedTotal()) : "Sin turno activo"}</small></article>
       <article><span>Ultima venta</span><strong>${latestSale ? money(latestSale.total) : "Sin datos"}</strong><small>${latestSale ? `${escapeHtml(latestSale.code)} / ${formatDateTime(latestSale.created_at)}` : "Aun sin movimiento"}</small></article>
       <article><span>Riesgo stock</span><strong class="${criticalProducts.length ? "warn-text" : "ok-text"}">${num(criticalProducts.length)}</strong><small>Productos para revisar</small></article>
-      <article><span>Cobrar</span><strong>${money(receivables.reduce((sum, sale) => sum + Number(sale.balance_due || 0), 0))}</strong><small>${receivables.length} cuenta${receivables.length === 1 ? "" : "s"}</small></article>
+      <article><span>Cobrar</span><strong>${money(debtTotal)}</strong><small>${receivables.length} cuenta${receivables.length === 1 ? "" : "s"}</small></article>
     </section>
+    ${renderExecutiveActionPlan({ todaySales, criticalProducts, debtTotal, cashOpen })}
     ${renderVentasCommandCenter()}
     ${renderServiceStrip()}
     ${renderLiveActivityPanel()}
@@ -597,6 +609,38 @@ function renderSummary() {
       <div class="admin-list">${sales.slice(0, 6).map(renderSaleRow).join("") || empty("Sin ventas registradas")}</div>
     </section>
   `;
+}
+
+function buildExecutiveScore({ todaySales, criticalProducts, debtTotal, cashOpen }) {
+  let score = 100;
+  if (!cashOpen) score -= 18;
+  if (!todaySales.length) score -= 10;
+  if (criticalProducts.length) score -= Math.min(26, criticalProducts.length * 4);
+  if (debtTotal > 0) score -= Math.min(18, Math.ceil(debtTotal / 500) * 3);
+  score = Math.max(score, 20);
+  const message = score >= 85
+    ? "Operacion estable. Puedes seguir vendiendo y revisar reportes al cierre."
+    : score >= 65
+      ? "Operacion activa con puntos por revisar antes de cerrar el dia."
+      : "Hay alertas importantes: prioriza caja, stock o cobranzas.";
+  return { score, message };
+}
+
+function renderExecutiveActionPlan({ todaySales, criticalProducts, debtTotal, cashOpen }) {
+  const actions = [];
+  if (!cashOpen) actions.push({ level: "danger", title: "Abrir caja", detail: "Sin caja activa no se pueden confirmar ventas correctamente.", view: "finance" });
+  if (criticalProducts.length) actions.push({ level: "warning", title: "Reponer stock", detail: `${criticalProducts.length} producto${criticalProducts.length === 1 ? "" : "s"} bajo minimo o agotado${criticalProducts.length === 1 ? "" : "s"}.`, view: "inventory" });
+  if (debtTotal > 0) actions.push({ level: "warning", title: "Revisar cobranzas", detail: `${money(debtTotal)} pendiente en cuentas por cobrar.`, view: "customers" });
+  if (!todaySales.length) actions.push({ level: "info", title: "Primera venta", detail: "Todavia no hay ventas registradas hoy.", view: "sell" });
+  if (!actions.length) actions.push({ level: "ok", title: "Todo bajo control", detail: "Caja, stock y cobranza se ven estables para operar.", view: "reports" });
+  return `<section class="executive-action-plan">
+    ${actions.slice(0, 4).map((item) => `
+      <article class="is-${item.level}">
+        <div><strong>${escapeHtml(item.title)}</strong><span>${escapeHtml(item.detail)}</span></div>
+        ${canAccessView(item.view) ? `<button class="ghost-button" type="button" data-module-view="${item.view}">Ir</button>` : ""}
+      </article>
+    `).join("")}
+  </section>`;
 }
 
 function renderLiveActivityPanel() {
