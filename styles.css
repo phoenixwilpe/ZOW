@@ -11347,6 +11347,235 @@ body.app-ventas .sales-history-actions {
   gap: 8px;
 }
 
+body.app-ventas .purchase-kpi-grid,
+body.app-ventas .purchase-workflow-strip,
+body.app-ventas .inventory-reorder-grid {
+  display: grid;
+  gap: 12px;
+}
+
+body.app-ventas .purchase-kpi-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  margin-bottom: 14px;
+}
+
+body.app-ventas .purchase-kpi-grid article,
+body.app-ventas .purchase-workflow-strip article,
+body.app-ventas .inventory-reorder-card {
+  min-width: 0;
+  border: 1px solid rgb(15 118 110 / 12%);
+  border-radius: 18px;
+  background:
+    radial-gradient(circle at 92% 8%, rgb(245 158 11 / 10%), transparent 32%),
+    linear-gradient(145deg, rgb(255 255 255 / 95%), rgb(236 253 245 / 72%));
+  box-shadow: 0 16px 38px rgb(8 30 26 / 8%);
+}
+
+body.app-ventas .purchase-kpi-grid article {
+  padding: 14px;
+}
+
+body.app-ventas .purchase-kpi-grid span,
+body.app-ventas .purchase-kpi-grid small,
+body.app-ventas .purchase-workflow-strip small,
+body.app-ventas .inventory-reorder-meta span {
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 900;
+}
+
+body.app-ventas .purchase-kpi-grid strong {
+  display: block;
+  margin: 5px 0 2px;
+  overflow-wrap: anywhere;
+  color: #10251f;
+  font-size: clamp(1.08rem, 2.4vw, 1.48rem);
+}
+
+body.app-ventas .purchase-workflow-strip {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin-bottom: 14px;
+}
+
+body.app-ventas .purchase-workflow-strip article {
+  position: relative;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 4px 10px;
+  align-items: center;
+  padding: 13px;
+  opacity: 0.72;
+}
+
+body.app-ventas .purchase-workflow-strip article.is-active {
+  opacity: 1;
+  border-color: rgb(16 185 129 / 24%);
+}
+
+body.app-ventas .purchase-workflow-strip article > span {
+  width: 34px;
+  height: 34px;
+  display: grid;
+  grid-row: span 2;
+  place-items: center;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #10b981, #0f766e);
+  color: white;
+  font-weight: 950;
+}
+
+body.app-ventas .purchase-workflow-strip strong {
+  color: #10251f;
+}
+
+body.app-ventas .purchase-entry-grid {
+  align-items: start;
+}
+
+body.app-ventas .purchase-card-panel,
+body.app-ventas .purchase-detail-panel,
+body.app-ventas .purchase-history-panel,
+body.app-ventas .inventory-reorder-panel,
+body.app-ventas .inventory-operational-panel {
+  border-color: rgb(15 118 110 / 12%);
+  background:
+    linear-gradient(145deg, rgb(255 255 255 / 94%), rgb(248 253 250 / 84%));
+  box-shadow: 0 18px 44px rgb(8 30 26 / 7%);
+}
+
+body.app-ventas .purchase-line-row,
+body.app-ventas .purchase-history-row {
+  display: grid;
+  align-items: center;
+  gap: 12px;
+  border: 1px solid rgb(15 118 110 / 12%);
+  border-radius: 16px;
+  padding: 12px;
+  background: linear-gradient(145deg, rgb(255 255 255 / 96%), rgb(236 253 245 / 70%));
+}
+
+body.app-ventas .purchase-line-row {
+  grid-template-columns: minmax(0, 1.4fr) minmax(120px, 0.45fr) auto;
+}
+
+body.app-ventas .purchase-history-row {
+  grid-template-columns: minmax(0, 1.35fr) minmax(120px, 0.44fr) auto auto;
+}
+
+body.app-ventas .purchase-line-row strong,
+body.app-ventas .purchase-history-row strong {
+  color: #10251f;
+}
+
+body.app-ventas .purchase-line-row span,
+body.app-ventas .purchase-line-row small,
+body.app-ventas .purchase-history-row span,
+body.app-ventas .purchase-history-row small,
+body.app-ventas .purchase-line-total span {
+  display: block;
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 850;
+}
+
+body.app-ventas .purchase-line-total strong {
+  display: block;
+  margin-top: 3px;
+  font-size: 1.06rem;
+}
+
+body.app-ventas .purchase-line-actions,
+body.app-ventas .purchase-history-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+body.app-ventas .inventory-reorder-grid {
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+}
+
+body.app-ventas .inventory-reorder-card {
+  position: relative;
+  overflow: hidden;
+  padding: 14px;
+}
+
+body.app-ventas .inventory-reorder-card::after {
+  content: "";
+  position: absolute;
+  right: -18px;
+  bottom: -22px;
+  width: 86px;
+  aspect-ratio: 1;
+  border-radius: 24px;
+  background: rgb(16 185 129 / 10%);
+  transform: rotate(12deg);
+}
+
+body.app-ventas .inventory-reorder-card.is-alta {
+  border-color: rgb(239 68 68 / 20%);
+  background: linear-gradient(145deg, rgb(255 255 255 / 95%), rgb(254 242 242 / 72%));
+}
+
+body.app-ventas .inventory-reorder-card.is-media {
+  border-color: rgb(245 158 11 / 22%);
+  background: linear-gradient(145deg, rgb(255 255 255 / 95%), rgb(255 251 235 / 74%));
+}
+
+body.app-ventas .inventory-reorder-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+body.app-ventas .inventory-reorder-head span {
+  border-radius: 999px;
+  padding: 4px 8px;
+  background: rgb(255 255 255 / 76%);
+  color: var(--accent-dark);
+  font-size: 0.74rem;
+  font-weight: 950;
+}
+
+body.app-ventas .inventory-reorder-card h4 {
+  position: relative;
+  z-index: 1;
+  margin: 10px 0;
+  color: #10251f;
+  font-size: 1rem;
+}
+
+body.app-ventas .stock-meter {
+  position: relative;
+  z-index: 1;
+  height: 10px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgb(15 118 110 / 9%);
+}
+
+body.app-ventas .stock-meter span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #ef4444, #f59e0b 45%, #10b981);
+}
+
+body.app-ventas .inventory-reorder-meta {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  gap: 4px;
+  margin-top: 10px;
+}
+
+body.app-ventas .inventory-reorder-meta strong {
+  color: #10251f;
+}
+
 body.app-ventas .voided-sale-banner {
   display: flex;
   align-items: center;
@@ -11433,6 +11662,20 @@ body.app-ventas .cloud-safe-note {
   }
 
   body.app-ventas .sales-history-actions {
+    display: grid;
+    grid-template-columns: 1fr;
+    justify-content: stretch;
+  }
+
+  body.app-ventas .purchase-kpi-grid,
+  body.app-ventas .purchase-workflow-strip,
+  body.app-ventas .purchase-line-row,
+  body.app-ventas .purchase-history-row {
+    grid-template-columns: 1fr;
+  }
+
+  body.app-ventas .purchase-line-actions,
+  body.app-ventas .purchase-history-actions {
     display: grid;
     grid-template-columns: 1fr;
     justify-content: stretch;

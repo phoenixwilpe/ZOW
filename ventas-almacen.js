@@ -1613,9 +1613,17 @@ function renderPurchases() {
   const reorderValue = reorderAlerts.reduce((sum, product) => sum + suggestedReorderQuantity(product) * Number(product.cost_price || 0), 0);
   const highPriority = reorderAlerts.filter((product) => reorderPriority(product).level === "alta");
   const purchaseTotal = purchaseCart.reduce((sum, item) => sum + item.quantity * item.unitCost, 0);
+  const pendingPurchases = purchases.filter((purchase) => (purchase.status || "confirmada") === "pendiente");
+  const confirmedPurchases = purchases.filter((purchase) => ["confirmada", "recibida"].includes(purchase.status || "confirmada"));
   setCount(`${purchases.length} compra${purchases.length === 1 ? "" : "s"}`);
   mainList().innerHTML = `
     ${ventasMessage ? `<div class="cloud-safe-note"><strong>${escapeHtml(ventasMessage)}</strong><span>La compra afecta solo el inventario de esta empresa.</span></div>` : ""}
+    <section class="purchase-kpi-grid">
+      <article><span>Orden actual</span><strong>${money(purchaseTotal)}</strong><small>${num(purchaseCart.length)} linea${purchaseCart.length === 1 ? "" : "s"} cargada${purchaseCart.length === 1 ? "" : "s"}</small></article>
+      <article><span>Pendientes</span><strong>${num(pendingPurchases.length)}</strong><small>Ordenes por recibir</small></article>
+      <article><span>Recibidas</span><strong>${num(confirmedPurchases.length)}</strong><small>${money(confirmedPurchases.reduce((sum, purchase) => sum + Number(purchase.total || 0), 0))}</small></article>
+      <article><span>Reposicion</span><strong>${money(reorderValue)}</strong><small>${num(reorderAlerts.length)} producto${reorderAlerts.length === 1 ? "" : "s"} bajo minimo</small></article>
+    </section>
     <section class="purchase-assist-card">
       <div>
         <p class="eyebrow">Asistente de reposicion</p>
@@ -1624,8 +1632,13 @@ function renderPurchases() {
       </div>
       <button class="primary-button" type="button" id="prepareSuggestedPurchaseFromPurchases" ${reorderAlerts.length ? "" : "disabled"}>Cargar compra sugerida</button>
     </section>
-    <section class="cashier-grid">
-      <section class="admin-panel">
+    <section class="purchase-workflow-strip">
+      <article class="is-active"><span>1</span><strong>Proveedor</strong><small>Registra o selecciona</small></article>
+      <article class="${purchaseCart.length ? "is-active" : ""}"><span>2</span><strong>Detalle</strong><small>Productos y costos</small></article>
+      <article class="${purchaseCart.length ? "is-active" : ""}"><span>3</span><strong>Recepcion</strong><small>Suma stock o deja pendiente</small></article>
+    </section>
+    <section class="cashier-grid purchase-entry-grid">
+      <section class="admin-panel purchase-card-panel">
         <div class="admin-panel-head"><div><p class="eyebrow">Proveedor</p><h3>Registrar proveedor</h3></div></div>
         <form class="admin-form" id="supplierForm">
           <div class="form-grid">
@@ -1637,7 +1650,7 @@ function renderPurchases() {
           <button class="ghost-button" type="submit">Guardar proveedor</button>
         </form>
       </section>
-      <section class="admin-panel">
+      <section class="admin-panel purchase-card-panel">
         <div class="admin-panel-head"><div><p class="eyebrow">Compra</p><h3>Entrada de mercaderia</h3></div></div>
         <form class="admin-form" id="purchaseForm">
           <div class="form-grid">
@@ -1656,7 +1669,7 @@ function renderPurchases() {
         </form>
       </section>
     </section>
-    <section class="admin-panel">
+    <section class="admin-panel purchase-detail-panel">
       <div class="admin-panel-head">
         <div><p class="eyebrow">Detalle</p><h3>Productos de la compra</h3></div>
         <div class="admin-head-actions">
@@ -1667,9 +1680,9 @@ function renderPurchases() {
       </div>
       <div class="admin-list">${purchaseCart.map(renderPurchaseCartRow).join("") || empty("Agrega productos a la compra")}</div>
     </section>
-    <section class="admin-panel">
+    <section class="admin-panel purchase-history-panel">
       <div class="admin-panel-head"><div><p class="eyebrow">Historial</p><h3>Compras recientes</h3></div><span>${money(purchases.reduce((sum, purchase) => sum + Number(purchase.total || 0), 0))}</span></div>
-      <div class="admin-list">${purchases.slice(0, 12).map(renderPurchaseRow).join("") || empty("Sin compras registradas")}</div>
+      <div class="purchase-history-list">${purchases.slice(0, 12).map(renderPurchaseRow).join("") || empty("Sin compras registradas")}</div>
     </section>
     <section class="admin-panel">
       <div class="admin-panel-head"><div><p class="eyebrow">Proveedores</p><h3>Directorio</h3></div></div>
@@ -1798,16 +1811,22 @@ function renderPurchaseCartRow(item) {
   const product = products.find((entry) => entry.id === item.productId);
   const priority = product ? reorderPriority(product) : null;
   const stockText = product ? `Stock ${num(product.stock)} / Min. ${num(product.min_stock)}` : "Producto cargado";
-  return `<article class="admin-row">
+  return `<article class="purchase-line-row">
     <div><strong>${escapeHtml(item.name)}</strong><span>${num(item.quantity)} x ${money(item.unitCost)} / ${escapeHtml(stockText)}</span></div>
-    <div class="admin-row-meta"><span>Total ${money(item.quantity * item.unitCost)}</span>${priority ? `<span class="${priority.className}">Prioridad ${priority.label}</span>` : ""}<button class="ghost-button danger-action" type="button" data-remove-purchase-line="${item.id}">Quitar</button></div>
+    <div class="purchase-line-total"><span>Total</span><strong>${money(item.quantity * item.unitCost)}</strong></div>
+    <div class="purchase-line-actions">${priority ? `<span class="${priority.className}">Prioridad ${priority.label}</span>` : ""}<button class="ghost-button danger-action" type="button" data-remove-purchase-line="${item.id}">Quitar</button></div>
   </article>`;
 }
 
 function renderPurchaseRow(purchase) {
   const status = purchase.status || "confirmada";
   const statusClass = status === "pendiente" ? "warn-text" : status === "cancelada" ? "danger-text" : "ok-text";
-  return `<article class="admin-row"><div><strong>${escapeHtml(purchase.code)}</strong><span>${escapeHtml(purchase.supplier_name || "Proveedor sin registrar")} / ${escapeHtml(purchase.invoice_number || "Sin factura")}</span><span>${formatDateTime(purchase.created_at)} / ${escapeHtml(purchase.created_by_name || "Usuario")}</span></div><div class="admin-row-meta"><span>Total ${money(purchase.total)}</span><span class="${statusClass}">${escapeHtml(purchaseStatusLabel(status))}</span>${status === "pendiente" && can("managePurchases") ? `<button class="primary-button" type="button" data-receive-purchase="${purchase.id}">Recibir</button><button class="ghost-button danger-action" type="button" data-cancel-purchase="${purchase.id}">Cancelar</button>` : ""}</div></article>`;
+  return `<article class="purchase-history-row">
+    <div><strong>${escapeHtml(purchase.code)}</strong><span>${escapeHtml(purchase.supplier_name || "Proveedor sin registrar")} / ${escapeHtml(purchase.invoice_number || "Sin factura")}</span><small>${formatDateTime(purchase.created_at)} / ${escapeHtml(purchase.created_by_name || "Usuario")}</small></div>
+    <div><span>Total</span><strong>${money(purchase.total)}</strong></div>
+    <div><span class="${statusClass}">${escapeHtml(purchaseStatusLabel(status))}</span></div>
+    ${status === "pendiente" && can("managePurchases") ? `<div class="purchase-history-actions"><button class="primary-button" type="button" data-receive-purchase="${purchase.id}">Recibir</button><button class="ghost-button danger-action" type="button" data-cancel-purchase="${purchase.id}">Cancelar</button></div>` : ""}
+  </article>`;
 }
 
 function renderSupplierRow(supplier) {
@@ -1824,6 +1843,13 @@ function renderInventory() {
   const inventoryValue = products.filter(isProductActive).reduce((sum, product) => sum + Number(product.stock || 0) * Number(product.cost_price || 0), 0);
   const potentialProfit = products.filter(isProductActive).reduce((sum, product) => sum + Number(product.stock || 0) * Math.max(Number(product.sale_price || 0) - Number(product.cost_price || 0), 0), 0);
   const highValueProducts = inventoryProducts.filter((product) => inventoryClass(product) === "A").length;
+  const reorderProducts = products
+    .filter((product) => isProductActive(product) && Number(product.stock || 0) <= Number(product.min_stock || 0))
+    .sort((a, b) => {
+      const priorityOrder = { alta: 3, media: 2, baja: 1 };
+      return priorityOrder[reorderPriority(b).level] - priorityOrder[reorderPriority(a).level]
+        || suggestedReorderQuantity(b) * Number(b.cost_price || 0) - suggestedReorderQuantity(a) * Number(a.cost_price || 0);
+    });
   setCount(`${products.length} producto${products.length === 1 ? "" : "s"}`);
   mainList().innerHTML = `
     <section class="inventory-health-grid">
@@ -1838,7 +1864,16 @@ function renderInventory() {
       <article><span>Productos clase A</span><strong>${num(highValueProducts)}</strong><small>Mayor valor inmovilizado</small></article>
       <article><span>Salud inventario</span><strong class="${outOfStock || lowStock ? "warn-text" : "ok-text"}">${outOfStock ? "Critico" : lowStock ? "Revisar" : "Estable"}</strong><small>Basado en stock minimo</small></article>
     </section>
-    <section class="admin-panel">
+    <section class="admin-panel inventory-reorder-panel">
+      <div class="admin-panel-head">
+        <div><p class="eyebrow">Reposicion inteligente</p><h3>Productos que necesitan atencion</h3></div>
+        <button class="primary-button" type="button" id="prepareSuggestedPurchaseFromInventory" ${reorderProducts.length && can("managePurchases") ? "" : "disabled"}>Preparar compra</button>
+      </div>
+      <div class="inventory-reorder-grid">
+        ${reorderProducts.slice(0, 6).map(renderInventoryReorderCard).join("") || empty("Sin productos bajo minimo")}
+      </div>
+    </section>
+    <section class="admin-panel inventory-operational-panel">
       <div class="admin-panel-head">
         <div><p class="eyebrow">Control de stock</p><h3>Inventario operativo</h3></div>
         ${["admin", "ventas_admin", "almacen"].includes(currentUser?.role) ? `<button class="ghost-button" type="button" id="loadStarterProducts">Cargar productos de prueba</button>` : ""}
@@ -1850,6 +1885,7 @@ function renderInventory() {
     ${selectedKardex ? renderKardexPanel() : ""}
   `;
   bindProductSearch();
+  document.querySelector("#prepareSuggestedPurchaseFromInventory")?.addEventListener("click", prepareSuggestedPurchase);
   document.querySelector("#loadStarterProducts")?.addEventListener("click", loadStarterProducts);
   document.querySelectorAll("[data-stock-move]").forEach((button) => {
     button.addEventListener("click", () => openStockMovement(button.dataset.stockMove, button.dataset.type));
@@ -1870,6 +1906,28 @@ function renderInventory() {
     selectedKardex = null;
     renderMain();
   });
+}
+
+function renderInventoryReorderCard(product) {
+  const suggested = suggestedReorderQuantity(product);
+  const priority = reorderPriority(product);
+  const estimated = suggested * Number(product.cost_price || 0);
+  const stock = Number(product.stock || 0);
+  const min = Number(product.min_stock || 0);
+  const pct = min > 0 ? Math.min(Math.max((stock / min) * 100, 0), 100) : stock > 0 ? 100 : 0;
+  return `<article class="inventory-reorder-card is-${priority.level}">
+    <div class="inventory-reorder-head">
+      <span>${escapeHtml(product.code)}</span>
+      <strong class="${priority.className}">${escapeHtml(priority.label)}</strong>
+    </div>
+    <h4>${escapeHtml(product.name)}</h4>
+    <div class="stock-meter"><span style="width:${pct}%"></span></div>
+    <div class="inventory-reorder-meta">
+      <span>Stock ${num(stock)} / Min. ${num(min)}</span>
+      <span>Sugerido ${num(suggested)}</span>
+      <strong>${money(estimated)}</strong>
+    </div>
+  </article>`;
 }
 
 function renderUsers() {
