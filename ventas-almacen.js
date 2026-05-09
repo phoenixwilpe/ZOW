@@ -42,6 +42,7 @@ let editingCustomerId = "";
 let editingPromotionId = "";
 let editingComboId = "";
 let productSearch = "";
+let productCategoryFilter = "";
 let productSearchTimer = 0;
 let ventasMessage = "";
 let posFeedbackMessage = "";
@@ -702,7 +703,7 @@ function renderAlerts() {
 function renderSell() {
   setCount(`${saleCart.length} item${saleCart.length === 1 ? "" : "s"}`);
   const posNotice = posFeedbackMessage || ventasMessage;
-  const sellProducts = filteredProducts().filter(isProductActive);
+  const sellProducts = filteredProducts({ category: productCategoryFilter }).filter(isProductActive);
   const activeCombos = combos.filter((combo) => combo.active && comboAvailableStock(combo) > 0).slice(0, 8);
   const favoriteSellProducts = favoriteProducts
     .map((productId) => products.find((product) => product.id === productId))
@@ -762,8 +763,8 @@ function renderSell() {
         <div class="pos-section-block">
           <div class="pos-section-title"><strong>Categorias</strong><span>Filtra rapido por familia</span></div>
           <div class="pos-category-rail">
-            <button class="${productSearch ? "" : "is-active"}" type="button" data-product-filter="">Todos</button>
-            ${categories.slice(0, 10).map((category) => `<button class="${productSearch === category ? "is-active" : ""}" type="button" data-product-filter="${escapeHtml(category)}">${escapeHtml(category)}</button>`).join("")}
+            <button class="${productCategoryFilter ? "" : "is-active"}" type="button" data-product-filter="">Todos</button>
+            ${categories.slice(0, 10).map((category) => `<button class="${productCategoryFilter === category ? "is-active" : ""}" type="button" data-product-filter="${escapeHtml(category)}">${escapeHtml(category)}</button>`).join("")}
           </div>
         </div>
         ${favoriteSellProducts.length ? `
@@ -849,7 +850,8 @@ function renderSell() {
     renderMain();
   });
   document.querySelectorAll("[data-product-filter]").forEach((button) => button.addEventListener("click", () => {
-    productSearch = button.dataset.productFilter || "";
+    productCategoryFilter = button.dataset.productFilter || "";
+    posMobilePanel = "products";
     renderMain();
   }));
   document.querySelector("#scanAddBtn")?.addEventListener("click", scanAddProduct);
@@ -2472,9 +2474,13 @@ function renderPriceRow(product) {
 function filteredProducts(options = {}) {
   const term = String(options.term ?? productSearch).trim().toLowerCase();
   const source = options.includeInactive ? products : products.filter(isProductActive);
-  if (!term) return source;
-  return source.filter((product) => [product.code, product.barcode, product.name, product.category]
-    .some((value) => String(value || "").toLowerCase().includes(term)));
+  const category = String(options.category || "").trim().toLowerCase();
+  return source.filter((product) => {
+    const matchesCategory = !category || String(product.category || "").trim().toLowerCase() === category;
+    const matchesTerm = !term || [product.code, product.barcode, product.name, product.category]
+      .some((value) => String(value || "").toLowerCase().includes(term));
+    return matchesCategory && matchesTerm;
+  });
 }
 
 function productCategories() {
@@ -2806,6 +2812,7 @@ function parseProductSearch(rawValue) {
 function newSale() {
   saleCart = [];
   productSearch = "";
+  productCategoryFilter = "";
   lastSaleReceipt = null;
   saleCustomerId = "";
   saleGlobalDiscount = 0;
@@ -2816,6 +2823,8 @@ function newSale() {
 
 function cancelCurrentSale() {
   saleCart = [];
+  productSearch = "";
+  productCategoryFilter = "";
   saleCustomerId = "";
   saleGlobalDiscount = 0;
   saleNote = "";
@@ -2831,6 +2840,8 @@ async function suspendCurrentSale() {
     await apiRequest("/ventas/suspended-sales", { method: "POST", body: payload });
     persistJson(SUSPENDED_SALES_KEY, []);
     saleCart = [];
+    productSearch = "";
+    productCategoryFilter = "";
     saleCustomerId = "";
     saleGlobalDiscount = 0;
     saleNote = "";
@@ -2840,6 +2851,8 @@ async function suspendCurrentSale() {
     suspendedSales = [{ id: crypto.randomUUID(), ...payload, createdAt: new Date().toISOString() }, ...suspendedSales].slice(0, 10);
     persistJson(SUSPENDED_SALES_KEY, suspendedSales);
     saleCart = [];
+    productSearch = "";
+    productCategoryFilter = "";
     saleCustomerId = "";
     saleGlobalDiscount = 0;
     saleNote = "";
@@ -3095,6 +3108,7 @@ async function submitSale(event) {
   lastSaleReceipt = { sale: response.sale, items: response.items };
   saleCart = [];
   productSearch = "";
+  productCategoryFilter = "";
   saleCustomerId = "";
   saleGlobalDiscount = 0;
   saleNote = "";
