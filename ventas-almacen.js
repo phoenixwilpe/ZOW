@@ -3570,47 +3570,61 @@ function renderSaleDetail(sale, items) {
   const canReturn = !["anulada", "devuelta"].includes(status) && can("returnSales");
   const itemTotal = items.reduce((sum, item) => sum + Number(item.total || 0), 0);
   const quantityTotal = items.reduce((sum, item) => sum + Number(item.quantity || 0), 0);
+  const paidAmount = Number(sale.amount_paid || sale.cash_received || 0);
+  const balanceDue = Number(sale.balance_due || 0);
+  const statusClass = status === "anulada" ? "danger-text" : status === "pagada" ? "ok-text" : "warn-text";
   saleDetailTitle.textContent = sale.code || "Comprobante";
   saleDetailContent.innerHTML = `
     <section class="sale-detail-summary">
-      <article><span>Estado</span><strong class="${status === "anulada" ? "danger-text" : status === "pagada" ? "ok-text" : "warn-text"}">${escapeHtml(status)}</strong></article>
+      <article><span>Estado</span><strong class="${statusClass}">${escapeHtml(status)}</strong></article>
       <article><span>Total</span><strong>${money(sale.total)}</strong></article>
       <article><span>Metodo</span><strong>${escapeHtml(paymentLabel(sale.payment_method || "efectivo"))}</strong></article>
       <article><span>Fecha</span><strong>${formatDateTime(sale.created_at)}</strong></article>
     </section>
     ${status === "anulada" ? `<div class="voided-sale-banner"><strong>Venta anulada</strong><span>Esta operacion queda en auditoria y su stock fue reintegrado.</span></div>` : ""}
+    <section class="sale-detail-audit-strip">
+      ${renderSaleDetailAuditItem("Comprobante", sale.code || "S/C", "Codigo unico de la operacion")}
+      ${renderSaleDetailAuditItem("Caja", sale.register_number || sale.cash_register_number ? `Caja ${num(sale.register_number || sale.cash_register_number)}` : "Sin caja", sale.cash_closed ? "Cierre aplicado" : "Pendiente de cierre")}
+      ${renderSaleDetailAuditItem("Cajero", sale.seller_name || currentUser.name || "Usuario", "Responsable registrado")}
+      ${renderSaleDetailAuditItem("Cliente", sale.customer_name || "Cliente sin registrar", balanceDue > 0 ? `Debe ${money(balanceDue)}` : "Sin saldo pendiente")}
+    </section>
     <section class="sale-detail-card">
       <div>
-        <span>Cliente</span>
-        <strong>${escapeHtml(sale.customer_name || "Cliente sin registrar")}</strong>
+        <span>Subtotal</span>
+        <strong>${money(sale.subtotal || itemTotal)}</strong>
       </div>
       <div>
-        <span>Cajero</span>
-        <strong>${escapeHtml(sale.seller_name || currentUser.name || "Usuario")}</strong>
-      </div>
-      <div>
-        <span>Pago</span>
-        <strong>Pagado ${money(sale.amount_paid || sale.cash_received || 0)} / Cambio ${money(sale.change_amount || 0)}</strong>
+        <span>Descuento</span>
+        <strong>${money(sale.discount || 0)}</strong>
       </div>
       <div>
         <span>Impuesto</span>
         <strong>${money(sale.tax || 0)}</strong>
       </div>
       <div>
+        <span>Pagado</span>
+        <strong>${money(paidAmount)}</strong>
+      </div>
+      <div>
         <span>Productos</span>
         <strong>${num(quantityTotal)} unidades / ${items.length} linea${items.length === 1 ? "" : "s"}</strong>
       </div>
       <div>
-        <span>Subtotal productos</span>
-        <strong>${money(itemTotal)}</strong>
+        <span>Cambio</span>
+        <strong>${money(sale.change_amount || 0)}</strong>
       </div>
       ${sale.note ? `<div><span>Observacion</span><strong>${escapeHtml(sale.note)}</strong></div>` : ""}
-      ${Number(sale.balance_due || 0) > 0 ? `<div><span>Saldo pendiente</span><strong class="warn-text">${money(sale.balance_due)}</strong></div>` : ""}
+      ${balanceDue > 0 ? `<div><span>Saldo pendiente</span><strong class="warn-text">${money(balanceDue)}</strong></div>` : ""}
     </section>
+    ${renderSaleDetailPaymentBreakdown(sale)}
     <div class="sale-detail-items">
       ${items.map((item) => `
         <article>
-          <div><strong>${escapeHtml(item.product_name)}</strong><span>${num(item.quantity)} x ${money(item.unit_price)}${Number(item.discount || 0) > 0 ? ` / Desc. ${money(item.discount)}` : ""}</span></div>
+          <div>
+            <strong>${escapeHtml(item.product_name)}</strong>
+            <span>${num(item.quantity)} x ${money(item.unit_price)}${Number(item.discount || 0) > 0 ? ` / Desc. ${money(item.discount)}` : ""}</span>
+            <small>${item.product_code ? `Codigo ${escapeHtml(item.product_code)}` : "Linea de venta"}</small>
+          </div>
           <b>${money(item.total)}</b>
         </article>
       `).join("") || empty("Sin productos registrados")}
@@ -3631,6 +3645,20 @@ function renderSaleDetail(sale, items) {
     input.addEventListener("input", () => updateReturnEstimate(items));
   });
   updateReturnEstimate(items);
+}
+
+function renderSaleDetailAuditItem(label, value, detail) {
+  return `<article><span>${escapeHtml(label)}</span><strong>${escapeHtml(String(value || ""))}</strong><small>${escapeHtml(detail || "")}</small></article>`;
+}
+
+function renderSaleDetailPaymentBreakdown(sale) {
+  const detail = parsePaymentDetail(sale.payment_detail || sale.paymentDetail);
+  const entries = Object.entries(detail).filter(([, amount]) => Number(amount || 0) > 0);
+  if (!entries.length) return "";
+  return `<section class="sale-detail-payment-card">
+    <div><span>Pago mixto</span><strong>Detalle por metodo</strong></div>
+    ${entries.map(([method, amount]) => `<article><span>${escapeHtml(paymentLabel(method))}</span><strong>${money(amount)}</strong></article>`).join("")}
+  </section>`;
 }
 
 function renderSaleReturnPanel(items) {
