@@ -992,31 +992,27 @@ function renderFinance() {
 }
 
 function renderHistory() {
-  const visibleSales = sales.filter((sale) => {
-    const meta = localSaleMeta[sale.id] || {};
-    const status = saleStatus(sale);
-    const query = String(historyFilter.q || "").trim().toLowerCase();
-    if (historyFilter.status && status !== historyFilter.status) return false;
-    if (historyFilter.method && (sale.payment_method || meta.method) !== historyFilter.method) return false;
-    if (historyFilter.date && !String(sale.created_at || "").startsWith(historyFilter.date)) return false;
-    if (query) {
-      const haystack = [sale.code, sale.customer_name, sale.seller_name, sale.payment_method, sale.total]
-        .map((value) => String(value || "").toLowerCase())
-        .join(" ");
-      if (!haystack.includes(query)) return false;
-    }
-    return true;
-  });
+  const visibleSales = filteredHistorySales();
   const historyStats = buildHistoryStats(visibleSales);
   setCount(`${visibleSales.length} venta${visibleSales.length === 1 ? "" : "s"}`);
   mainList().innerHTML = `
     <section class="admin-panel sales-history-panel">
-      <div class="admin-panel-head"><div><p class="eyebrow">Historial</p><h3>Ventas y comprobantes</h3></div><button class="ghost-button" type="button" id="clearHistoryFilters">Limpiar filtros</button></div>
+      <div class="admin-panel-head">
+        <div><p class="eyebrow">Historial</p><h3>Ventas y comprobantes</h3></div>
+        <div class="admin-head-actions"><button class="ghost-button" type="button" id="exportHistoryVisibleCsv">Exportar vista</button><button class="ghost-button" type="button" id="clearHistoryFilters">Limpiar filtros</button></div>
+      </div>
       <div class="history-kpi-grid">
         <article><span>Ventas visibles</span><strong>${num(historyStats.count)}</strong><small>${num(historyStats.voided)} anulada${historyStats.voided === 1 ? "" : "s"}</small></article>
         <article><span>Total vendido</span><strong>${money(historyStats.total)}</strong><small>Sin anuladas</small></article>
         <article><span>Cobrado</span><strong>${money(historyStats.paid)}</strong><small>${money(historyStats.pending)} pendiente</small></article>
         <article><span>Ticket promedio</span><strong>${money(historyStats.average)}</strong><small>Ventas validas</small></article>
+      </div>
+      <div class="history-quick-filters" aria-label="Filtros rapidos de historial">
+        <button type="button" data-history-preset="today">Hoy</button>
+        <button type="button" data-history-preset="yesterday">Ayer</button>
+        <button type="button" data-history-preset="pending">Pendientes</button>
+        <button type="button" data-history-preset="credit">Credito</button>
+        <button type="button" data-history-preset="voided">Anuladas</button>
       </div>
       <div class="history-filters">
         <label>Buscar<input id="historySearch" type="search" inputmode="search" autocomplete="off" placeholder="Codigo, cliente, cajero..." value="${escapeHtml(historyFilter.q)}" /></label>
@@ -1036,9 +1032,45 @@ function renderHistory() {
   document.querySelector("#historyMethod")?.addEventListener("change", (event) => { historyFilter.method = event.target.value; renderMain(); });
   document.querySelector("#historyStatus")?.addEventListener("change", (event) => { historyFilter.status = event.target.value; renderMain(); });
   document.querySelector("#clearHistoryFilters")?.addEventListener("click", () => { historyFilter = { status: "", method: "", date: "", q: "" }; renderMain(); });
+  document.querySelector("#exportHistoryVisibleCsv")?.addEventListener("click", exportVisibleHistoryCsv);
+  document.querySelectorAll("[data-history-preset]").forEach((button) => button.addEventListener("click", () => {
+    applyHistoryPreset(button.dataset.historyPreset);
+    renderMain();
+  }));
   document.querySelectorAll("[data-detail-sale]").forEach((button) => button.addEventListener("click", () => showSaleDetail(button.dataset.detailSale)));
   document.querySelectorAll("[data-reprint-sale]").forEach((button) => button.addEventListener("click", () => reprintSale(button.dataset.reprintSale)));
   document.querySelectorAll("[data-void-sale]").forEach((button) => button.addEventListener("click", () => voidSale(button.dataset.voidSale)));
+}
+
+function filteredHistorySales() {
+  return sales.filter(saleMatchesHistoryFilter);
+}
+
+function saleMatchesHistoryFilter(sale) {
+  const meta = localSaleMeta[sale.id] || {};
+  const status = saleStatus(sale);
+  const query = String(historyFilter.q || "").trim().toLowerCase();
+  if (historyFilter.status && status !== historyFilter.status) return false;
+  if (historyFilter.method && (sale.payment_method || meta.method) !== historyFilter.method) return false;
+  if (historyFilter.date && !String(sale.created_at || "").startsWith(historyFilter.date)) return false;
+  if (query) {
+    const haystack = [sale.code, sale.customer_name, sale.seller_name, sale.payment_method, sale.total, sale.balance_due]
+      .map((value) => String(value || "").toLowerCase())
+      .join(" ");
+    if (!haystack.includes(query)) return false;
+  }
+  return true;
+}
+
+function applyHistoryPreset(preset) {
+  const yesterday = new Date();
+  yesterday.setDate(yesterday.getDate() - 1);
+  const yesterdayKey = yesterday.toISOString().slice(0, 10);
+  if (preset === "today") historyFilter = { status: "", method: "", date: todayDate(), q: "" };
+  if (preset === "yesterday") historyFilter = { status: "", method: "", date: yesterdayKey, q: "" };
+  if (preset === "pending") historyFilter = { ...historyFilter, status: "pendiente", date: "" };
+  if (preset === "credit") historyFilter = { ...historyFilter, method: "credito", status: "", date: "" };
+  if (preset === "voided") historyFilter = { ...historyFilter, status: "anulada", date: "" };
 }
 
 function buildHistoryStats(rows) {
@@ -4438,6 +4470,25 @@ function exportSalesCsv() {
     estado: saleStatus(sale)
   }));
   downloadCsv(`ventas-${csvDateStamp()}.csv`, rows);
+}
+
+function exportVisibleHistoryCsv() {
+  const rows = filteredHistorySales().map((sale) => ({
+    codigo: sale.code,
+    fecha: formatDateTime(sale.created_at),
+    cliente: sale.customer_name || "Cliente sin registrar",
+    cajero: sale.seller_name || "",
+    metodo_pago: paymentLabel(sale.payment_method || localSaleMeta[sale.id]?.method || "efectivo"),
+    estado: saleStatus(sale),
+    subtotal: Number(sale.subtotal || 0).toFixed(2),
+    descuento: Number(sale.discount || 0).toFixed(2),
+    impuesto: Number(sale.tax || 0).toFixed(2),
+    total: Number(sale.total || 0).toFixed(2),
+    pagado: Number(sale.amount_paid || sale.cash_received || 0).toFixed(2),
+    saldo: Number(sale.balance_due || 0).toFixed(2),
+    caja_cerrada: sale.cash_closed ? "si" : "no"
+  }));
+  downloadCsv(`historial-ventas-${csvDateStamp()}.csv`, rows);
 }
 
 function exportCustomersCsv() {
