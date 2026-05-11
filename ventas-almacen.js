@@ -2116,9 +2116,16 @@ function renderSettings() {
   setCount("Tienda");
   mainList().innerHTML = `
     ${renderSetupAssistant()}
-    <section class="admin-panel">
+    ${renderStoreSettingsOverview()}
+    <section class="admin-panel settings-command-panel">
       <div class="admin-panel-head"><div><p class="eyebrow">Empresa</p><h3>Datos para ventas e impresion</h3></div></div>
       <form class="admin-form" id="storeSettingsForm">
+        <div class="settings-preset-row">
+          <button class="ghost-button" type="button" data-settings-preset="solo">Tienda 1 persona</button>
+          <button class="ghost-button" type="button" data-settings-preset="duo">Tienda 2 personas</button>
+          <button class="ghost-button" type="button" data-settings-preset="control">Control estricto</button>
+        </div>
+        <p class="settings-preset-note">Elige un modelo rapido o ajusta manualmente las reglas de venta.</p>
         <div class="form-grid">
           <label>Nombre legal<input id="storeCompanyName" type="text" value="${escapeHtml(storeSettings.companyName || currentUser.companyName || "")}" required /></label>
           <label>Nombre comercial<input id="storeName" type="text" value="${escapeHtml(storeSettings.storeName || "")}" placeholder="Sucursal central" /></label>
@@ -2136,16 +2143,35 @@ function renderSettings() {
         <div class="modal-actions"><button class="primary-button" type="submit">Guardar configuracion</button></div>
       </form>
     </section>
-    <section class="admin-panel">
-      <div class="admin-panel-head"><div><p class="eyebrow">Modelos de operacion</p><h3>Adaptable a empresa chica o grande</h3></div></div>
-      <div class="operation-model-grid">
-        <article><span>Tienda 1 persona</span><strong>Encargado de sistema</strong><small>Puede configurar, vender, cerrar caja, registrar productos y ajustar stock.</small></article>
-        <article><span>Tienda 2 personas</span><strong>Operador integral + encargado</strong><small>El operador integral atiende venta, caja e inventario diario sin tocar el panel ZOW.</small></article>
-        <article><span>Empresa grande</span><strong>Cajas separadas</strong><small>Cajeros, almacen, vendedor y supervisor trabajan con permisos separados en el mismo punto de atencion.</small></article>
-      </div>
-    </section>
+    ${renderRoleConfigGuide()}
   `;
   document.querySelector("#storeSettingsForm")?.addEventListener("submit", saveStoreSettings);
+  document.querySelectorAll("[data-settings-preset]").forEach((button) => {
+    button.addEventListener("click", () => applySettingsPreset(button.dataset.settingsPreset));
+  });
+}
+
+function renderStoreSettingsOverview() {
+  const rules = [
+    { label: "Cajas", value: `${num(storeSettings.cashRegisterCount || 1)} configurada${Number(storeSettings.cashRegisterCount || 1) === 1 ? "" : "s"}`, detail: "Define cuantos puntos de cobro puede abrir la empresa." },
+    { label: "Moneda", value: storeSettings.currency || "BOB", detail: "Aparece en POS, tickets, cierres y reportes." },
+    { label: "Credito", value: storeSettings.allowCredit ? "Permitido" : "Bloqueado", detail: storeSettings.allowCredit ? "Puede vender con saldo pendiente." : "Solo pagos completos." },
+    { label: "Cliente", value: storeSettings.requireCustomerForSale ? "Obligatorio" : "Opcional", detail: storeSettings.requireCustomerForSale ? "Toda venta exige cliente registrado." : "Permite venta rapida sin cliente." }
+  ];
+  return `<section class="settings-overview-grid">
+    ${rules.map((item) => `<article><span>${escapeHtml(item.label)}</span><strong>${escapeHtml(item.value)}</strong><small>${escapeHtml(item.detail)}</small></article>`).join("")}
+  </section>`;
+}
+
+function renderRoleConfigGuide() {
+  return `<section class="admin-panel settings-role-guide">
+    <div class="admin-panel-head"><div><p class="eyebrow">Modelos de operacion</p><h3>Adaptable a empresa chica o grande</h3></div></div>
+    <div class="operation-model-grid">
+      <article><span>Tienda 1 persona</span><strong>Encargado integral</strong><small>Puede configurar, vender, cerrar caja, registrar productos y ajustar stock.</small></article>
+      <article><span>Tienda 2 personas</span><strong>Operador integral + encargado</strong><small>El operador integral atiende venta, caja e inventario diario sin tocar el panel ZOW.</small></article>
+      <article><span>Empresa grande</span><strong>Cajas separadas</strong><small>Cajeros, almacen, vendedor y supervisor trabajan con permisos separados en el mismo punto de atencion.</small></article>
+    </div>
+  </section>`;
 }
 
 function renderSetupAssistant() {
@@ -2167,6 +2193,36 @@ function renderSetupAssistant() {
     </div>
     <p class="setup-hint">Recomendacion: completa estos puntos antes de entregar el acceso a cajeros o almacen.</p>
   </section>`;
+}
+
+function applySettingsPreset(preset) {
+  const cashCount = document.querySelector("#storeCashRegisterCount");
+  const allowCredit = document.querySelector("#storeAllowCredit");
+  const allowDiscounts = document.querySelector("#storeAllowDiscounts");
+  const requireCustomer = document.querySelector("#storeRequireCustomerForSale");
+  if (preset === "solo") {
+    if (cashCount) cashCount.value = "1";
+    if (allowCredit) allowCredit.checked = true;
+    if (allowDiscounts) allowDiscounts.checked = true;
+    if (requireCustomer) requireCustomer.checked = false;
+    ventasMessage = "Preset aplicado: tienda pequena con operacion rapida.";
+  }
+  if (preset === "duo") {
+    if (cashCount) cashCount.value = "1";
+    if (allowCredit) allowCredit.checked = true;
+    if (allowDiscounts) allowDiscounts.checked = true;
+    if (requireCustomer) requireCustomer.checked = false;
+    ventasMessage = "Preset aplicado: cajero y almacen separados.";
+  }
+  if (preset === "control") {
+    if (cashCount) cashCount.value = String(Math.max(Number(cashCount.value || 1), 2));
+    if (allowCredit) allowCredit.checked = false;
+    if (allowDiscounts) allowDiscounts.checked = false;
+    if (requireCustomer) requireCustomer.checked = true;
+    ventasMessage = "Preset aplicado: control estricto con cliente obligatorio.";
+  }
+  const note = document.querySelector(".settings-preset-note");
+  if (note) note.textContent = ventasMessage;
 }
 
 function renderProductRow(product) {
