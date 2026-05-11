@@ -12480,6 +12480,33 @@ body.app-ventas .pos-section-title strong {
   color: #10251f;
 }
 
+body.app-ventas .pos-result-hint,
+body.app-ventas .pos-more-results {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+  border: 1px solid rgb(15 118 110 / 10%);
+  border-radius: 14px;
+  padding: 9px 11px;
+  background: rgb(255 255 255 / 72%);
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-weight: 850;
+}
+
+body.app-ventas .pos-result-hint strong {
+  color: #0f766e;
+  font-weight: 950;
+}
+
+body.app-ventas .pos-more-results {
+  justify-content: center;
+  margin: 10px 0 0;
+  color: #0f766e;
+}
+
 body.app-ventas .quick-action-row .ghost-button {
   min-height: 48px;
   border-radius: 14px;
@@ -12602,6 +12629,45 @@ body.app-ventas .touch-product-card > * {
   min-width: 0;
   position: relative;
   z-index: 1;
+}
+
+body.app-ventas .product-badge-row {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 5px;
+  max-width: 62%;
+}
+
+body.app-ventas .product-badge {
+  border: 1px solid rgb(15 118 110 / 12%);
+  border-radius: 999px;
+  padding: 4px 7px;
+  background: rgb(255 255 255 / 82%);
+  color: #0f766e;
+  font-size: 0.68rem;
+  font-weight: 950;
+  line-height: 1;
+  white-space: nowrap;
+  box-shadow: 0 8px 18px rgb(8 30 26 / 8%);
+}
+
+body.app-ventas .product-badge.is-favorite {
+  background: rgb(245 158 11 / 14%);
+  color: #92400e;
+}
+
+body.app-ventas .product-badge.is-warning {
+  background: rgb(245 158 11 / 14%);
+  color: #92400e;
+}
+
+body.app-ventas .product-badge.is-danger {
+  background: rgb(239 68 68 / 12%);
+  color: #991b1b;
 }
 
 body.app-ventas .product-visual {
@@ -13129,6 +13195,11 @@ body.app-ventas .pos-focus-mode .cart-line-controls {
   body.app-ventas .pos-search-row {
     position: relative;
     grid-template-columns: minmax(0, 1fr) 1fr;
+  }
+
+  body.app-ventas .pos-result-hint {
+    align-items: flex-start;
+    flex-direction: column;
   }
 
   body.app-ventas .pos-search-row .touch-search {

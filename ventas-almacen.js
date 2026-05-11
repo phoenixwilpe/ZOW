@@ -704,6 +704,10 @@ function renderSell() {
   setCount(`${saleCart.length} item${saleCart.length === 1 ? "" : "s"}`);
   const posNotice = posFeedbackMessage || ventasMessage;
   const sellProducts = filteredProducts({ category: productCategoryFilter }).filter(isProductActive);
+  const sortedSellProducts = sortProductsForPos(sellProducts);
+  const visibleProductLimit = isMobilePos() ? 24 : 36;
+  const visibleSellProducts = sortedSellProducts.slice(0, visibleProductLimit);
+  const hiddenProductCount = Math.max(sortedSellProducts.length - visibleSellProducts.length, 0);
   const activeCombos = combos.filter((combo) => combo.active && comboAvailableStock(combo) > 0).slice(0, 8);
   const favoriteSellProducts = favoriteProducts
     .map((productId) => products.find((product) => product.id === productId))
@@ -782,8 +786,16 @@ function renderSell() {
           </div>
         ` : ""}
         <div class="pos-section-block pos-products-block">
-          <div class="pos-section-title"><strong>Productos disponibles</strong><span>Toca para agregar al carrito</span></div>
-          <div class="product-suggestion-grid touch-product-grid">${sellProducts.slice(0, 24).map(renderSellProduct).join("") || empty("Sin productos con esa busqueda")}</div>
+          <div class="pos-section-title">
+            <strong>Productos disponibles</strong>
+            <span>${num(sortedSellProducts.length)} resultado${sortedSellProducts.length === 1 ? "" : "s"}${hiddenProductCount ? ` / mostrando ${num(visibleProductLimit)}` : ""}</span>
+          </div>
+          <div class="pos-result-hint">
+            <strong>${productSearch ? `Busqueda: ${escapeHtml(productSearch)}` : productCategoryFilter ? `Categoria: ${escapeHtml(productCategoryFilter)}` : "Vista general"}</strong>
+            <span>Favoritos, coincidencias exactas y productos con stock aparecen primero.</span>
+          </div>
+          <div class="product-suggestion-grid touch-product-grid">${visibleSellProducts.map(renderSellProduct).join("") || empty("Sin productos con esa busqueda")}</div>
+          ${hiddenProductCount ? `<div class="pos-more-results">Hay ${num(hiddenProductCount)} producto${hiddenProductCount === 1 ? "" : "s"} mas. Usa la busqueda por nombre, codigo o categoria para filtrar.</div>` : ""}
         </div>
       </section>
       <section class="admin-panel pos-cart touch-cart-panel">
@@ -2437,8 +2449,11 @@ function renderSellProduct(product) {
   const productCode = product.barcode ? `${product.code} / ${product.barcode}` : product.code;
   const recentClass = posFeedbackTargetId === product.id ? " is-recently-added" : "";
   const stockLevel = stock <= 0 ? "danger" : stock <= Number(product.min_stock || 0) || expiry.level === "warning" ? "warning" : "ok";
+  const isFavorite = favoriteProducts.includes(product.id);
+  const alertLabel = stock <= 0 ? "Agotado" : expiry.level === "danger" ? "Vencido" : expiry.level === "warning" ? "Por vencer" : stock <= Number(product.min_stock || 0) ? "Stock bajo" : "";
   return `<button class="pos-product-card touch-product-card${recentClass}" type="button" data-add-product="${product.id}" ${blocked ? "disabled" : ""}>
     <span class="product-visual" aria-hidden="true"><i></i><i></i><i></i></span>
+    <span class="product-badge-row">${isFavorite ? `<small class="product-badge is-favorite">Favorito</small>` : ""}${alertLabel ? `<small class="product-badge is-${stockLevel}">${escapeHtml(alertLabel)}</small>` : ""}</span>
     <span class="product-code">${escapeHtml(productCode)}</span>
     <strong>${escapeHtml(product.name)}</strong>
     <span class="product-meta"><span>${escapeHtml(product.category || "Sin categoria")}</span><small class="stock-chip is-${stockLevel}">Stock ${num(stock)}${expiry.level !== "none" ? ` / ${escapeHtml(expiry.label)}` : ""}</small></span>
@@ -2642,6 +2657,35 @@ function filteredProducts(options = {}) {
       .some((value) => String(value || "").toLowerCase().includes(term));
     return matchesCategory && matchesTerm;
   });
+}
+
+function sortProductsForPos(productList) {
+  const term = normalizeText(productSearch);
+  return [...productList].sort((a, b) => productPosRank(b, term) - productPosRank(a, term) || String(a.name || "").localeCompare(String(b.name || ""), "es"));
+}
+
+function productPosRank(product, term) {
+  const stock = Number(product.stock || 0);
+  const minStock = Number(product.min_stock || 0);
+  const code = normalizeText(product.code);
+  const barcode = normalizeText(product.barcode);
+  const name = normalizeText(product.name);
+  const category = normalizeText(product.category);
+  const expiry = expiryStatus(product);
+  let rank = 0;
+  if (favoriteProducts.includes(product.id)) rank += 80;
+  if (stock > 0) rank += 35;
+  if (stock > minStock) rank += 12;
+  if (expiry.level === "warning") rank -= 18;
+  if (expiry.level === "danger" || stock <= 0) rank -= 90;
+  if (term) {
+    if (code === term || barcode === term) rank += 120;
+    else if (name === term) rank += 95;
+    else if (code.startsWith(term) || barcode.startsWith(term)) rank += 65;
+    else if (name.startsWith(term)) rank += 45;
+    else if (category.includes(term)) rank += 18;
+  }
+  return rank;
 }
 
 function productCategories() {
