@@ -755,7 +755,8 @@ function renderSell() {
         ` : ""}
         ${saleCart.length ? renderPosMiniCartPreview(totals, isCashOpen) : ""}
         <div class="pos-search-row">
-          <label class="toolbar-search touch-search">Buscar o escanear<input id="productSearchInput" type="search" value="${escapeHtml(productSearch)}" placeholder="Codigo, barras o nombre del producto" /></label>
+          <label class="toolbar-search touch-search">Buscar o escanear<input id="productSearchInput" type="search" value="${escapeHtml(productSearch)}" placeholder="Codigo, barras o nombre del producto" enterkeyhint="search" autocomplete="off" /></label>
+          <button class="ghost-button touch-action icon-text-button" type="button" id="applyProductSearchBtn"><span class="ui-ico">⌕</span>Buscar</button>
           <button class="primary-button touch-action icon-text-button" type="button" id="scanAddBtn"><span class="ui-ico">+</span>Agregar</button>
           ${productSearch ? `<button class="ghost-button touch-action icon-text-button" type="button" id="clearSearchBtn"><span class="ui-ico">x</span>Limpiar</button>` : ""}
         </div>
@@ -848,6 +849,11 @@ function renderSell() {
   });
   document.querySelector("#clearSearchBtn")?.addEventListener("click", () => {
     productSearch = "";
+    renderMain();
+  });
+  document.querySelector("#applyProductSearchBtn")?.addEventListener("click", () => {
+    productSearch = value("#productSearchInput");
+    posMobilePanel = "products";
     renderMain();
   });
   document.querySelectorAll("[data-product-filter]").forEach((button) => button.addEventListener("click", () => {
@@ -2651,6 +2657,7 @@ function bindProductSearch() {
     const caretPosition = input.selectionStart || productSearch.length;
     const mobile = isMobilePos();
     productSearchTimer = window.setTimeout(() => {
+      if (document.activeElement === input && input.value !== productSearch) return;
       posMobilePanel = "products";
       renderMain();
       window.requestAnimationFrame(() => {
@@ -2659,7 +2666,7 @@ function bindProductSearch() {
         if (!mobile) nextInput.focus({ preventScroll: true });
         nextInput.setSelectionRange(caretPosition, caretPosition);
       });
-    }, mobile ? 720 : 420);
+    }, mobile ? 1250 : 760);
   });
   input.addEventListener("keydown", (event) => {
     if (event.key === "Enter") {
