@@ -527,6 +527,26 @@ body.system-zow-site .site-footer a {
   color: var(--zow-blue);
 }
 
+body.system-zow-site .product-card.upcoming-card {
+  border-style: dashed;
+  background:
+    linear-gradient(145deg, rgb(255 255 255 / 78%), rgb(255 255 255 / 56%)),
+    linear-gradient(135deg, rgb(34 197 94 / 7%), transparent 52%, rgb(0 184 217 / 6%));
+}
+
+body.system-zow-site .product-card.upcoming-card:hover {
+  transform: translateY(-3px);
+}
+
+body.system-zow-site .product-card.upcoming-card span {
+  background: rgb(34 197 94 / 10%);
+  color: #15803d;
+}
+
+body.system-zow-site .product-card.upcoming-card a {
+  color: #15803d;
+}
+
 body.system-zow-site .operation-section,
 body.system-zow-site .site-band {
   width: 100%;
@@ -6947,6 +6967,18 @@ body.app-ventas .business-health-grid article {
   border-radius: 6px;
 }
 
+.health-icon::before {
+  inset: 16px 29px;
+  border-color: var(--zow-green);
+  border-radius: 6px;
+}
+
+.health-icon::after {
+  inset: 29px 16px;
+  border-color: var(--zow-cyan);
+  border-radius: 6px;
+}
+
 .system-zow-site .product-card span,
 .system-zow-site .plan-grid span {
   background: rgb(98 239 255 / 10%);
@@ -9984,6 +10016,7 @@ body.system-zow-site {
   --zow-deep: #07111f;
   --zow-neon: #00e5ff;
   --zow-lime: #8cffc1;
+  overflow-x: hidden;
   background:
     radial-gradient(circle at 72% 10%, rgb(0 229 255 / 18%), transparent 30rem),
     radial-gradient(circle at 16% 22%, rgb(37 99 235 / 16%), transparent 28rem),
@@ -9993,6 +10026,7 @@ body.system-zow-site {
 body.system-zow-site .site-hero {
   min-height: min(880px, calc(100vh - 74px));
   perspective: 1300px;
+  overflow: clip;
 }
 
 body.system-zow-site .site-hero-copy h1 {
@@ -10018,12 +10052,28 @@ body.system-zow-site .site-header {
 body.system-zow-site .site-brand {
   --brand-tilt-x: 0deg;
   --brand-tilt-y: 0deg;
+  min-width: 0;
   transform-style: preserve-3d;
+}
+
+body.system-zow-site .site-brand-logo {
+  display: block;
+  width: clamp(164px, 15vw, 220px);
+  height: auto;
+  filter: drop-shadow(0 10px 20px rgb(37 99 235 / 10%));
+  transform: perspective(620px) rotateX(var(--brand-tilt-x)) rotateY(var(--brand-tilt-y)) translateZ(0);
+  transition: transform 180ms ease, filter 180ms ease;
 }
 
 body.system-zow-site .site-brand .zow-symbol {
   transform: perspective(620px) rotateX(var(--brand-tilt-x)) rotateY(var(--brand-tilt-y)) translateZ(0);
   transition: transform 180ms ease, box-shadow 180ms ease, border-color 180ms ease;
+}
+
+body.system-zow-site .site-brand:hover .site-brand-logo {
+  filter:
+    drop-shadow(0 18px 32px rgb(37 99 235 / 18%))
+    drop-shadow(0 0 16px rgb(0 184 217 / 14%));
 }
 
 body.system-zow-site .site-brand:hover .zow-symbol {
@@ -10215,8 +10265,10 @@ body.system-zow-site .floating-tech-card.card-b {
 }
 
 body.system-zow-site .floating-tech-card.card-c {
-  right: 6%;
-  bottom: 4%;
+  right: auto;
+  left: 50%;
+  bottom: 3%;
+  max-width: 205px;
   animation-delay: 1500ms;
 }
 
@@ -10582,7 +10634,7 @@ body.system-zow-site .site-footer {
   }
 
   body.system-zow-site .floating-tech-card.card-c {
-    margin-left: 18%;
+    margin-left: 0;
   }
 }
 
@@ -13243,6 +13295,526 @@ body.app-ventas .pos-focus-mode .cart-line-controls {
 
   body.app-ventas .mobile-pos-summary > div {
     grid-column: 1 / -1;
+  }
+}
+
+/* SYSTEM ZOW production polish */
+body.system-zow-site {
+  scroll-behavior: smooth;
+}
+
+body.system-zow-site .product-showcase {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: stretch;
+}
+
+body.system-zow-site .site-hero-copy h1 {
+  max-width: 760px;
+  margin: 10px 0 22px;
+  font-size: clamp(3rem, 5.7vw, 5.8rem);
+  line-height: 0.95;
+}
+
+body.system-zow-site .product-card.system-card {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(190px, 0.68fr) minmax(0, 1fr);
+  gap: 24px;
+  min-height: 360px;
+  overflow: hidden;
+  border-radius: 30px;
+  padding: 24px;
+  isolation: isolate;
+  transition: transform 220ms ease, border-color 220ms ease, box-shadow 220ms ease;
+}
+
+body.system-zow-site .product-card.system-card::before {
+  content: "";
+  position: absolute;
+  inset: -1px;
+  z-index: -1;
+  border-radius: inherit;
+  opacity: 0.9;
+}
+
+body.system-zow-site .product-card.system-card::after {
+  content: "";
+  position: absolute;
+  inset: auto -20% -36%;
+  z-index: -1;
+  height: 190px;
+  background: radial-gradient(circle, rgb(0 184 217 / 18%), transparent 64%);
+  transition: transform 260ms ease, opacity 260ms ease;
+}
+
+body.system-zow-site .product-card.system-card:hover {
+  border-color: rgb(0 184 217 / 30%);
+  box-shadow: 0 34px 86px rgb(15 33 58 / 14%);
+  transform: translateY(-7px);
+}
+
+body.system-zow-site .product-card.system-card:hover::after {
+  opacity: 1;
+  transform: translateY(-16px) scale(1.08);
+}
+
+body.system-zow-site .product-card.is-live::before {
+  background:
+    linear-gradient(145deg, rgb(255 255 255 / 94%), rgb(235 249 255 / 76%)),
+    radial-gradient(circle at 20% 0%, rgb(0 184 217 / 18%), transparent 42%),
+    radial-gradient(circle at 94% 16%, rgb(37 99 235 / 14%), transparent 36%);
+}
+
+body.system-zow-site .product-card.upcoming-card {
+  grid-column: 1 / -1;
+  border-style: solid;
+  border-color: rgb(21 128 61 / 18%);
+}
+
+body.system-zow-site .product-card.upcoming-card::before {
+  background:
+    linear-gradient(145deg, rgb(255 255 255 / 88%), rgb(238 253 246 / 72%)),
+    repeating-linear-gradient(135deg, rgb(21 128 61 / 8%) 0 1px, transparent 1px 18px),
+    radial-gradient(circle at 15% 0%, rgb(34 197 94 / 18%), transparent 42%);
+}
+
+body.system-zow-site .product-visual {
+  position: relative;
+  min-height: 100%;
+  border: 1px solid rgb(37 99 235 / 12%);
+  border-radius: 24px;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  background:
+    linear-gradient(145deg, rgb(7 17 31 / 92%), rgb(19 50 92 / 82%)),
+    radial-gradient(circle at 50% 26%, rgb(0 229 255 / 22%), transparent 54%);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 12%), 0 24px 58px rgb(17 31 49 / 14%);
+}
+
+body.system-zow-site .product-visual::before {
+  content: "";
+  position: absolute;
+  inset: 18px;
+  border: 1px solid rgb(98 239 255 / 16%);
+  border-radius: 18px;
+  background:
+    linear-gradient(90deg, transparent 0 47%, rgb(98 239 255 / 8%) 48% 52%, transparent 53%),
+    linear-gradient(180deg, transparent 0 47%, rgb(140 255 193 / 7%) 48% 52%, transparent 53%);
+  background-size: 28px 28px;
+}
+
+body.system-zow-site .product-visual img {
+  position: relative;
+  z-index: 2;
+  width: min(230px, 88%);
+  height: auto;
+  filter: drop-shadow(0 18px 32px rgb(0 229 255 / 20%));
+  transition: transform 260ms ease;
+}
+
+body.system-zow-site .health-card .product-visual img {
+  filter: drop-shadow(0 18px 36px rgb(140 255 193 / 22%));
+}
+
+body.system-zow-site .correspondence-card .product-visual::after,
+body.system-zow-site .sales-card .product-visual::after {
+  position: absolute;
+  right: 14px;
+  bottom: 8px;
+  z-index: 1;
+  color: rgb(255 255 255 / 8%);
+  font-size: clamp(3.8rem, 8vw, 5.8rem);
+  font-weight: 950;
+  line-height: 1;
+}
+
+body.system-zow-site .correspondence-card .product-visual::after {
+  content: "DOC";
+}
+
+body.system-zow-site .sales-card .product-visual::after {
+  content: "POS";
+}
+
+body.system-zow-site .product-card:hover .product-visual img {
+  transform: scale(1.045) rotate(-1deg);
+}
+
+body.system-zow-site .screen-line,
+body.system-zow-site .screen-dot {
+  position: absolute;
+  z-index: 1;
+  border-radius: 999px;
+  background: linear-gradient(90deg, transparent, rgb(98 239 255 / 62%), transparent);
+}
+
+body.system-zow-site .screen-line {
+  width: 58%;
+  height: 2px;
+}
+
+body.system-zow-site .line-a {
+  top: 26%;
+  left: 12%;
+}
+
+body.system-zow-site .line-b {
+  right: 12%;
+  bottom: 23%;
+}
+
+body.system-zow-site .screen-dot {
+  width: 12px;
+  height: 12px;
+  right: 20%;
+  top: 20%;
+  background: var(--zow-lime);
+  box-shadow: 0 0 24px rgb(140 255 193 / 60%);
+}
+
+body.system-zow-site .health-visual {
+  background:
+    linear-gradient(145deg, rgb(5 37 25 / 92%), rgb(13 92 69 / 78%)),
+    radial-gradient(circle at 45% 24%, rgb(140 255 193 / 24%), transparent 54%);
+}
+
+body.system-zow-site .health-cross {
+  position: relative;
+  z-index: 2;
+  width: 104px;
+  aspect-ratio: 1;
+  filter: drop-shadow(0 22px 38px rgb(34 197 94 / 28%));
+}
+
+body.system-zow-site .health-cross::before,
+body.system-zow-site .health-cross::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  border-radius: 18px;
+  background: linear-gradient(135deg, #ecfff6, #8cffc1);
+}
+
+body.system-zow-site .health-cross::before {
+  width: 34px;
+  height: 100%;
+}
+
+body.system-zow-site .health-cross::after {
+  width: 100%;
+  height: 34px;
+}
+
+body.system-zow-site .pulse-ring {
+  position: absolute;
+  z-index: 1;
+  width: 150px;
+  aspect-ratio: 1;
+  border: 1px solid rgb(140 255 193 / 24%);
+  border-radius: 999px;
+  animation: zowHealthPulse 3.8s ease-in-out infinite;
+}
+
+body.system-zow-site .pulse-ring.ring-b {
+  width: 210px;
+  animation-delay: 900ms;
+}
+
+body.system-zow-site .product-content {
+  display: grid;
+  align-content: start;
+  gap: 12px;
+}
+
+body.system-zow-site .product-card.system-card .status-pill {
+  width: fit-content;
+  border: 1px solid rgb(0 184 217 / 18%);
+  border-radius: 999px;
+  padding: 8px 11px;
+  background: rgb(0 184 217 / 9%);
+  color: #126b86;
+  font-size: 0.74rem;
+  font-weight: 950;
+  text-transform: uppercase;
+}
+
+body.system-zow-site .product-card.upcoming-card .status-pill {
+  border-color: rgb(21 128 61 / 18%);
+  background: rgb(34 197 94 / 11%);
+  color: #15803d;
+}
+
+body.system-zow-site .product-card.system-card h3 {
+  margin: 2px 0 0;
+  font-size: clamp(1.45rem, 2.6vw, 2.2rem);
+  line-height: 1.02;
+}
+
+body.system-zow-site .product-card.system-card p {
+  margin: 0;
+  line-height: 1.58;
+}
+
+body.system-zow-site .product-points {
+  display: grid;
+  gap: 8px;
+  margin: 4px 0;
+  padding: 0;
+  list-style: none;
+}
+
+body.system-zow-site .product-points li {
+  position: relative;
+  padding-left: 24px;
+  color: var(--zow-muted);
+  font-size: 0.9rem;
+  font-weight: 820;
+}
+
+body.system-zow-site .product-points li::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0.36rem;
+  width: 11px;
+  height: 11px;
+  border-radius: 999px;
+  background: linear-gradient(135deg, var(--zow-blue), var(--zow-cyan));
+  box-shadow: 0 0 18px rgb(0 184 217 / 30%);
+}
+
+body.system-zow-site .upcoming-card .product-points li::before {
+  background: linear-gradient(135deg, #15803d, #35d07f);
+}
+
+body.system-zow-site .product-link {
+  width: fit-content;
+  min-height: 42px;
+  align-items: center;
+  border: 1px solid rgb(37 99 235 / 16%);
+  border-radius: 999px;
+  padding: 10px 14px;
+  background: #ffffff;
+  box-shadow: 0 14px 34px rgb(37 99 235 / 10%);
+  transition: transform 180ms ease, box-shadow 180ms ease, border-color 180ms ease;
+}
+
+body.system-zow-site .product-link:hover {
+  border-color: rgb(0 184 217 / 34%);
+  box-shadow: 0 20px 44px rgb(37 99 235 / 15%);
+  transform: translateY(-2px);
+}
+
+body.system-zow-site .product-link.soft-link {
+  border-color: rgb(21 128 61 / 18%);
+  background: rgb(255 255 255 / 82%);
+  box-shadow: none;
+}
+
+body.system-zow-site .contact-section {
+  grid-template-columns: minmax(0, 1fr) minmax(360px, 0.92fr);
+  gap: clamp(24px, 4vw, 44px);
+}
+
+body.system-zow-site .contact-hub {
+  display: grid;
+  gap: 14px;
+}
+
+body.system-zow-site .contact-card,
+body.system-zow-site .location-card {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid rgb(37 99 235 / 12%);
+  border-radius: 24px;
+  padding: 18px;
+  background:
+    linear-gradient(145deg, rgb(255 255 255 / 92%), rgb(237 249 255 / 68%)),
+    radial-gradient(circle at 12% 0%, rgb(0 184 217 / 12%), transparent 48%);
+  box-shadow: 0 22px 54px rgb(17 31 49 / 8%);
+}
+
+body.system-zow-site .contact-card::after,
+body.system-zow-site .location-card::after {
+  content: "";
+  position: absolute;
+  inset: auto 18px 0;
+  height: 3px;
+  border-radius: 999px 999px 0 0;
+  background: linear-gradient(90deg, var(--zow-blue), var(--zow-cyan), var(--zow-lime));
+}
+
+body.system-zow-site .contact-card span,
+body.system-zow-site .location-card span {
+  color: var(--zow-blue);
+  font-size: 0.74rem;
+  font-weight: 950;
+  text-transform: uppercase;
+}
+
+body.system-zow-site .contact-card strong,
+body.system-zow-site .location-card strong {
+  color: var(--zow-ink);
+  font-size: 1.08rem;
+}
+
+body.system-zow-site .contact-card p,
+body.system-zow-site .location-card p {
+  margin: 6px 0 0;
+  color: var(--zow-muted);
+  line-height: 1.55;
+}
+
+body.system-zow-site .channel-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 12px;
+}
+
+body.system-zow-site .channel-list a {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  border: 1px solid rgb(37 99 235 / 10%);
+  border-radius: 16px;
+  padding: 12px;
+  background: rgb(255 255 255 / 72%);
+  color: var(--zow-ink);
+  text-decoration: none;
+  transition: transform 170ms ease, border-color 170ms ease, box-shadow 170ms ease;
+}
+
+body.system-zow-site .channel-list a:hover {
+  border-color: rgb(0 184 217 / 28%);
+  box-shadow: 0 14px 30px rgb(37 99 235 / 10%);
+  transform: translateY(-2px);
+}
+
+body.system-zow-site .channel-list b {
+  color: var(--zow-muted);
+  font-size: 0.72rem;
+  text-transform: uppercase;
+}
+
+body.system-zow-site .channel-list strong {
+  overflow-wrap: anywhere;
+  font-size: 0.92rem;
+}
+
+body.system-zow-site .location-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+body.system-zow-site .location-card {
+  min-height: 126px;
+  background:
+    linear-gradient(145deg, rgb(255 255 255 / 90%), rgb(241 253 247 / 72%)),
+    radial-gradient(circle at 18% 0%, rgb(34 197 94 / 13%), transparent 48%);
+}
+
+body.system-zow-site .request-form {
+  position: sticky;
+  top: 92px;
+  border-radius: 30px;
+  box-shadow: 0 34px 86px rgb(17 31 49 / 12%);
+}
+
+body.system-zow-site .request-form::before {
+  content: "Respuesta comercial";
+  display: inline-flex;
+  width: fit-content;
+  margin-bottom: 10px;
+  border: 1px solid rgb(0 184 217 / 18%);
+  border-radius: 999px;
+  padding: 7px 10px;
+  background: rgb(0 184 217 / 9%);
+  color: var(--zow-blue);
+  font-size: 0.74rem;
+  font-weight: 950;
+  text-transform: uppercase;
+}
+
+body.system-zow-site .request-form input,
+body.system-zow-site .request-form select,
+body.system-zow-site .request-form textarea {
+  transition: border-color 170ms ease, box-shadow 170ms ease, background 170ms ease;
+}
+
+body.system-zow-site .request-form input:focus,
+body.system-zow-site .request-form select:focus,
+body.system-zow-site .request-form textarea:focus {
+  border-color: rgb(0 184 217 / 44%);
+  background: #ffffff;
+  box-shadow: 0 0 0 4px rgb(0 184 217 / 10%);
+  outline: 0;
+}
+
+@keyframes zowHealthPulse {
+  0%, 100% {
+    opacity: 0.28;
+    transform: scale(0.9);
+  }
+  50% {
+    opacity: 0.86;
+    transform: scale(1.08);
+  }
+}
+
+@media (max-width: 980px) {
+  body.system-zow-site .product-showcase,
+  body.system-zow-site .contact-section {
+    grid-template-columns: 1fr;
+  }
+
+  body.system-zow-site .product-card.upcoming-card {
+    grid-column: auto;
+  }
+
+  body.system-zow-site .request-form {
+    position: static;
+  }
+}
+
+@media (max-width: 680px) {
+  body.system-zow-site .site-brand-logo {
+    width: clamp(136px, 48vw, 174px);
+  }
+
+  body.system-zow-site .site-hero-copy h1 {
+    font-size: clamp(2.45rem, 12vw, 3.5rem);
+    line-height: 1;
+  }
+
+  body.system-zow-site .product-card.system-card {
+    grid-template-columns: 1fr;
+    min-height: 0;
+    border-radius: 24px;
+    padding: 18px;
+  }
+
+  body.system-zow-site .product-visual {
+    min-height: 210px;
+  }
+
+  body.system-zow-site .channel-list,
+  body.system-zow-site .location-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  body.system-zow-site *,
+  body.system-zow-site *::before,
+  body.system-zow-site *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
   }
 }
 

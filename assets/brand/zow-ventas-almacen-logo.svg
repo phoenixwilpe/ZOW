@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 360 260" role="img" aria-labelledby="title desc">
+  <title id="title">Zow Ventas-Almacen</title>
+  <desc id="desc">Logo para el sistema Zow Ventas-Almacen.</desc>
+  <defs>
+    <linearGradient id="salesBg" x1="52" y1="26" x2="310" y2="230" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#081421"/>
+      <stop offset=".56" stop-color="#10284b"/>
+      <stop offset="1" stop-color="#053b40"/>
+    </linearGradient>
+    <linearGradient id="salesAccent" x1="102" y1="60" x2="256" y2="182" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#22d3ee"/>
+      <stop offset=".48" stop-color="#2dd4bf"/>
+      <stop offset="1" stop-color="#8cffc1"/>
+    </linearGradient>
+  </defs>
+  <rect x="28" y="24" width="304" height="212" rx="34" fill="url(#salesBg)"/>
+  <path d="M72 68h46M244 68h44M76 190h56M234 190h50" stroke="#8cffc1" stroke-width="2" stroke-linecap="round" opacity=".32"/>
+  <g>
+    <rect x="92" y="77" width="118" height="88" rx="20" fill="#edfaff"/>
+    <rect x="108" y="93" width="86" height="24" rx="8" fill="#0e2846" opacity=".9"/>
+    <path d="M119 134h22M155 134h22M119 149h58" stroke="#0e2846" stroke-width="8" stroke-linecap="round" opacity=".28"/>
+    <path d="M210 104h39l15 68H135" fill="none" stroke="url(#salesAccent)" stroke-width="14" stroke-linecap="round" stroke-linejoin="round"/>
+    <circle cx="160" cy="183" r="12" fill="#22d3ee"/>
+    <circle cx="244" cy="183" r="12" fill="#8cffc1"/>
+    <rect x="226" y="75" width="42" height="42" rx="12" fill="url(#salesAccent)"/>
+    <path d="M238 88h18M238 101h18" stroke="#062033" stroke-width="6" stroke-linecap="round" opacity=".58"/>
+  </g>
+  <text x="180" y="214" text-anchor="middle" fill="#f8fbff" font-family="Montserrat, Arial, sans-serif" font-size="23" font-weight="850">Zow Ventas-Almacen</text>
+  <text x="180" y="232" text-anchor="middle" fill="#a8f4ff" font-family="Montserrat, Arial, sans-serif" font-size="11" font-weight="700" letter-spacing="2.6">POS CAJA INVENTARIO</text>
+</svg>

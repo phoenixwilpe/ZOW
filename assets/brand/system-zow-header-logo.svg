@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 360 92" role="img" aria-labelledby="title desc">
+  <title id="title">SYSTEM ZOW SAAS</title>
+  <desc id="desc">Logo compacto para el encabezado web de SYSTEM ZOW SAAS.</desc>
+  <defs>
+    <linearGradient id="headerMark" x1="20" y1="18" x2="84" y2="76" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#7dd3fc"/>
+      <stop offset=".5" stop-color="#22d3ee"/>
+      <stop offset="1" stop-color="#8cffc1"/>
+    </linearGradient>
+    <filter id="headerGlow" x="-25%" y="-25%" width="150%" height="150%">
+      <feGaussianBlur stdDeviation="2.5" result="blur"/>
+      <feColorMatrix in="blur" type="matrix" values="0 0 0 0 0.02 0 0 0 0 0.68 0 0 0 0 0.86 0 0 0 .35 0" result="glow"/>
+      <feMerge>
+        <feMergeNode in="glow"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+
+  <g filter="url(#headerGlow)">
+    <rect x="14" y="14" width="64" height="64" rx="18" fill="#07111f"/>
+    <rect x="15" y="15" width="62" height="62" rx="17" fill="none" stroke="#22d3ee" stroke-opacity=".32"/>
+    <path d="M29 33h33L36 59h31" fill="none" stroke="url(#headerMark)" stroke-width="9" stroke-linecap="round" stroke-linejoin="round"/>
+    <circle cx="30" cy="33" r="3.4" fill="#8cffc1"/>
+    <circle cx="67" cy="59" r="3.4" fill="#22d3ee"/>
+  </g>
+
+  <g font-family="Montserrat, Arial, sans-serif">
+    <text x="94" y="42" fill="#07111f" font-size="25" font-weight="900" letter-spacing=".8">SYSTEM ZOW</text>
+    <text x="96" y="64" fill="#0f8ea3" font-size="11" font-weight="850" letter-spacing="4.4">SAAS EMPRESARIAL</text>
+  </g>
+
+  <path d="M309 29h11v11h-11zM328 29h11v11h-11zM309 52h11v11h-11zM328 52h11v11h-11z" fill="#22d3ee" opacity=".64"/>
+  <path d="M320 35h8M320 58h8" stroke="#8cffc1" stroke-width="2" stroke-linecap="round" opacity=".7"/>
+</svg>

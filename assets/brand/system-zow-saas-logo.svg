@@ -1,0 +1,49 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 520 220" role="img" aria-labelledby="title desc">
+  <title id="title">SYSTEM ZOW SAAS</title>
+  <desc id="desc">Logo corporativo moderno para SYSTEM ZOW SAAS.</desc>
+  <defs>
+    <linearGradient id="markGradient" x1="76" y1="42" x2="194" y2="168" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#7dd3fc"/>
+      <stop offset=".48" stop-color="#22d3ee"/>
+      <stop offset="1" stop-color="#8cffc1"/>
+    </linearGradient>
+    <linearGradient id="panelGradient" x1="26" y1="18" x2="482" y2="214" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#07111f"/>
+      <stop offset=".58" stop-color="#0d2038"/>
+      <stop offset="1" stop-color="#082b2e"/>
+    </linearGradient>
+    <filter id="softGlow" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="4" result="blur"/>
+      <feColorMatrix in="blur" type="matrix" values="0 0 0 0 0.02 0 0 0 0 0.74 0 0 0 0 0.86 0 0 0 .42 0" result="glow"/>
+      <feMerge>
+        <feMergeNode in="glow"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+
+  <rect x="16" y="16" width="488" height="188" rx="34" fill="url(#panelGradient)"/>
+  <rect x="17" y="17" width="486" height="186" rx="33" fill="none" stroke="#8cffc1" stroke-opacity=".16"/>
+  <path d="M48 164c54-40 92-56 143-48 42 7 73 30 120 26 42-3 76-24 128-72" fill="none" stroke="#22d3ee" stroke-width="2" stroke-linecap="round" opacity=".2"/>
+  <path d="M54 58h54M386 58h42M54 174h72M414 172h36" stroke="#8cffc1" stroke-width="2" stroke-linecap="round" opacity=".28"/>
+
+  <g filter="url(#softGlow)">
+    <rect x="58" y="50" width="122" height="122" rx="30" fill="#071827" stroke="#22d3ee" stroke-opacity=".28"/>
+    <path d="M92 88h66l-51 48h57" fill="none" stroke="url(#markGradient)" stroke-width="15" stroke-linecap="round" stroke-linejoin="round"/>
+    <circle cx="91" cy="88" r="6" fill="#8cffc1"/>
+    <circle cx="164" cy="136" r="6" fill="#22d3ee"/>
+    <path d="M73 154h22M144 66h18" stroke="#7dd3fc" stroke-width="4" stroke-linecap="round" opacity=".7"/>
+  </g>
+
+  <g font-family="Montserrat, Arial, sans-serif">
+    <text x="214" y="96" fill="#f8fbff" font-size="36" font-weight="900" letter-spacing="1.2">SYSTEM ZOW</text>
+    <text x="216" y="128" fill="#a8f4ff" font-size="17" font-weight="800" letter-spacing="5.6">SAAS</text>
+    <text x="216" y="154" fill="#d9f7ff" fill-opacity=".82" font-size="13" font-weight="600">Soluciones digitales para empresas</text>
+  </g>
+
+  <g fill="none" stroke-linecap="round" stroke-linejoin="round" opacity=".72">
+    <path d="M426 104h24v24h-24z" stroke="#22d3ee" stroke-width="3"/>
+    <path d="M438 84v20M438 128v20M406 116h20M450 116h20" stroke="#8cffc1" stroke-width="3"/>
+    <circle cx="438" cy="116" r="5" fill="#8cffc1" stroke="none"/>
+  </g>
+</svg>

@@ -15,6 +15,7 @@ const scrollProgress = document.querySelector(".site-scroll-progress");
 const navLinks = [...document.querySelectorAll("[data-nav-link]")];
 const prefersReducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 const lowPowerViewport = window.matchMedia("(max-width: 760px)").matches;
+const shouldAnimateHero = !prefersReducedMotion && !lowPowerViewport;
 const planLabels = {
   mensual: "Mensual",
   trimestral: "Trimestral",
@@ -67,7 +68,7 @@ const revealObserver = "IntersectionObserver" in window
     )
   : null;
 
-document.querySelectorAll(".site-section, .product-card, .plan-grid article, .operation-grid article, .trust-grid article, .faq-shell, .implementation-flow article, .launch-cta, .request-form").forEach((item) => {
+document.querySelectorAll(".site-section-head, .capability-grid article, .product-card, .service-card, .plan-grid article, .trust-grid article, .faq-shell, .contact-card, .location-card, .request-form").forEach((item) => {
   item.classList.add("reveal-item");
   revealObserver?.observe(item);
 });
@@ -177,7 +178,7 @@ function resizeHeroCanvas() {
 
 function drawHeroCanvas(frameTime = performance.now()) {
   if (!heroCanvas || !heroContext) return;
-  if (!heroVisible || document.hidden || prefersReducedMotion) {
+  if (!heroVisible || document.hidden || !shouldAnimateHero) {
     heroAnimation = 0;
     return;
   }
@@ -251,9 +252,9 @@ function drawHeroCanvas(frameTime = performance.now()) {
   heroAnimation = requestAnimationFrame(drawHeroCanvas);
 }
 
-if (heroCanvas && heroContext) {
+if (heroCanvas && heroContext && shouldAnimateHero) {
   resizeHeroCanvas();
-  if (!prefersReducedMotion) drawHeroCanvas();
+  drawHeroCanvas();
   let resizeTicking = false;
   window.addEventListener("resize", () => {
     if (resizeTicking) return;
@@ -267,7 +268,7 @@ if (heroCanvas && heroContext) {
     ? new IntersectionObserver(
         ([entry]) => {
           heroVisible = Boolean(entry?.isIntersecting);
-          if (heroVisible && !heroAnimation && !prefersReducedMotion) drawHeroCanvas();
+          if (heroVisible && !heroAnimation) drawHeroCanvas();
           if (!heroVisible && heroAnimation) {
             cancelAnimationFrame(heroAnimation);
             heroAnimation = 0;
@@ -281,7 +282,7 @@ if (heroCanvas && heroContext) {
     if (document.hidden) {
       cancelAnimationFrame(heroAnimation);
       heroAnimation = 0;
-    } else if (heroVisible && !heroAnimation && !prefersReducedMotion) {
+    } else if (heroVisible && !heroAnimation) {
       drawHeroCanvas();
     }
   });
