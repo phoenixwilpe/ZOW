@@ -1101,6 +1101,7 @@ function renderHistory() {
         <article><span>Cobrado</span><strong>${money(historyStats.paid)}</strong><small>${money(historyStats.pending)} pendiente</small></article>
         <article><span>Ticket promedio</span><strong>${money(historyStats.average)}</strong><small>Ventas validas</small></article>
       </div>
+      ${renderHistoryControlStrip(visibleSales, historyStats)}
       <div class="history-quick-filters" aria-label="Filtros rapidos de historial">
         <button type="button" data-history-preset="today">Hoy</button>
         <button type="button" data-history-preset="yesterday">Ayer</button>
@@ -1134,6 +1135,30 @@ function renderHistory() {
   document.querySelectorAll("[data-detail-sale]").forEach((button) => button.addEventListener("click", () => showSaleDetail(button.dataset.detailSale)));
   document.querySelectorAll("[data-reprint-sale]").forEach((button) => button.addEventListener("click", () => reprintSale(button.dataset.reprintSale)));
   document.querySelectorAll("[data-void-sale]").forEach((button) => button.addEventListener("click", () => voidSale(button.dataset.voidSale)));
+}
+
+function renderHistoryControlStrip(visibleSales, historyStats) {
+  const annulable = visibleSales.filter((sale) => saleStatus(sale) !== "anulada" && !sale.cash_closed && can("voidSales"));
+  const pendingPayments = visibleSales.filter((sale) => Number(sale.balance_due || 0) > 0 && sale.status !== "anulada");
+  const closedSales = visibleSales.filter((sale) => sale.cash_closed && sale.status !== "anulada");
+  const latest = visibleSales.find((sale) => sale.status !== "anulada");
+  const activeFilters = [
+    historyFilter.q ? `Busqueda: ${historyFilter.q}` : "",
+    historyFilter.date ? `Fecha: ${historyFilter.date}` : "",
+    historyFilter.method ? `Metodo: ${paymentLabel(historyFilter.method)}` : "",
+    historyFilter.status ? `Estado: ${historyFilter.status}` : ""
+  ].filter(Boolean);
+  const health = historyStats.pending > 0 || annulable.length > 0 ? "is-warning" : "is-ok";
+  return `<section class="history-control-strip ${health}">
+    <article>
+      <span>Revision rapida</span>
+      <strong>${activeFilters.length ? activeFilters.join(" / ") : "Vista general del turno"}</strong>
+      <small>${latest ? `Ultima operacion ${escapeHtml(latest.code)} / ${formatDateTime(latest.created_at)}` : "Sin operaciones visibles"}</small>
+    </article>
+    <article><span>Anulables</span><strong>${num(annulable.length)}</strong><small>Ventas abiertas del turno</small></article>
+    <article><span>Cuentas por cobrar</span><strong>${num(pendingPayments.length)}</strong><small>${money(historyStats.pending)} pendiente</small></article>
+    <article><span>Caja cerrada</span><strong>${num(closedSales.length)}</strong><small>Solo consulta o reimpresion</small></article>
+  </section>`;
 }
 
 function filteredHistorySales() {
@@ -2704,11 +2729,13 @@ function renderHistorySaleRow(sale) {
   const canVoid = status !== "anulada" && !sale.cash_closed && can("voidSales");
   const method = paymentLabel(sale.payment_method || meta.method || "efectivo");
   const statusClass = status === "anulada" ? "danger-text" : status === "pagada" ? "ok-text" : "warn-text";
+  const operationMode = sale.cash_closed ? "Caja cerrada" : status === "anulada" ? "Operacion anulada" : canVoid ? "Anulable" : "Consulta";
   return `<article class="sales-history-row ${status === "anulada" ? "is-voided" : ""}">
     <div class="sales-history-main">
       <span class="sales-history-code">${escapeHtml(sale.code)}</span>
       <strong>${escapeHtml(sale.customer_name || "Cliente sin registrar")}</strong>
       <span>${formatDateTime(sale.created_at)} / ${escapeHtml(sale.seller_name || "Cajero")}</span>
+      <small>${escapeHtml(operationMode)}</small>
     </div>
     <div class="sales-history-money">
       <span>Total</span>
