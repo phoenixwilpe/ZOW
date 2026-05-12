@@ -1957,6 +1957,8 @@ function renderPurchases() {
         <div><p class="eyebrow">Detalle</p><h3>Productos de la compra</h3></div>
         <div class="admin-head-actions">
           <span>${money(purchaseTotal)}</span>
+          <button class="ghost-button" type="button" id="copyPurchaseOrderText" ${purchaseCart.length ? "" : "disabled"}>Copiar orden</button>
+          <button class="ghost-button" type="button" id="whatsAppPurchaseOrder" ${purchaseCart.length ? "" : "disabled"}>WhatsApp proveedor</button>
           <button class="ghost-button" type="button" id="printPurchaseOrder" ${purchaseCart.length ? "" : "disabled"}>Imprimir orden</button>
           <button class="ghost-button danger-action" type="button" id="clearPurchaseCart" ${purchaseCart.length && can("managePurchases") ? "" : "disabled"}>Limpiar</button>
         </div>
@@ -1977,6 +1979,8 @@ function renderPurchases() {
   document.querySelector("#savePendingPurchase")?.addEventListener("click", () => savePurchase(null, "pendiente"));
   document.querySelector("#prepareSuggestedPurchaseFromPurchases")?.addEventListener("click", prepareSuggestedPurchase);
   document.querySelector("#addPurchaseLine")?.addEventListener("click", addPurchaseLine);
+  document.querySelector("#copyPurchaseOrderText")?.addEventListener("click", copyPurchaseOrderText);
+  document.querySelector("#whatsAppPurchaseOrder")?.addEventListener("click", sendPurchaseOrderWhatsApp);
   document.querySelector("#printPurchaseOrder")?.addEventListener("click", printPurchaseOrder);
   document.querySelector("#clearPurchaseCart")?.addEventListener("click", clearPurchaseCart);
   document.querySelectorAll("[data-remove-purchase-line]").forEach((button) => button.addEventListener("click", () => {
@@ -2121,7 +2125,12 @@ function renderPurchaseRow(purchase) {
 }
 
 function renderSupplierRow(supplier) {
-  return `<article class="admin-row"><div><strong>${escapeHtml(supplier.name)}</strong><span>NIT/CI ${escapeHtml(supplier.tax_id || "Sin dato")} / Cel. ${escapeHtml(supplier.phone || "Sin celular")}</span><span>${escapeHtml(supplier.address || "Sin direccion")}</span></div></article>`;
+  const phone = String(supplier.phone || "").replace(/\D/g, "");
+  const whatsApp = phone ? `https://wa.me/${phone.startsWith("591") ? phone : `591${phone.replace(/^0+/, "")}`}` : "";
+  return `<article class="admin-row supplier-row">
+    <div><strong>${escapeHtml(supplier.name)}</strong><span>NIT/CI ${escapeHtml(supplier.tax_id || "Sin dato")} / Cel. ${escapeHtml(supplier.phone || "Sin celular")}</span><span>${escapeHtml(supplier.address || "Sin direccion")}</span></div>
+    <div class="admin-row-meta">${whatsApp ? `<a class="ghost-button" href="${whatsApp}" target="_blank" rel="noopener">WhatsApp</a>` : `<span>Sin WhatsApp</span>`}</div>
+  </article>`;
 }
 
 function renderInventory() {
@@ -4391,6 +4400,62 @@ function clearPurchaseCart() {
   ventasMessage = "Detalle de compra limpiado.";
   activeView = "purchases";
   renderMain();
+}
+
+function purchaseOrderContext() {
+  const supplierId = value("#purchaseSupplier");
+  const supplier = suppliers.find((item) => item.id === supplierId);
+  const invoice = value("#purchaseInvoice") || "Sin factura/nota";
+  const note = value("#purchaseNote") || "Reposicion de inventario";
+  const total = purchaseCart.reduce((sum, item) => sum + item.quantity * item.unitCost, 0);
+  return { supplier, invoice, note, total };
+}
+
+function purchaseOrderMessage() {
+  const { supplier, invoice, note, total } = purchaseOrderContext();
+  const title = storeSettings.storeName || storeSettings.companyName || currentUser.companyName || "Zow Ventas-Almacen";
+  const lines = purchaseCart.map((item, index) => {
+    const product = products.find((entry) => entry.id === item.productId);
+    return `${index + 1}. ${product?.code ? `${product.code} - ` : ""}${item.name}: ${num(item.quantity)} x ${money(item.unitCost)} = ${money(item.quantity * item.unitCost)}`;
+  });
+  return [
+    `Orden de compra - ${title}`,
+    `Proveedor: ${supplier?.name || "Proveedor sin registrar"}`,
+    `Referencia: ${invoice}`,
+    `Nota: ${note}`,
+    "",
+    ...lines,
+    "",
+    `Total estimado: ${money(total)}`,
+    `Solicita: ${currentUser.name || currentUser.username || "Usuario"}`
+  ].join("\n");
+}
+
+async function copyPurchaseOrderText() {
+  if (!purchaseCart.length) return;
+  const message = purchaseOrderMessage();
+  try {
+    await navigator.clipboard.writeText(message);
+    ventasMessage = "Orden de compra copiada al portapapeles.";
+  } catch (error) {
+    ventasMessage = message;
+  }
+  activeView = "purchases";
+  renderMain();
+}
+
+function sendPurchaseOrderWhatsApp() {
+  if (!purchaseCart.length) return;
+  const { supplier } = purchaseOrderContext();
+  const phone = String(supplier?.phone || "").replace(/\D/g, "");
+  if (!phone) {
+    ventasMessage = "Selecciona un proveedor con celular para enviar la orden por WhatsApp.";
+    activeView = "purchases";
+    renderMain();
+    return;
+  }
+  const normalized = phone.startsWith("591") ? phone : `591${phone.replace(/^0+/, "")}`;
+  window.open(`https://wa.me/${normalized}?text=${encodeURIComponent(purchaseOrderMessage())}`, "_blank", "noopener");
 }
 
 function printPurchaseOrder() {

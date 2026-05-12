@@ -12560,6 +12560,10 @@ body.app-ventas .purchase-history-actions {
   gap: 8px;
 }
 
+body.app-ventas .supplier-row a.ghost-button {
+  text-decoration: none;
+}
+
 body.app-ventas .inventory-reorder-grid {
   grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
 }
