@@ -3411,7 +3411,8 @@ body.app-correspondencia .metrics article:hover {
 
 .cash-close-breakdown,
 .live-activity-grid,
-.kardex-summary {
+.kardex-summary,
+.kardex-control-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
   gap: 10px;
@@ -3426,7 +3427,8 @@ body.app-correspondencia .metrics article:hover {
 
 .cash-close-breakdown article,
 .live-activity-grid article,
-.kardex-summary article {
+.kardex-summary article,
+.kardex-control-grid article {
   border: 1px solid color-mix(in srgb, var(--accent) 16%, var(--line));
   border-radius: 8px;
   padding: 12px;
@@ -3441,7 +3443,9 @@ body.app-correspondencia .metrics article:hover {
 .cash-close-breakdown small,
 .live-activity-grid span,
 .live-activity-grid small,
-.kardex-summary span {
+.kardex-summary span,
+.kardex-control-grid span,
+.kardex-control-grid small {
   display: block;
   color: var(--muted);
   font-size: 0.78rem;
@@ -3451,10 +3455,25 @@ body.app-correspondencia .metrics article:hover {
 .payment-breakdown-grid strong,
 .cash-close-breakdown strong,
 .live-activity-grid strong,
-.kardex-summary strong {
+.kardex-summary strong,
+.kardex-control-grid strong {
   display: block;
   margin: 5px 0;
   color: var(--accent-dark);
+}
+
+.kardex-control-grid {
+  margin: 0 0 14px;
+}
+
+.kardex-control-grid article.is-in {
+  border-color: rgb(16 185 129 / 22%);
+  background: linear-gradient(145deg, rgb(255 255 255 / 96%), rgb(236 253 245 / 88%));
+}
+
+.kardex-control-grid article.is-out {
+  border-color: rgb(239 68 68 / 18%);
+  background: linear-gradient(145deg, rgb(255 255 255 / 96%), rgb(254 242 242 / 80%));
 }
 
 .cash-health-grid {
@@ -11279,6 +11298,7 @@ body.system-zow-site .site-footer {
   .cash-close-breakdown,
   .live-activity-grid,
   .kardex-summary,
+  .kardex-control-grid,
   .setup-check-grid,
   .customer-health-grid,
   .business-health-grid {

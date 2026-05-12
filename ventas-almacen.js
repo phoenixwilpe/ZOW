@@ -2089,6 +2089,7 @@ function renderInventory() {
     selectedKardex = null;
     renderMain();
   });
+  document.querySelector("#exportKardexCsv")?.addEventListener("click", exportSelectedKardexCsv);
 }
 
 function renderInventoryReorderCard(product) {
@@ -2363,22 +2364,52 @@ function renderInventoryProductRow(product) {
 function renderKardexPanel() {
   const product = products.find((item) => item.id === selectedKardex.productId);
   const movements = buildKardexTimeline(product, selectedKardex.movements || []);
+  const stats = buildKardexStats(movements);
   return `
     <section class="admin-panel kardex-panel">
       <div class="admin-panel-head">
         <div><p class="eyebrow">Kardex visual</p><h3>${escapeHtml(product?.name || "Producto")}</h3></div>
-        <button class="ghost-button" type="button" id="closeKardex">Cerrar</button>
+        <div class="admin-head-actions">
+          <button class="ghost-button" type="button" id="exportKardexCsv">Exportar CSV</button>
+          <button class="ghost-button" type="button" id="closeKardex">Cerrar</button>
+        </div>
       </div>
       <div class="kardex-summary">
         <article><span>Stock actual</span><strong>${num(product?.stock || 0)}</strong></article>
         <article><span>Valor actual</span><strong>${money(Number(product?.stock || 0) * Number(product?.cost_price || 0))}</strong></article>
         <article><span>Movimientos</span><strong>${num(movements.length)}</strong></article>
+        <article><span>Ultimo movimiento</span><strong>${stats.lastDate ? formatShortDate(stats.lastDate) : "Sin datos"}</strong></article>
+      </div>
+      <div class="kardex-control-grid">
+        <article class="is-in"><span>Entradas</span><strong>${num(stats.in)}</strong><small>${num(stats.inCount)} movimiento${stats.inCount === 1 ? "" : "s"}</small></article>
+        <article class="is-out"><span>Salidas</span><strong>${num(stats.out)}</strong><small>${num(stats.outCount)} movimiento${stats.outCount === 1 ? "" : "s"}</small></article>
+        <article><span>Ajustes</span><strong>${num(stats.adjustments)}</strong><small>Conteos o regularizaciones</small></article>
+        <article><span>Saldo calculado</span><strong>${num(stats.currentStock)}</strong><small>Segun movimientos visibles</small></article>
       </div>
       <div class="kardex-timeline">
         ${movements.map(renderKardexTimelineRow).join("") || empty("Sin movimientos de inventario")}
       </div>
     </section>
   `;
+}
+
+function buildKardexStats(movements) {
+  return movements.reduce((stats, movement) => {
+    const quantity = signedMovementQuantity(movement);
+    if (quantity > 0) {
+      stats.in += quantity;
+      stats.inCount += 1;
+    }
+    if (quantity < 0) {
+      stats.out += Math.abs(quantity);
+      stats.outCount += 1;
+    }
+    if (String(movement.type || "").toLowerCase() === "ajuste") stats.adjustments += 1;
+    if (stats.currentStock === null && movement.runningStock !== undefined) stats.currentStock = movement.runningStock;
+    const date = movement.created_at || movement.createdAt;
+    if (date && (!stats.lastDate || new Date(date) > new Date(stats.lastDate))) stats.lastDate = date;
+    return stats;
+  }, { in: 0, out: 0, inCount: 0, outCount: 0, adjustments: 0, currentStock: null, lastDate: "" });
 }
 
 function buildKardexTimeline(product, movements) {
@@ -2409,6 +2440,27 @@ function renderKardexTimelineRow(movement) {
     </div>
     <div class="admin-row-meta"><span>Saldo ${num(movement.runningStock)}</span></div>
   </article>`;
+}
+
+function exportSelectedKardexCsv() {
+  if (!selectedKardex) return;
+  const product = products.find((item) => item.id === selectedKardex.productId);
+  const movements = buildKardexTimeline(product, selectedKardex.movements || []);
+  const rows = movements.map((movement) => {
+    const quantity = signedMovementQuantity(movement);
+    return {
+      fecha: formatDateTime(movement.created_at || movement.createdAt),
+      producto: product?.name || "",
+      codigo: product?.code || "",
+      tipo: movement.type || "",
+      cantidad: quantity,
+      saldo: movement.runningStock ?? "",
+      referencia: movement.reference || "",
+      nota: movement.note || "",
+      usuario: movement.created_by_name || movement.user || ""
+    };
+  });
+  downloadCsv(`kardex-${slug(product?.code || product?.name || "producto")}-${csvDateStamp()}.csv`, rows);
 }
 
 function renderStockMovementRow(movement) {
@@ -4954,6 +5006,16 @@ function csvDateStamp() {
   const now = new Date();
   const pad = (value) => String(value).padStart(2, "0");
   return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+}
+function slug(value) {
+  return String(value || "archivo")
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 48) || "archivo";
 }
 function isSaleInsideReportFilter(sale) {
   const saleDate = String(sale.created_at || "").slice(0, 10);
