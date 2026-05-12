@@ -2648,6 +2648,62 @@ body.app-correspondencia .metrics article:hover {
   margin-bottom: 14px;
 }
 
+.inventory-decision-strip {
+  display: grid;
+  grid-template-columns: minmax(240px, 1.1fr) repeat(3, minmax(140px, 0.7fr)) auto;
+  align-items: stretch;
+  gap: 10px;
+  margin-bottom: 14px;
+  border: 1px solid color-mix(in srgb, var(--accent) 18%, var(--line));
+  border-radius: 14px;
+  padding: 12px;
+  background:
+    linear-gradient(145deg, #ffffff, color-mix(in srgb, var(--accent-tint) 48%, white)),
+    radial-gradient(circle at 3% 10%, color-mix(in srgb, var(--accent) 16%, transparent), transparent 32%);
+  box-shadow: 0 16px 38px rgb(15 32 28 / 7%);
+}
+
+.inventory-decision-strip.is-danger {
+  border-color: rgb(220 38 38 / 24%);
+  background: linear-gradient(145deg, #ffffff, #fef2f2);
+}
+
+.inventory-decision-strip.is-warning {
+  border-color: rgb(245 158 11 / 28%);
+  background: linear-gradient(145deg, #ffffff, #fffbeb);
+}
+
+.inventory-decision-strip article {
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+  border-radius: 12px;
+  padding: 10px;
+  background: rgb(255 255 255 / 74%);
+}
+
+.inventory-decision-strip span,
+.inventory-decision-strip small {
+  color: var(--muted);
+  font-size: 0.76rem;
+  font-weight: 900;
+}
+
+.inventory-decision-strip span {
+  text-transform: uppercase;
+}
+
+.inventory-decision-strip strong {
+  color: var(--accent-dark);
+  font-size: clamp(1rem, 2vw, 1.22rem);
+}
+
+.inventory-decision-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+}
+
 .combo-builder-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -11197,6 +11253,7 @@ body.system-zow-site .site-footer {
   .report-risk-columns,
   .collection-plan-grid,
   .customer-workspace-grid,
+  .inventory-decision-strip,
   .service-strip,
   .operation-model-grid,
   .role-template-grid,
@@ -11486,6 +11543,7 @@ body.system-zow-site .site-footer {
   .role-permission-grid,
   .shift-command-grid,
   .shift-checklist,
+  .inventory-decision-strip,
   body.app-ventas .history-control-strip,
   .settings-overview-grid,
   .settings-preset-row,

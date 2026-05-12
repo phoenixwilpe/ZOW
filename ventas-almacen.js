@@ -2150,6 +2150,7 @@ function renderInventory() {
       return priorityOrder[reorderPriority(b).level] - priorityOrder[reorderPriority(a).level]
         || suggestedReorderQuantity(b) * Number(b.cost_price || 0) - suggestedReorderQuantity(a) * Number(a.cost_price || 0);
     });
+  const riskProducts = uniqueProducts([...reorderProducts, ...expiringProducts, ...overstockProducts, ...marginRiskProducts]);
   setCount(`${products.length} producto${products.length === 1 ? "" : "s"}`);
   mainList().innerHTML = `
     <section class="inventory-health-grid">
@@ -2164,6 +2165,7 @@ function renderInventory() {
       <article><span>Productos clase A</span><strong>${num(highValueProducts)}</strong><small>Mayor valor inmovilizado</small></article>
       <article><span>Salud inventario</span><strong class="${outOfStock || lowStock ? "warn-text" : "ok-text"}">${outOfStock ? "Critico" : lowStock ? "Revisar" : "Estable"}</strong><small>Basado en stock minimo</small></article>
     </section>
+    ${renderInventoryDecisionStrip({ reorderProducts, expiringProducts, overstockProducts, marginRiskProducts, riskProducts })}
     ${renderInventoryRiskBoard({ expiringProducts, overstockProducts, marginRiskProducts })}
     <section class="admin-panel inventory-reorder-panel">
       <div class="admin-panel-head">
@@ -2187,6 +2189,7 @@ function renderInventory() {
   `;
   bindProductSearch();
   document.querySelector("#prepareSuggestedPurchaseFromInventory")?.addEventListener("click", prepareSuggestedPurchase);
+  document.querySelector("#exportInventoryRiskCsv")?.addEventListener("click", exportInventoryRiskCsv);
   document.querySelector("#loadStarterProducts")?.addEventListener("click", loadStarterProducts);
   document.querySelectorAll("[data-stock-move]").forEach((button) => {
     button.addEventListener("click", () => openStockMovement(button.dataset.stockMove, button.dataset.type));
@@ -2208,6 +2211,46 @@ function renderInventory() {
     renderMain();
   });
   document.querySelector("#exportKardexCsv")?.addEventListener("click", exportSelectedKardexCsv);
+}
+
+function renderInventoryDecisionStrip({ reorderProducts, expiringProducts, overstockProducts, marginRiskProducts, riskProducts }) {
+  const reorderCost = reorderProducts.reduce((sum, product) => sum + suggestedReorderQuantity(product) * Number(product.cost_price || 0), 0);
+  const overstockValue = overstockProducts.reduce((sum, product) => sum + Number(product.stock || 0) * Number(product.cost_price || 0), 0);
+  const expiringValue = expiringProducts.reduce((sum, product) => sum + Number(product.stock || 0) * Number(product.cost_price || 0), 0);
+  const score = inventoryDecisionScore({ reorderProducts, expiringProducts, overstockProducts, marginRiskProducts });
+  return `<section class="inventory-decision-strip ${score.className}">
+    <article>
+      <span>Prioridad del dia</span>
+      <strong>${escapeHtml(score.label)}</strong>
+      <small>${escapeHtml(score.detail)}</small>
+    </article>
+    <article><span>Compra estimada</span><strong>${money(reorderCost)}</strong><small>${num(reorderProducts.length)} producto${reorderProducts.length === 1 ? "" : "s"} bajo minimo</small></article>
+    <article><span>Capital detenido</span><strong>${money(overstockValue)}</strong><small>${num(overstockProducts.length)} con sobrestock</small></article>
+    <article><span>Riesgo vencimiento</span><strong>${money(expiringValue)}</strong><small>${num(expiringProducts.length)} producto${expiringProducts.length === 1 ? "" : "s"} por revisar</small></article>
+    <div class="inventory-decision-actions">
+      <button class="ghost-button" type="button" id="exportInventoryRiskCsv" ${riskProducts.length ? "" : "disabled"}>Exportar riesgos CSV</button>
+    </div>
+  </section>`;
+}
+
+function inventoryDecisionScore({ reorderProducts, expiringProducts, overstockProducts, marginRiskProducts }) {
+  if (expiringProducts.some((product) => expiryStatus(product).level === "danger")) {
+    return { label: "Bloquear vencidos", detail: "Hay productos vencidos. Revise antes de vender.", className: "is-danger" };
+  }
+  if (reorderProducts.some((product) => Number(product.stock || 0) <= 0)) {
+    return { label: "Reposicion urgente", detail: "Hay productos agotados que frenan la venta.", className: "is-warning" };
+  }
+  if (marginRiskProducts.length) {
+    return { label: "Revisar precios", detail: "Hay productos sin margen positivo.", className: "is-warning" };
+  }
+  if (overstockProducts.length) {
+    return { label: "Mover sobrestock", detail: "Conviene liquidar o promocionar stock detenido.", className: "is-muted" };
+  }
+  return { label: "Inventario estable", detail: "No hay riesgos criticos en la lectura actual.", className: "is-ok" };
+}
+
+function uniqueProducts(list) {
+  return [...new Map(list.map((product) => [product.id, product])).values()];
 }
 
 function renderInventoryReorderCard(product) {
@@ -5119,6 +5162,43 @@ function exportInventoryCsv() {
     };
   });
   downloadCsv(`inventario-${csvDateStamp()}.csv`, rows);
+}
+function exportInventoryRiskCsv() {
+  const riskProducts = uniqueProducts(products.filter((product) => {
+    if (!isProductActive(product)) return false;
+    const stock = Number(product.stock || 0);
+    const min = Number(product.min_stock || 0);
+    return stock <= min
+      || ["danger", "warning"].includes(expiryStatus(product).level)
+      || (min > 0 && stock >= min * 4)
+      || Number(product.sale_price || 0) <= Number(product.cost_price || 0);
+  }));
+  const rows = riskProducts.map((product) => {
+    const stock = Number(product.stock || 0);
+    const min = Number(product.min_stock || 0);
+    const cost = Number(product.cost_price || 0);
+    const price = Number(product.sale_price || 0);
+    const reasons = [
+      stock <= min ? "reposicion" : "",
+      expiryStatus(product).label ? `vencimiento: ${expiryStatus(product).label}` : "",
+      min > 0 && stock >= min * 4 ? "sobrestock" : "",
+      price <= cost ? "margen bajo" : ""
+    ].filter(Boolean).join(" | ");
+    return {
+      codigo: product.code,
+      producto: product.name,
+      categoria: product.category || "",
+      stock: stock.toFixed(2),
+      minimo: min.toFixed(2),
+      compra_sugerida: suggestedReorderQuantity(product),
+      costo_estimado_reposicion: (suggestedReorderQuantity(product) * cost).toFixed(2),
+      valor_stock: (stock * cost).toFixed(2),
+      precio_venta: price.toFixed(2),
+      prioridad: reorderPriority(product).level,
+      motivo: reasons
+    };
+  });
+  downloadCsv(`riesgos-inventario-${csvDateStamp()}.csv`, rows);
 }
 function downloadCsv(filename, rows) {
   if (!rows.length) {
