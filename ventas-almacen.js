@@ -1451,6 +1451,7 @@ function renderReports() {
         ${businessHealth.items.map((item) => `<article class="${item.className}"><strong>${escapeHtml(item.label)}</strong><span>${escapeHtml(item.detail)}</span></article>`).join("")}
       </div>
     </section>
+    ${renderReportDecisionPanel({ businessHealth, confirmedSales, stockRisks, expiryRisks, pendingTotal, marginPercent, totalClosureDifference: cashClosures.reduce((sum, closure) => sum + Math.abs(Number(closure.differenceAmount || 0)), 0) })}
     ${renderInventoryValuationReport()}
     <section class="admin-panel">
       <div class="admin-panel-head"><div><p class="eyebrow">Cobros</p><h3>Ventas por metodo de pago</h3></div></div>
@@ -1563,6 +1564,54 @@ function buildBusinessHealth({ confirmedSales, stockRisks, expiryRisks, pendingT
     score,
     items: items.map((item) => ({ ...item, className: item.ok ? "is-ok" : "is-warning" }))
   };
+}
+
+function renderReportDecisionPanel({ businessHealth, confirmedSales, stockRisks, expiryRisks, pendingTotal, marginPercent, totalClosureDifference }) {
+  const actions = buildReportActions({ confirmedSales, stockRisks, expiryRisks, pendingTotal, marginPercent, totalClosureDifference });
+  const status = businessHealth.score >= 80 ? "is-ok" : businessHealth.score >= 50 ? "is-warning" : "is-danger";
+  return `<section class="report-decision-panel ${status}">
+    <div class="report-decision-head">
+      <div>
+        <p class="eyebrow">Decision recomendada</p>
+        <h3>${escapeHtml(reportDecisionTitle(businessHealth.score))}</h3>
+        <span>${escapeHtml(reportDecisionDetail(businessHealth.score, confirmedSales.length))}</span>
+      </div>
+      <strong>${businessHealth.score}%</strong>
+    </div>
+    <div class="report-decision-grid">
+      ${actions.map((item) => `<article class="${item.className}">
+        <span>${escapeHtml(item.area)}</span>
+        <strong>${escapeHtml(item.title)}</strong>
+        <small>${escapeHtml(item.detail)}</small>
+        ${item.view && canAccessView(item.view) ? `<button class="ghost-button" type="button" data-module-view="${item.view}">Abrir</button>` : ""}
+      </article>`).join("")}
+    </div>
+  </section>`;
+}
+
+function buildReportActions({ confirmedSales, stockRisks, expiryRisks, pendingTotal, marginPercent, totalClosureDifference }) {
+  const actions = [];
+  if (!confirmedSales.length) actions.push({ area: "Ventas", title: "Sin ventas en el periodo", detail: "Revisa si el filtro de fecha es correcto o realiza una venta de prueba.", view: "sell", className: "is-warning" });
+  if (pendingTotal > 0) actions.push({ area: "Cobranza", title: "Cobrar saldos pendientes", detail: `Hay ${money(pendingTotal)} en cuentas por cobrar.`, view: "customers", className: "is-warning" });
+  if (stockRisks.length) actions.push({ area: "Inventario", title: "Reponer productos criticos", detail: `${stockRisks.length} producto${stockRisks.length === 1 ? "" : "s"} bajo minimo o agotado${stockRisks.length === 1 ? "" : "s"}.`, view: "inventory", className: "is-warning" });
+  if (expiryRisks.length) actions.push({ area: "Vencimiento", title: "Revisar productos por vencer", detail: `${expiryRisks.length} producto${expiryRisks.length === 1 ? "" : "s"} requieren control antes de vender.`, view: "inventory", className: "is-danger" });
+  if (totalClosureDifference > 1) actions.push({ area: "Caja", title: "Auditar diferencias", detail: `Diferencias acumuladas por ${money(totalClosureDifference)}.`, view: "finance", className: "is-danger" });
+  if (confirmedSales.length && marginPercent < 15) actions.push({ area: "Margen", title: "Revisar precios y descuentos", detail: `Margen actual ${marginPercent.toFixed(1)}%. Conviene revisar costos y descuentos.`, view: "reports", className: "is-warning" });
+  if (!actions.length) actions.push({ area: "Operacion", title: "Negocio estable", detail: "Ventas, caja, inventario y cobranza se ven controlados en este periodo.", view: "summary", className: "is-ok" });
+  return actions.slice(0, 5);
+}
+
+function reportDecisionTitle(score) {
+  if (score >= 80) return "Operacion saludable";
+  if (score >= 50) return "Operacion con puntos por corregir";
+  return "Atencion prioritaria requerida";
+}
+
+function reportDecisionDetail(score, salesCount) {
+  if (!salesCount) return "No hay ventas confirmadas para leer el rendimiento del periodo seleccionado.";
+  if (score >= 80) return "Puedes revisar exportaciones y continuar el control normal del negocio.";
+  if (score >= 50) return "Conviene atender los puntos marcados antes del cierre o reposicion.";
+  return "Prioriza caja, inventario y cobranza antes de seguir operando sin revision.";
 }
 
 function renderProfitProductRow(row) {

@@ -4840,6 +4840,94 @@ body.app-ventas .executive-action-plan button {
   font-weight: 800;
 }
 
+.report-decision-panel {
+  display: grid;
+  gap: 14px;
+  margin-bottom: 14px;
+  border: 1px solid color-mix(in srgb, var(--accent) 18%, var(--line));
+  border-radius: 18px;
+  padding: clamp(14px, 2vw, 18px);
+  background:
+    radial-gradient(circle at 90% 12%, color-mix(in srgb, var(--accent) 16%, transparent), transparent 34%),
+    linear-gradient(145deg, #ffffff, color-mix(in srgb, var(--accent-tint) 48%, white));
+  box-shadow: 0 18px 44px rgb(15 32 28 / 7%);
+}
+
+.report-decision-panel.is-warning {
+  border-color: rgb(245 158 11 / 28%);
+  background:
+    radial-gradient(circle at 90% 12%, rgb(245 158 11 / 14%), transparent 34%),
+    linear-gradient(145deg, #ffffff, #fffbeb);
+}
+
+.report-decision-panel.is-danger {
+  border-color: rgb(220 38 38 / 24%);
+  background:
+    radial-gradient(circle at 90% 12%, rgb(220 38 38 / 12%), transparent 34%),
+    linear-gradient(145deg, #ffffff, #fef2f2);
+}
+
+.report-decision-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.report-decision-head h3 {
+  margin: 4px 0 5px;
+  color: var(--accent-dark);
+  font-size: clamp(1.14rem, 2.2vw, 1.58rem);
+}
+
+.report-decision-head span,
+.report-decision-grid small,
+.report-decision-grid span {
+  color: var(--muted);
+  font-size: 0.84rem;
+  font-weight: 820;
+  line-height: 1.38;
+}
+
+.report-decision-head > strong {
+  color: var(--accent);
+  font-size: clamp(1.75rem, 3vw, 2.35rem);
+  line-height: 1;
+}
+
+.report-decision-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 10px;
+}
+
+.report-decision-grid article {
+  display: grid;
+  gap: 7px;
+  border: 1px solid color-mix(in srgb, var(--accent) 14%, var(--line));
+  border-radius: 13px;
+  padding: 12px;
+  background: rgb(255 255 255 / 78%);
+}
+
+.report-decision-grid article.is-warning {
+  border-color: rgb(245 158 11 / 24%);
+  background: rgb(255 251 235 / 72%);
+}
+
+.report-decision-grid article.is-danger {
+  border-color: rgb(220 38 38 / 22%);
+  background: rgb(254 242 242 / 72%);
+}
+
+.report-decision-grid span {
+  text-transform: uppercase;
+}
+
+.report-decision-grid strong {
+  color: var(--accent-dark);
+}
+
 @keyframes zow-scan {
   from { transform: translateX(-120%); }
   to { transform: translateX(120%); }
@@ -11640,6 +11728,7 @@ body.system-zow-site .site-footer {
   .shift-checklist,
   .inventory-decision-strip,
   body.app-ventas .history-control-strip,
+  .report-decision-grid,
   .settings-overview-grid,
   .store-launch-grid,
   .settings-preset-row,
@@ -12890,6 +12979,11 @@ body.app-ventas .cloud-safe-note {
   }
 
   body.app-ventas .store-launch-head {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  body.app-ventas .report-decision-head {
     align-items: flex-start;
     flex-direction: column;
   }
