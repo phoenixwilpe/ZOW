@@ -11596,6 +11596,54 @@ body.app-ventas .payment-flow-summary article.is-ok {
   border-color: rgb(16 185 129 / 24%);
 }
 
+body.app-ventas .payment-safety-card {
+  display: grid;
+  gap: 5px;
+  border: 1px solid rgb(16 185 129 / 18%);
+  border-radius: 18px;
+  padding: 13px 14px;
+  background:
+    radial-gradient(circle at 92% 0%, rgb(16 185 129 / 12%), transparent 34%),
+    linear-gradient(135deg, rgb(236 253 245 / 92%), rgb(255 255 255 / 88%));
+  color: #0f5132;
+}
+
+body.app-ventas .payment-safety-card strong {
+  font-size: 0.98rem;
+  font-weight: 950;
+}
+
+body.app-ventas .payment-safety-card span {
+  color: rgb(15 81 50 / 78%);
+  font-size: 0.9rem;
+  font-weight: 850;
+  line-height: 1.35;
+}
+
+body.app-ventas .payment-safety-card.is-warning {
+  border-color: rgb(245 158 11 / 26%);
+  background:
+    radial-gradient(circle at 92% 0%, rgb(245 158 11 / 16%), transparent 34%),
+    linear-gradient(135deg, rgb(255 251 235 / 96%), rgb(255 255 255 / 88%));
+  color: #92400e;
+}
+
+body.app-ventas .payment-safety-card.is-warning span {
+  color: rgb(146 64 14 / 82%);
+}
+
+body.app-ventas .payment-safety-card.is-caution {
+  border-color: rgb(239 68 68 / 22%);
+  background:
+    radial-gradient(circle at 92% 0%, rgb(239 68 68 / 13%), transparent 34%),
+    linear-gradient(135deg, rgb(254 242 242 / 96%), rgb(255 255 255 / 88%));
+  color: #991b1b;
+}
+
+body.app-ventas .payment-safety-card.is-caution span {
+  color: rgb(153 27 27 / 82%);
+}
+
 body.app-ventas .touch-payment-fields {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }

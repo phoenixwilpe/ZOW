@@ -3122,6 +3122,8 @@ function renderPaymentModal() {
   const balanceDue = isCredit ? Math.max(totals.total - Number(paymentDraft.received || 0), 0) : 0;
   const quickOptions = buildQuickCashOptions(totals.total);
   const selectedMethod = availablePaymentMethods().find((method) => method.id === paymentDraft.method)?.label || "Pago";
+  const cashChange = paymentChangeAmount(totals.total);
+  const changeWarning = !isCredit && !insufficient && cashChange > Math.max(totals.total * 2, 200);
   paymentModalContent.innerHTML = `
     <div class="touch-payment-layout">
       <div class="payment-total touch-payment-total"><span>Total a pagar</span><strong>${money(totals.total)}</strong><small>${saleCart.length} item${saleCart.length === 1 ? "" : "s"} en carrito</small></div>
@@ -3136,6 +3138,10 @@ function renderPaymentModal() {
         <label>${isCredit ? "Anticipo recibido" : "Monto recibido"}<input id="paymentReceived" type="text" inputmode="decimal" enterkeyhint="done" value="${Number(paymentDraft.received || 0).toFixed(2)}" /></label>
         <label>${isCredit ? "Saldo pendiente" : "Vuelto"}<input id="paymentResultValue" type="text" value="${money(isCredit ? balanceDue : change)}" readonly /></label>
       </div>${renderPaymentKeypad(totals.total, isCredit)}`}
+      <div class="payment-safety-card ${insufficient ? "is-warning" : changeWarning ? "is-caution" : "is-ok"}" id="paymentSafetyCard">
+        <strong>${insufficient ? "Pago incompleto" : changeWarning ? "Revisar vuelto" : isCredit ? "Credito listo" : "Cobro listo"}</strong>
+        <span id="paymentSafetyText">${paymentSafetyText(totals.total, insufficient, isCredit)}</span>
+      </div>
       <p class="form-error" id="paymentErrorText" ${insufficient ? "" : "hidden"}>${insufficient ? `Pago insuficiente. Falta ${money(totals.total - paidTotal)}.` : ""}</p>
       <div class="modal-actions touch-payment-actions"><button class="ghost-button" type="button" id="printDraftBtn">Precomprobante</button><button class="primary-button" type="submit" id="confirmPaymentBtn" ${insufficient ? "disabled" : ""}>Confirmar pago</button></div>
     </div>
@@ -3203,11 +3209,15 @@ function buildQuickCashOptions(total) {
   const rounded5 = Math.ceil(base / 5) * 5;
   const rounded10 = Math.ceil(base / 10) * 10;
   const rounded20 = Math.ceil(base / 20) * 20;
+  const rounded50 = Math.ceil(base / 50) * 50;
+  const rounded100 = Math.ceil(base / 100) * 100;
   const options = [
     { label: "Exacto", amount: Number(total || 0) },
     { label: "Redondeo 5", amount: rounded5 },
     { label: "Redondeo 10", amount: rounded10 },
-    { label: "Redondeo 20", amount: rounded20 }
+    { label: "Redondeo 20", amount: rounded20 },
+    { label: "Billete 50", amount: rounded50 },
+    { label: "Billete 100", amount: rounded100 }
   ];
   const seen = new Set();
   return options.filter((option) => {
@@ -3216,6 +3226,25 @@ function buildQuickCashOptions(total) {
     seen.add(key);
     return true;
   }).slice(0, 4);
+}
+
+function paymentChangeAmount(total) {
+  if (paymentDraft.method === "credito") return 0;
+  if (paymentDraft.method === "mixto") {
+    const split = paymentDraft.split || {};
+    const nonCashPaid = Number(split.tarjeta || 0) + Number(split.transferencia || 0) + Number(split.qr || 0);
+    return Math.max(Number(split.efectivo || 0) - Math.max(Number(total || 0) - nonCashPaid, 0), 0);
+  }
+  return Math.max(Number(paymentDraft.received || 0) - Number(total || 0), 0);
+}
+
+function paymentSafetyText(total, insufficient, isCredit) {
+  const paid = paymentDraftTotal();
+  if (insufficient) return `Falta ${money(Number(total || 0) - paid)} para confirmar.`;
+  if (isCredit) return `Saldo pendiente: ${money(Math.max(Number(total || 0) - Number(paymentDraft.received || 0), 0))}.`;
+  const change = paymentChangeAmount(total);
+  if (change > Math.max(Number(total || 0) * 2, 200)) return `El vuelto es alto: ${money(change)}. Confirma el monto recibido antes de guardar.`;
+  return change > 0 ? `Devuelve ${money(change)} al cliente.` : "Pago exacto. Puedes confirmar.";
 }
 
 function applyPaymentKey(key, total) {
@@ -3316,6 +3345,17 @@ function updatePaymentLiveSummary(total) {
     balanceCard.classList.toggle("is-warning", insufficient);
     balanceCard.classList.toggle("is-ok", !insufficient);
   }
+  const safetyCard = paymentModalContent.querySelector("#paymentSafetyCard");
+  const safetyText = paymentModalContent.querySelector("#paymentSafetyText");
+  const changeWarning = !isCredit && !insufficient && paymentChangeAmount(total) > Math.max(Number(total || 0) * 2, 200);
+  if (safetyCard) {
+    safetyCard.classList.toggle("is-warning", insufficient);
+    safetyCard.classList.toggle("is-caution", changeWarning);
+    safetyCard.classList.toggle("is-ok", !insufficient && !changeWarning);
+    const title = safetyCard.querySelector("strong");
+    if (title) title.textContent = insufficient ? "Pago incompleto" : changeWarning ? "Revisar vuelto" : isCredit ? "Credito listo" : "Cobro listo";
+  }
+  if (safetyText) safetyText.textContent = paymentSafetyText(total, insufficient, isCredit);
   if (isMixed) {
     const split = paymentDraft.split || {};
     const change = Math.max(Number(split.efectivo || 0) - Math.max(Number(total || 0) - Number(split.tarjeta || 0) - Number(split.transferencia || 0) - Number(split.qr || 0), 0), 0);
