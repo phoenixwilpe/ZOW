@@ -958,6 +958,7 @@ function renderFinance() {
         <span>El cajero puede abrir, cobrar y cerrar su caja. Ingresos o egresos manuales quedan para encargado o administrador de ventas.</span>
       </div>`;
   mainList().innerHTML = `
+    ${renderShiftCommandPanel({ expectedCash, movementsTotal, paymentBreakdown })}
     <section class="setup-overview">
       <article><span>${cashLabel}</span><strong>${cash.pendingSales?.length || 0}</strong></article>
       <article><span>${totalLabel}</span><strong>${money(cash.total || 0)}</strong></article>
@@ -1043,6 +1044,45 @@ function renderFinance() {
     button.addEventListener("click", () => printCashClosure(button.dataset.printClosure));
   });
   document.querySelector("#exportCashClosuresCsv")?.addEventListener("click", exportCashClosuresCsv);
+}
+
+function renderShiftCommandPanel({ expectedCash, movementsTotal, paymentBreakdown }) {
+  const pendingSales = cash.pendingSales?.length || 0;
+  const isOpen = cashSession?.status === "abierta";
+  const confirmedSales = sales.filter((sale) => sale.status !== "anulada");
+  const voidedSales = sales.filter((sale) => sale.status === "anulada");
+  const paidTotal = paymentBreakdown.reduce((sum, item) => sum + Number(item.total || 0), 0);
+  const checklist = [
+    { label: "Caja abierta", done: isOpen, detail: isOpen ? `Caja ${num(cashSession.registerNumber)} activa` : "Abre caja antes de cobrar" },
+    { label: "Ventas registradas", done: confirmedSales.length > 0, detail: `${num(confirmedSales.length)} operacion${confirmedSales.length === 1 ? "" : "es"} valida${confirmedSales.length === 1 ? "" : "s"}` },
+    { label: "Cierre preparado", done: pendingSales > 0, detail: pendingSales ? `${num(pendingSales)} venta${pendingSales === 1 ? "" : "s"} para cuadrar` : "Sin ventas pendientes" },
+    { label: "Control de anuladas", done: voidedSales.length === 0, detail: voidedSales.length ? `${num(voidedSales.length)} anulada${voidedSales.length === 1 ? "" : "s"} para revisar` : "Sin anulaciones" }
+  ];
+  const progress = Math.round((checklist.filter((item) => item.done).length / checklist.length) * 100);
+  return `<section class="shift-command-panel">
+    <div class="shift-command-main">
+      <div>
+        <p class="eyebrow">Control del turno</p>
+        <h3>${isOpen ? `Caja ${num(cashSession.registerNumber)} en operacion` : "Caja pendiente de apertura"}</h3>
+        <span>${isOpen ? `Abierta por ${escapeHtml(cashSession.openedBy || currentUser.name || currentUser.username || "usuario")} / ${formatDateTime(cashSession.openedAt)}` : "El turno necesita apertura para vender con control."}</span>
+      </div>
+      <strong>${progress}%</strong>
+    </div>
+    <div class="shift-command-meter"><span style="width:${progress}%"></span></div>
+    <div class="shift-command-grid">
+      <article><span>Efectivo esperado</span><strong>${money(expectedCash)}</strong><small>Incluye apertura, cobros y movimientos.</small></article>
+      <article><span>Pagos cobrados</span><strong>${money(paidTotal)}</strong><small>${paymentBreakdown.map((item) => `${item.label}: ${money(item.total)}`).join(" / ") || "Sin cobros"}</small></article>
+      <article><span>Movimientos manuales</span><strong>${money(movementsTotal)}</strong><small>${can("cashMovements") ? "Permitido para tu rol" : "Solo encargado o administrador"}</small></article>
+    </div>
+    <div class="shift-checklist">
+      ${checklist.map((item) => `<article class="${item.done ? "is-done" : "is-pending"}"><b>${item.done ? "OK" : "!"}</b><div><strong>${escapeHtml(item.label)}</strong><span>${escapeHtml(item.detail)}</span></div></article>`).join("")}
+    </div>
+    <div class="shift-command-actions">
+      ${canAccessView("sell") ? `<button class="primary-button" type="button" data-module-view="sell">Ir a vender</button>` : ""}
+      ${canAccessView("history") ? `<button class="ghost-button" type="button" data-module-view="history">Ver operaciones</button>` : ""}
+      ${canAccessView("reports") ? `<button class="ghost-button" type="button" data-module-view="reports">Auditoria</button>` : ""}
+    </div>
+  </section>`;
 }
 
 function renderHistory() {

@@ -3349,6 +3349,155 @@ body.app-correspondencia .metrics article:hover {
   line-height: 1.45;
 }
 
+.shift-command-panel {
+  position: relative;
+  overflow: hidden;
+  display: grid;
+  gap: 14px;
+  margin-bottom: 14px;
+  border: 1px solid color-mix(in srgb, var(--accent) 20%, var(--line));
+  border-radius: 16px;
+  padding: 18px;
+  background:
+    radial-gradient(circle at 8% 12%, color-mix(in srgb, var(--accent) 14%, transparent), transparent 32%),
+    linear-gradient(145deg, #ffffff, color-mix(in srgb, var(--accent-tint) 48%, white));
+  box-shadow: 0 18px 42px rgb(15 23 42 / 7%);
+}
+
+.shift-command-panel::after {
+  content: "";
+  position: absolute;
+  inset: auto -7% -44% auto;
+  width: 220px;
+  aspect-ratio: 1;
+  border-radius: 999px;
+  background: radial-gradient(circle, color-mix(in srgb, var(--accent-2) 22%, transparent), transparent 68%);
+  pointer-events: none;
+}
+
+.shift-command-main,
+.shift-command-actions {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.shift-command-main h3 {
+  margin: 0;
+  color: var(--ink);
+  font-size: clamp(1.1rem, 2vw, 1.45rem);
+}
+
+.shift-command-main span,
+.shift-command-grid small,
+.shift-checklist span {
+  color: var(--muted);
+}
+
+.shift-command-main > strong {
+  min-width: 78px;
+  text-align: right;
+  color: var(--accent);
+  font-size: clamp(1.8rem, 4vw, 2.6rem);
+  line-height: 1;
+}
+
+.shift-command-meter {
+  position: relative;
+  z-index: 1;
+  overflow: hidden;
+  height: 10px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--line) 68%, white);
+}
+
+.shift-command-meter span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--accent), var(--accent-2));
+  transition: width 260ms ease;
+}
+
+.shift-command-grid,
+.shift-checklist {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  gap: 10px;
+}
+
+.shift-command-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.shift-command-grid article,
+.shift-checklist article {
+  border: 1px solid color-mix(in srgb, var(--accent) 13%, var(--line));
+  border-radius: 12px;
+  background: rgb(255 255 255 / 82%);
+}
+
+.shift-command-grid article {
+  display: grid;
+  gap: 4px;
+  padding: 13px;
+}
+
+.shift-command-grid span {
+  color: var(--muted);
+  font-size: 0.75rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.shift-command-grid strong {
+  color: var(--ink);
+  font-size: 1.15rem;
+}
+
+.shift-checklist {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.shift-checklist article {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px;
+}
+
+.shift-checklist b {
+  display: grid;
+  flex: 0 0 28px;
+  width: 28px;
+  height: 28px;
+  place-items: center;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--accent) 12%, white);
+  color: var(--accent);
+  font-size: 0.78rem;
+  font-weight: 950;
+}
+
+.shift-checklist article.is-pending b {
+  background: rgb(254 243 199 / 80%);
+  color: #b45309;
+}
+
+.shift-checklist strong {
+  display: block;
+  color: var(--ink);
+}
+
+.shift-command-actions {
+  justify-content: flex-end;
+  flex-wrap: wrap;
+}
+
 .pos-shell {
   display: grid;
   grid-template-columns: minmax(0, 1.25fr) minmax(360px, 0.75fr);
@@ -11027,7 +11176,9 @@ body.system-zow-site .site-footer {
   .service-strip,
   .operation-model-grid,
   .role-template-grid,
-  .role-permission-grid {
+  .role-permission-grid,
+  .shift-command-grid,
+  .shift-checklist {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
@@ -11308,6 +11459,8 @@ body.system-zow-site .site-footer {
   .operation-model-grid,
   .role-template-grid,
   .role-permission-grid,
+  .shift-command-grid,
+  .shift-checklist,
   .settings-overview-grid,
   .settings-preset-row,
   body.app-ventas .receipt-preview-shell {
@@ -12496,6 +12649,16 @@ body.app-ventas .cloud-safe-note {
   body.app-ventas .sale-detail-summary,
   body.app-ventas .receivable-payment-card {
     grid-template-columns: 1fr;
+  }
+
+  body.app-ventas .shift-command-main,
+  body.app-ventas .shift-command-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  body.app-ventas .shift-command-main > strong {
+    text-align: left;
   }
 
   body.app-ventas .touch-payment-total {
