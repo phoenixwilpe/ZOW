@@ -5,6 +5,7 @@
 const requestForm = document.querySelector("#requestForm");
 const requestMessage = document.querySelector("#requestMessage");
 const planSelect = requestForm?.querySelector('select[name="plan"]');
+const systemSelect = requestForm?.querySelector('select[name="system"]');
 const requestMessageField = requestForm?.querySelector('textarea[name="message"]');
 const requestNameField = requestForm?.querySelector('input[name="name"]');
 const siteHeader = document.querySelector(".site-header");
@@ -68,24 +69,39 @@ const revealObserver = "IntersectionObserver" in window
     )
   : null;
 
-document.querySelectorAll(".site-section-head, .capability-grid article, .product-card, .service-card, .plan-grid article, .trust-grid article, .faq-shell, .contact-card, .location-card, .request-form").forEach((item) => {
+document.querySelectorAll(".site-section-head, .trust-seal, .capability-grid article, .snapshot-card, .product-card, .comparison-card, .use-case-card, .system-finder-card, .service-card, .plan-grid article, .trust-grid article, .faq-shell, .contact-card, .location-card, .contact-assurance article, .request-form").forEach((item) => {
   item.classList.add("reveal-item");
   revealObserver?.observe(item);
 });
 
+function focusRequestForm() {
+  const contactSection = document.querySelector("#contacto");
+  contactSection?.scrollIntoView({ behavior: "smooth", block: "start" });
+  requestForm?.classList.add("is-highlighted");
+  window.setTimeout(() => requestForm?.classList.remove("is-highlighted"), 1400);
+  window.setTimeout(() => requestNameField?.focus({ preventScroll: true }), 520);
+}
+
 document.querySelectorAll("[data-plan-request]").forEach((button) => {
   button.addEventListener("click", (event) => {
     const plan = button.dataset.plan;
-    const contactSection = document.querySelector("#contacto");
     event.preventDefault();
     if (planSelect && plan) planSelect.value = plan;
     if (requestMessageField && !requestMessageField.value.trim()) {
       requestMessageField.value = `Me interesa el plan ${planLabels[plan] || plan} para mi empresa.`;
     }
-    contactSection?.scrollIntoView({ behavior: "smooth", block: "start" });
-    requestForm?.classList.add("is-highlighted");
-    window.setTimeout(() => requestForm?.classList.remove("is-highlighted"), 1400);
-    window.setTimeout(() => requestNameField?.focus({ preventScroll: true }), 520);
+    focusRequestForm();
+  });
+});
+
+document.querySelectorAll("[data-system-request]").forEach((button) => {
+  button.addEventListener("click", (event) => {
+    const system = button.dataset.system;
+    const message = button.dataset.message;
+    event.preventDefault();
+    if (systemSelect && system) systemSelect.value = system;
+    if (requestMessageField && message) requestMessageField.value = message;
+    focusRequestForm();
   });
 });
 
@@ -102,7 +118,15 @@ function updateNavigationState() {
   navSections.forEach((item) => {
     if (item.target.offsetTop <= marker) activeItem = item;
   });
-  navLinks.forEach((link) => link.classList.toggle("is-active", link === activeItem?.link));
+  navLinks.forEach((link) => {
+    const isActive = link === activeItem?.link;
+    link.classList.toggle("is-active", isActive);
+    if (isActive) {
+      link.setAttribute("aria-current", "page");
+    } else {
+      link.removeAttribute("aria-current");
+    }
+  });
 }
 
 updateNavigationState();

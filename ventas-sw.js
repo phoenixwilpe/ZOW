@@ -1,11 +1,11 @@
-const CACHE_NAME = "zow-ventas-static-v1";
+const CACHE_NAME = "zow-ventas-static-v2";
 const STATIC_ASSETS = [
   "/ventas-almacen.html",
   "/ventas-almacen.js",
   "/styles.css",
   "/ventas-pwa.webmanifest",
-  "/assets/brand/zow-ventas-almacen-logo-transparent.png",
-  "/assets/brand/zow-ventas-almacen-logo.png"
+  "/assets/brand/zow-ventas-almacen-icon-transparent.png",
+  "/assets/brand/zow-ventas-almacen-icon.png"
 ];
 
 self.addEventListener("install", (event) => {

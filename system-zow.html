@@ -4,9 +4,92 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>SYSTEM ZOW | Sistemas SaaS para empresas</title>
+    <meta name="description" content="SYSTEM ZOW desarrolla sistemas SaaS en la nube para ventas, almacen, correspondencia, control interno y operaciones empresariales en Bolivia." />
+    <meta name="theme-color" content="#07111f" />
+    <link rel="canonical" href="https://zow-six.vercel.app/" />
+    <meta property="og:type" content="website" />
+    <meta property="og:locale" content="es_BO" />
+    <meta property="og:url" content="https://zow-six.vercel.app/" />
+    <meta property="og:title" content="SYSTEM ZOW | Sistemas SaaS para empresas" />
+    <meta property="og:description" content="Sistemas SaaS para vender, controlar documentos y administrar operaciones desde la nube." />
+    <meta property="og:image" content="https://zow-six.vercel.app/assets/brand/system-zow-og.svg" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="SYSTEM ZOW | Sistemas SaaS para empresas" />
+    <meta name="twitter:description" content="Sistemas SaaS para vender, controlar documentos y administrar operaciones desde la nube." />
+    <meta name="twitter:image" content="https://zow-six.vercel.app/assets/brand/system-zow-og.svg" />
+    <link rel="icon" type="image/svg+xml" href="assets/brand/system-zow-header-logo.svg" />
+    <link rel="manifest" href="site.webmanifest" />
+    <link rel="preload" href="assets/brand/system-zow-header-logo.svg" as="image" type="image/svg+xml" />
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@graph": [
+          {
+            "@type": "Organization",
+            "@id": "https://zow-six.vercel.app/#organization",
+            "name": "SYSTEM ZOW",
+            "url": "https://zow-six.vercel.app/",
+            "logo": "https://zow-six.vercel.app/assets/brand/system-zow-header-logo.svg",
+            "email": "systemszow@gmail.com",
+            "address": [
+              { "@type": "PostalAddress", "addressLocality": "Puerto Suarez", "addressRegion": "Santa Cruz", "addressCountry": "BO" },
+              { "@type": "PostalAddress", "addressLocality": "Santa Cruz de la Sierra", "addressRegion": "Santa Cruz", "addressCountry": "BO" }
+            ],
+            "contactPoint": {
+              "@type": "ContactPoint",
+              "telephone": "+59175620492",
+              "contactType": "sales",
+              "areaServed": "BO",
+              "availableLanguage": "es"
+            }
+          },
+          {
+            "@type": "WebSite",
+            "@id": "https://zow-six.vercel.app/#website",
+            "url": "https://zow-six.vercel.app/",
+            "name": "SYSTEM ZOW",
+            "publisher": { "@id": "https://zow-six.vercel.app/#organization" }
+          },
+          {
+            "@type": "ItemList",
+            "@id": "https://zow-six.vercel.app/#systems",
+            "name": "Sistemas SaaS SYSTEM ZOW",
+            "itemListElement": [
+              { "@type": "ListItem", "position": 1, "name": "Correspondencia ZOW", "url": "https://zow-six.vercel.app/correspondencia" },
+              { "@type": "ListItem", "position": 2, "name": "Zow Ventas-Almacen", "url": "https://zow-six.vercel.app/ventas-almacen" },
+              { "@type": "ListItem", "position": 3, "name": "Zow Salud", "url": "https://zow-six.vercel.app/#contacto" }
+            ]
+          },
+          {
+            "@type": "FAQPage",
+            "@id": "https://zow-six.vercel.app/#faq",
+            "mainEntity": [
+              {
+                "@type": "Question",
+                "name": "Como se activa una empresa nueva?",
+                "acceptedAnswer": { "@type": "Answer", "text": "Desde el Panel ZOW se registra la empresa, se asigna el sistema contratado, el periodo del plan y la credencial del encargado de sistema." }
+              },
+              {
+                "@type": "Question",
+                "name": "Los datos de una empresa se mezclan con otra?",
+                "acceptedAnswer": { "@type": "Answer", "text": "No. La plataforma trabaja con separacion por empresa para que cada cliente vea y administre solamente su propia informacion." }
+              },
+              {
+                "@type": "Question",
+                "name": "Se puede adaptar a la organizacion de cada cliente?",
+                "acceptedAnswer": { "@type": "Answer", "text": "Si. Cada encargado puede configurar areas, responsables, usuarios, roles y funciones segun la necesidad de su empresa." }
+              }
+            ]
+          }
+        ]
+      }
+    </script>
     <link rel="stylesheet" href="styles.css" />
   </head>
   <body class="system-zow-site">
+    <a class="skip-link" href="#mainContent">Saltar al contenido</a>
     <div class="site-ambient" aria-hidden="true">
       <span class="ambient-plane plane-a"></span>
       <span class="ambient-plane plane-b"></span>
@@ -16,15 +99,15 @@
     </div>
     <div class="site-scroll-progress" aria-hidden="true"></div>
     <header class="site-header">
-      <a class="site-brand" href="/" aria-label="SYSTEM ZOW SAAS">
-        <img class="site-brand-logo" src="assets/brand/system-zow-header-logo.svg" width="360" height="92" alt="SYSTEM ZOW SAAS" decoding="async" />
+      <a class="site-brand" href="/" aria-label="SYSTEM ZOW">
+        <img class="site-brand-logo" src="assets/brand/system-zow-header-logo.svg" width="360" height="92" alt="SYSTEM ZOW" decoding="async" fetchpriority="high" />
       </a>
       <button class="site-menu-toggle" type="button" aria-label="Abrir menu" aria-controls="siteNav" aria-expanded="false">
         <span></span><span></span><span></span>
       </button>
       <nav class="site-nav" id="siteNav" aria-label="Navegacion comercial">
         <a href="#sistemas" data-nav-link><span>Sistemas</span></a>
-        <a href="#metodo" data-nav-link><span>Metodo</span></a>
+        <a href="#comparacion" data-nav-link><span>Comparar</span></a>
         <a href="#servicios" data-nav-link><span>Servicios</span></a>
         <a href="#planes" data-nav-link><span>Planes</span></a>
         <a href="#preguntas" data-nav-link><span>Preguntas</span></a>
@@ -33,18 +116,18 @@
       </nav>
     </header>
 
-    <main>
+    <main id="mainContent">
       <section class="site-hero">
         <div class="site-hero-copy">
           <div class="hero-badge"><span></span> Plataforma SaaS multiempresa</div>
           <h1>Sistemas SaaS para empresas que necesitan operar mejor</h1>
           <p>
-            Desarrollamos sistemas en la nube para empresas que necesitan operar mejor: ventas, almacen,
-            correspondencia, control interno, reportes, usuarios, seguridad y procesos a medida en la nube.
+            Sistemas SaaS para vender, controlar documentos y administrar operaciones desde la nube:
+            ventas, almacen, correspondencia, reportes, usuarios, seguridad y procesos a medida.
           </p>
           <div class="site-hero-actions">
-            <a class="primary-button" href="#contacto">Solicitar diagnostico</a>
-            <a class="ghost-button" href="#sistemas">Ver sistemas SaaS</a>
+            <a class="primary-button" href="https://wa.me/59175620492?text=Hola%20SYSTEM%20ZOW%2C%20quiero%20solicitar%20una%20demo%20para%20mi%20empresa." target="_blank" rel="noopener">Solicitar demo por WhatsApp</a>
+            <a class="ghost-button" href="#contacto">Cotizar mi sistema</a>
           </div>
           <div class="hero-metrics" aria-label="Capacidades SYSTEM ZOW">
             <article><strong>En la nube</strong><span>Acceso web seguro</span></article>
@@ -86,6 +169,31 @@
         </div>
       </section>
 
+      <section class="site-section trust-seals-section" aria-label="Confianza SYSTEM ZOW">
+        <div class="trust-seals">
+          <article class="trust-seal">
+            <span>01</span>
+            <strong>Datos separados por empresa</strong>
+            <p>Cada cliente trabaja con usuarios, permisos y registros propios.</p>
+          </article>
+          <article class="trust-seal">
+            <span>02</span>
+            <strong>Usuarios y roles</strong>
+            <p>Control de accesos segun areas, responsables y funciones.</p>
+          </article>
+          <article class="trust-seal">
+            <span>03</span>
+            <strong>Soporte en Bolivia</strong>
+            <p>Atencion directa en Puerto Suarez y Santa Cruz de la Sierra.</p>
+          </article>
+          <article class="trust-seal">
+            <span>04</span>
+            <strong>Despliegue en la nube</strong>
+            <p>Acceso web, actualizaciones y acompaniamiento comercial.</p>
+          </article>
+        </div>
+      </section>
+
       <section class="site-section capability-section" id="metodo">
         <div class="site-section-head">
           <p class="eyebrow">Forma de trabajo</p>
@@ -121,6 +229,18 @@
           <p class="eyebrow">Catalogo SaaS</p>
           <h2>Sistemas SaaS para operar, controlar y crecer</h2>
           <p>Cada producto se activa por empresa, con permisos, usuarios, planes, auditoria y datos separados.</p>
+        </div>
+        <div class="system-snapshot" aria-label="Estado de sistemas SYSTEM ZOW">
+          <article class="snapshot-card is-live">
+            <span>Disponibles ahora</span>
+            <strong>2 sistemas</strong>
+            <p>Correspondencia ZOW y Zow Ventas-Almacen listos para activacion comercial.</p>
+          </article>
+          <article class="snapshot-card is-building">
+            <span>En desarrollo</span>
+            <strong>Zow Salud</strong>
+            <p>Enfoque para clinicas y hospitales con consulta comercial anticipada.</p>
+          </article>
         </div>
         <div class="product-grid product-showcase">
           <article class="product-card system-card is-live correspondence-card">
@@ -177,6 +297,136 @@
               </ul>
               <a class="product-link soft-link" href="#contacto">Consultar enfoque</a>
             </div>
+          </article>
+        </div>
+      </section>
+
+      <section class="site-section comparison-section" id="comparacion">
+        <div class="site-section-head">
+          <p class="eyebrow">Comparacion rapida</p>
+          <h2>Identifica el sistema ideal segun tu operacion</h2>
+          <p>Una vista directa para diferenciar los SaaS disponibles, el sistema en desarrollo y las soluciones a medida.</p>
+        </div>
+        <div class="comparison-grid" aria-label="Comparacion de sistemas SYSTEM ZOW">
+          <article class="comparison-card is-live">
+            <div class="comparison-top">
+              <img src="assets/brand/zow-correspondencia-logo.svg" width="96" height="96" alt="" loading="lazy" decoding="async" />
+              <span>Disponible</span>
+            </div>
+            <h3>Correspondencia ZOW</h3>
+            <p>Para oficinas e instituciones que necesitan recepcion, derivacion, archivo y seguimiento documental.</p>
+            <ul>
+              <li>Codigo QR y hoja de control</li>
+              <li>Responsables, estados y auditoria</li>
+              <li>Reportes para seguimiento diario</li>
+            </ul>
+            <a href="/correspondencia">Ver sistema</a>
+          </article>
+          <article class="comparison-card is-live">
+            <div class="comparison-top">
+              <img src="assets/brand/zow-ventas-almacen-logo.svg" width="96" height="96" alt="" loading="lazy" decoding="async" />
+              <span>Disponible</span>
+            </div>
+            <h3>Zow Ventas-Almacen</h3>
+            <p>Para comercios, almacenes y negocios que necesitan controlar caja, productos y movimiento comercial.</p>
+            <ul>
+              <li>POS, caja y comprobantes</li>
+              <li>Inventario, compras y devoluciones</li>
+              <li>Clientes, creditos y reportes</li>
+            </ul>
+            <a href="/ventas-almacen">Ver sistema</a>
+          </article>
+          <article class="comparison-card is-building">
+            <div class="comparison-top">
+              <img src="assets/brand/zow-salud-logo.svg" width="96" height="96" alt="" loading="lazy" decoding="async" />
+              <span>En desarrollo</span>
+            </div>
+            <h3>Zow Salud</h3>
+            <p>Para clinicas y hospitales que quieren ordenar admision, pacientes, agenda y trazabilidad operativa.</p>
+            <ul>
+              <li>Flujo medico y administrativo</li>
+              <li>Areas, agenda y atenciones</li>
+              <li>Consulta comercial anticipada</li>
+            </ul>
+            <a href="#contacto" data-system-request data-system="zow_salud" data-message="Quiero consultar el enfoque de Zow Salud para una clinica u hospital.">Consultar enfoque</a>
+          </article>
+          <article class="comparison-card is-custom">
+            <div class="comparison-top">
+              <span class="comparison-icon" aria-hidden="true">+</span>
+              <span>A medida</span>
+            </div>
+            <h3>Desarrollo ZOW</h3>
+            <p>Para empresas con procesos propios que requieren pantallas, permisos, reportes o integraciones especificas.</p>
+            <ul>
+              <li>Analisis del flujo real</li>
+              <li>Usuarios, roles y datos separados</li>
+              <li>Implementacion por etapas</li>
+            </ul>
+            <a href="#contacto" data-system-request data-system="varios" data-message="Necesito evaluar un sistema a medida para un proceso especifico de mi empresa.">Solicitar analisis</a>
+          </article>
+        </div>
+      </section>
+
+      <section class="site-section use-cases-section" id="casos">
+        <div class="site-section-head">
+          <p class="eyebrow">Casos de uso</p>
+          <h2>Soluciones para equipos que necesitan control diario</h2>
+          <p>La plataforma se adapta a operaciones comerciales, documentales, administrativas y de atencion, sin mezclar informacion entre empresas.</p>
+        </div>
+        <div class="use-case-grid">
+          <article class="use-case-card">
+            <span>Comercios y almacenes</span>
+            <strong>Ventas, caja e inventario en un solo flujo</strong>
+            <p>Ideal para negocios que necesitan registrar ventas, controlar stock, compras, clientes, creditos y reportes.</p>
+          </article>
+          <article class="use-case-card">
+            <span>Oficinas e instituciones</span>
+            <strong>Documentos con seguimiento y responsables</strong>
+            <p>Organiza recepcion, derivaciones, estados, archivos digitales, codigos QR y auditoria documental.</p>
+          </article>
+          <article class="use-case-card">
+            <span>Clinicas y hospitales</span>
+            <strong>Base para operaciones de salud en desarrollo</strong>
+            <p>Zow Salud se orienta a admision, pacientes, agenda, atenciones, areas medicas y trazabilidad.</p>
+          </article>
+          <article class="use-case-card">
+            <span>Procesos a medida</span>
+            <strong>Software adaptado al trabajo real</strong>
+            <p>Cuando tu empresa necesita pantallas, reportes, permisos o flujos propios, se analiza y desarrolla sobre el enfoque ZOW.</p>
+          </article>
+        </div>
+      </section>
+
+      <section class="site-section system-finder-section" id="selector">
+        <div class="site-section-head">
+          <p class="eyebrow">Selector rapido</p>
+          <h2>Que sistema necesita tu empresa?</h2>
+          <p>Elige el escenario mas cercano y te llevamos al formulario con el sistema sugerido y un mensaje inicial.</p>
+        </div>
+        <div class="system-finder-grid">
+          <article class="system-finder-card">
+            <span>Documentos</span>
+            <strong>Necesito controlar recepcion, derivaciones y archivo</strong>
+            <p>Recomendado para oficinas, instituciones y empresas con seguimiento documental.</p>
+            <a href="#contacto" data-system-request data-system="correspondencia" data-message="Me interesa Correspondencia ZOW para controlar documentos, derivaciones y archivo digital.">Usar Correspondencia ZOW</a>
+          </article>
+          <article class="system-finder-card">
+            <span>Ventas</span>
+            <strong>Necesito caja, inventario, clientes y reportes</strong>
+            <p>Recomendado para comercios, almacenes y negocios con movimiento diario de productos.</p>
+            <a href="#contacto" data-system-request data-system="ventas_almacen" data-message="Me interesa Zow Ventas-Almacen para ventas, caja, inventario y reportes.">Usar Ventas-Almacen</a>
+          </article>
+          <article class="system-finder-card is-building">
+            <span>Salud</span>
+            <strong>Necesito una solucion para clinica u hospital</strong>
+            <p>Consulta anticipada para admision, pacientes, agenda, atenciones y areas medicas.</p>
+            <a href="#contacto" data-system-request data-system="zow_salud" data-message="Quiero consultar el enfoque de Zow Salud para una clinica u hospital.">Consultar Zow Salud</a>
+          </article>
+          <article class="system-finder-card">
+            <span>A medida</span>
+            <strong>Necesito digitalizar un proceso propio</strong>
+            <p>Para empresas que requieren pantallas, permisos, reportes o flujos especiales.</p>
+            <a href="#contacto" data-system-request data-system="varios" data-message="Necesito evaluar un sistema a medida para un proceso especifico de mi empresa.">Solicitar analisis</a>
           </article>
         </div>
       </section>
@@ -322,6 +572,20 @@
         </div>
       </section>
 
+      <section class="site-section final-cta-section" aria-label="Agendar demo SYSTEM ZOW">
+        <div class="final-cta">
+          <div>
+            <span>Demo comercial</span>
+            <strong>Hablemos de tu empresa y del sistema que necesitas activar.</strong>
+            <p>Te orientamos por WhatsApp, revisamos el flujo de trabajo y proponemos el sistema o desarrollo mas adecuado.</p>
+          </div>
+          <div class="final-cta-actions">
+            <a class="primary-button" href="https://wa.me/59175620492?text=Hola%20SYSTEM%20ZOW%2C%20quiero%20agendar%20una%20demo%20comercial." target="_blank" rel="noopener">Agendar por WhatsApp</a>
+            <a class="ghost-button" href="#contacto">Enviar solicitud</a>
+          </div>
+        </div>
+      </section>
+
       <section class="site-section contact-section" id="contacto">
         <div class="site-section-head contact-copy">
           <p class="eyebrow">Contacto</p>
@@ -363,13 +627,27 @@
               <a class="ghost-button" href="https://www.tiktok.com/@zow_systems" target="_blank" rel="noopener">TikTok</a>
               <a class="ghost-button" href="mailto:systemszow@gmail.com">Enviar correo</a>
             </div>
+            <div class="contact-assurance" aria-label="Acompanamiento comercial SYSTEM ZOW">
+              <article>
+                <span>Respuesta directa</span>
+                <strong>Te atiende una persona del equipo ZOW</strong>
+              </article>
+              <article>
+                <span>Demo guiada</span>
+                <strong>Revisamos el flujo real de tu empresa</strong>
+              </article>
+              <article>
+                <span>Cotizacion clara</span>
+                <strong>Sistema, plan y alcance antes de activar</strong>
+              </article>
+            </div>
           </div>
         </div>
         <form class="request-form" id="requestForm">
-          <label>Nombre completo<input name="name" type="text" required /></label>
-          <label>Empresa<input name="company" type="text" required /></label>
-          <label>Celular<input name="phone" type="tel" required /></label>
-          <label>Correo<input name="email" type="email" placeholder="opcional" /></label>
+          <label>Nombre completo<input name="name" type="text" placeholder="Tu nombre" autocomplete="name" required /></label>
+          <label>Empresa<input name="company" type="text" placeholder="Nombre de la empresa" autocomplete="organization" required /></label>
+          <label>Celular<input name="phone" type="tel" placeholder="+591 ..." autocomplete="tel" inputmode="tel" required /></label>
+          <label>Correo<input name="email" type="email" placeholder="opcional" autocomplete="email" /></label>
           <label>
             Sistema de interes
             <select name="system">
@@ -389,7 +667,13 @@
             </select>
           </label>
           <label class="span-2">Mensaje<textarea name="message" rows="4" placeholder="Cuentanos que necesita tu empresa"></textarea></label>
+          <div class="quick-contact span-2" aria-label="Consultas rapidas por WhatsApp">
+            <a href="https://wa.me/59175620492?text=Hola%20SYSTEM%20ZOW%2C%20quiero%20una%20demo%20de%20Correspondencia%20ZOW." target="_blank" rel="noopener">Demo Correspondencia</a>
+            <a href="https://wa.me/59175620492?text=Hola%20SYSTEM%20ZOW%2C%20quiero%20una%20demo%20de%20Zow%20Ventas-Almacen." target="_blank" rel="noopener">Demo Ventas-Almacen</a>
+            <a href="https://wa.me/59175620492?text=Hola%20SYSTEM%20ZOW%2C%20quiero%20consultar%20Zow%20Salud%20para%20una%20clinica%20u%20hospital." target="_blank" rel="noopener">Consultar Zow Salud</a>
+          </div>
           <button class="primary-button" type="submit">Enviar solicitud</button>
+          <small class="form-note">Usaremos estos datos solo para responder tu consulta comercial y coordinar la demo.</small>
           <p class="form-error" id="requestMessage" aria-live="polite"></p>
         </form>
       </section>
@@ -399,7 +683,10 @@
       <span>&copy; 2026 SYSTEM ZOW. Derecho de autor: Wilmar Peinado B.</span>
       <a href="/panel">Acceso privado</a>
     </footer>
-    <script src="system-zow.js"></script>
+    <a class="floating-whatsapp" href="https://wa.me/59175620492?text=Hola%20SYSTEM%20ZOW%2C%20quiero%20recibir%20informacion%20sobre%20sus%20sistemas%20SaaS." target="_blank" rel="noopener" aria-label="Contactar por WhatsApp">
+      <span>WhatsApp</span>
+    </a>
+    <script src="system-zow.js" defer></script>
   </body>
 </html>
 

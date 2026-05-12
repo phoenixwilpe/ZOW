@@ -11,13 +11,13 @@
   "categories": ["business", "productivity", "shopping"],
   "icons": [
     {
-      "src": "/assets/brand/zow-ventas-almacen-logo-transparent.png",
+      "src": "/assets/brand/zow-ventas-almacen-icon-transparent.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any maskable"
     },
     {
-      "src": "/assets/brand/zow-ventas-almacen-logo.png",
+      "src": "/assets/brand/zow-ventas-almacen-icon.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any"

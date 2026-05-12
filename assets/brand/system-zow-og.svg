@@ -1,0 +1,61 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630" role="img" aria-labelledby="title desc">
+  <title id="title">SYSTEM ZOW - Sistemas SaaS para empresas</title>
+  <desc id="desc">Imagen social de SYSTEM ZOW con los sistemas Correspondencia ZOW, Zow Ventas-Almacen y Zow Salud.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" x2="1" y1="0" y2="1">
+      <stop offset="0" stop-color="#07111f"/>
+      <stop offset="0.52" stop-color="#0b3258"/>
+      <stop offset="1" stop-color="#06382c"/>
+    </linearGradient>
+    <linearGradient id="cyan" x1="0" x2="1" y1="0" y2="1">
+      <stop offset="0" stop-color="#22e8ff"/>
+      <stop offset="1" stop-color="#8cffc1"/>
+    </linearGradient>
+    <filter id="glow" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="18" result="blur"/>
+      <feColorMatrix in="blur" type="matrix" values="0 0 0 0 0.08 0 0 0 0 0.9 0 0 0 0 1 0 0 0 0.65 0"/>
+      <feMerge>
+        <feMergeNode/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+  <rect width="1200" height="630" fill="url(#bg)"/>
+  <path d="M-40 470 C170 350 275 595 480 470 C695 340 760 135 1240 172" fill="none" stroke="#22e8ff" stroke-width="2" opacity="0.28"/>
+  <path d="M-20 214 C205 288 330 120 520 210 C760 325 866 408 1230 276" fill="none" stroke="#8cffc1" stroke-width="2" opacity="0.22"/>
+  <g opacity="0.12" stroke="#d7f7ff" stroke-width="1">
+    <path d="M96 0v630M192 0v630M288 0v630M384 0v630M480 0v630M576 0v630M672 0v630M768 0v630M864 0v630M960 0v630M1056 0v630"/>
+    <path d="M0 90h1200M0 180h1200M0 270h1200M0 360h1200M0 450h1200M0 540h1200"/>
+  </g>
+  <g transform="translate(82 72)">
+    <rect width="190" height="190" rx="44" fill="#07111f" stroke="#22e8ff" stroke-opacity="0.36" stroke-width="3" filter="url(#glow)"/>
+    <path d="M62 54h82c14 0 20 16 10 26L84 150h78" fill="none" stroke="url(#cyan)" stroke-width="24" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M48 36h70M46 154h48M132 36h22M130 154h26" stroke="#7ddfff" stroke-width="6" stroke-linecap="round" opacity="0.82"/>
+  </g>
+  <text x="314" y="138" fill="#ffffff" font-family="Arial, Helvetica, sans-serif" font-size="72" font-weight="900" letter-spacing="2">SYSTEM ZOW</text>
+  <text x="318" y="194" fill="#8cffc1" font-family="Arial, Helvetica, sans-serif" font-size="34" font-weight="900" letter-spacing="9">SAAS</text>
+  <text x="318" y="252" fill="#d9edf8" font-family="Arial, Helvetica, sans-serif" font-size="28" font-weight="700">Sistemas SaaS para empresas que necesitan operar mejor</text>
+  <g transform="translate(82 360)">
+    <rect width="315" height="118" rx="28" fill="#ffffff" opacity="0.94"/>
+    <circle cx="60" cy="59" r="28" fill="#eaf9ff"/>
+    <text x="52" y="70" fill="#0b78ff" font-family="Arial, Helvetica, sans-serif" font-size="34" font-weight="900">D</text>
+    <text x="105" y="50" fill="#07111f" font-family="Arial, Helvetica, sans-serif" font-size="23" font-weight="900">Correspondencia</text>
+    <text x="105" y="82" fill="#607386" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="700">Documentos, QR y archivo</text>
+  </g>
+  <g transform="translate(442 360)">
+    <rect width="315" height="118" rx="28" fill="#ffffff" opacity="0.94"/>
+    <circle cx="60" cy="59" r="28" fill="#eef4ff"/>
+    <text x="49" y="70" fill="#2563eb" font-family="Arial, Helvetica, sans-serif" font-size="34" font-weight="900">V</text>
+    <text x="105" y="50" fill="#07111f" font-family="Arial, Helvetica, sans-serif" font-size="23" font-weight="900">Ventas-Almacen</text>
+    <text x="105" y="82" fill="#607386" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="700">POS, caja e inventario</text>
+  </g>
+  <g transform="translate(802 360)">
+    <rect width="315" height="118" rx="28" fill="#ffffff" opacity="0.94"/>
+    <circle cx="60" cy="59" r="28" fill="#ebfff4"/>
+    <text x="49" y="70" fill="#15803d" font-family="Arial, Helvetica, sans-serif" font-size="34" font-weight="900">+</text>
+    <text x="105" y="50" fill="#07111f" font-family="Arial, Helvetica, sans-serif" font-size="23" font-weight="900">Zow Salud</text>
+    <text x="105" y="82" fill="#607386" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="700">Clinicas y hospitales</text>
+  </g>
+  <rect x="82" y="528" width="316" height="46" rx="23" fill="#22e8ff" opacity="0.95"/>
+  <text x="112" y="559" fill="#07111f" font-family="Arial, Helvetica, sans-serif" font-size="20" font-weight="900">zow-six.vercel.app</text>
+</svg>

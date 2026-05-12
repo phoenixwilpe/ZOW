@@ -1461,9 +1461,9 @@ function renderSession() {
   const brandLogo = document.querySelector("#sidebarBrandLogo");
   if (brandLogo) {
     brandLogo.src = isZowOwner()
-      ? "assets/brand/zow-systems-logo-transparent.png"
-      : "assets/brand/zow-correspondencia-login-logo-transparent.png";
-    brandLogo.alt = isZowOwner() ? "ZOW Systems" : "Correspondencia ZOW";
+      ? "assets/brand/system-zow-header-logo.svg"
+      : "assets/brand/zow-correspondencia-logo.svg";
+    brandLogo.alt = isZowOwner() ? "SYSTEM ZOW" : "Correspondencia ZOW";
   }
   document.querySelector("#currentAreaLabel").textContent = `${unit?.name ?? "Sin unidad asignada"} / ${organizationSettings.companyName || "Empresa sin configurar"}`;
   document.querySelector("#companyNameTitle").textContent = isZowOwner() ? "Panel ZOW SaaS" : "Correspondencia ZOW";
