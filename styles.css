@@ -4413,6 +4413,87 @@ body.app-ventas .executive-action-plan button {
   flex: 0 0 auto;
 }
 
+body.app-ventas .daily-operation-panel {
+  display: grid;
+  gap: 14px;
+  margin-bottom: 14px;
+  border: 1px solid rgb(15 118 110 / 14%);
+  border-radius: 20px;
+  padding: clamp(14px, 2vw, 18px);
+  background:
+    radial-gradient(circle at 8% 12%, rgb(16 185 129 / 14%), transparent 32%),
+    linear-gradient(145deg, rgb(255 255 255 / 96%), rgb(240 253 250 / 82%));
+  box-shadow: 0 18px 44px rgb(8 30 26 / 7%);
+}
+
+body.app-ventas .daily-operation-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+body.app-ventas .daily-operation-head h3 {
+  margin: 4px 0 5px;
+  color: #10251f;
+  font-size: clamp(1.12rem, 2.2vw, 1.55rem);
+}
+
+body.app-ventas .daily-operation-head span,
+body.app-ventas .daily-operation-track span {
+  color: var(--muted);
+  font-size: 0.84rem;
+  font-weight: 820;
+  line-height: 1.38;
+}
+
+body.app-ventas .daily-operation-head > strong {
+  color: var(--accent);
+  font-size: clamp(1.7rem, 3vw, 2.35rem);
+  line-height: 1;
+}
+
+body.app-ventas .daily-operation-track {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 10px;
+}
+
+body.app-ventas .daily-operation-track article {
+  min-width: 0;
+  display: grid;
+  gap: 10px;
+  align-content: start;
+  border: 1px solid rgb(15 118 110 / 12%);
+  border-radius: 15px;
+  padding: 12px;
+  background: rgb(255 255 255 / 78%);
+}
+
+body.app-ventas .daily-operation-track article.is-pending {
+  border-color: rgb(245 158 11 / 24%);
+  background: rgb(255 251 235 / 72%);
+}
+
+body.app-ventas .daily-operation-track b {
+  display: grid;
+  width: 32px;
+  height: 32px;
+  place-items: center;
+  border-radius: 999px;
+  background: linear-gradient(135deg, #10b981, #0f766e);
+  color: white;
+  font-size: 0.85rem;
+  font-weight: 950;
+  box-shadow: 0 10px 22px rgb(15 118 110 / 16%);
+}
+
+body.app-ventas .daily-operation-track strong {
+  display: block;
+  margin-bottom: 4px;
+  color: #10251f;
+}
+
 .pos-quick-status article,
 .inventory-health-grid article,
 .owner-dashboard-grid article {
@@ -11443,6 +11524,7 @@ body.system-zow-site .site-footer {
   .role-permission-grid,
   .shift-command-grid,
   .shift-checklist,
+  body.app-ventas .daily-operation-track,
   body.app-ventas .history-control-strip {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -11729,6 +11811,7 @@ body.system-zow-site .site-footer {
   .inventory-decision-strip,
   body.app-ventas .history-control-strip,
   .report-decision-grid,
+  body.app-ventas .daily-operation-track,
   .settings-overview-grid,
   .store-launch-grid,
   .settings-preset-row,
@@ -12984,6 +13067,11 @@ body.app-ventas .cloud-safe-note {
   }
 
   body.app-ventas .report-decision-head {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  body.app-ventas .daily-operation-head {
     align-items: flex-start;
     flex-direction: column;
   }

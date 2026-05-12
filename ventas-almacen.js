@@ -602,6 +602,7 @@ function renderSummary() {
       <article><span>Cobrar</span><strong>${money(debtTotal)}</strong><small>${receivables.length} cuenta${receivables.length === 1 ? "" : "s"}</small></article>
     </section>
     ${renderExecutiveActionPlan({ todaySales, criticalProducts, debtTotal, cashOpen })}
+    ${renderDailyOperationPanel({ todaySales, criticalProducts, debtTotal, cashOpen })}
     ${renderVentasCommandCenter()}
     ${renderServiceStrip()}
     ${renderLiveActivityPanel()}
@@ -641,6 +642,64 @@ function renderExecutiveActionPlan({ todaySales, criticalProducts, debtTotal, ca
         ${canAccessView(item.view) ? `<button class="ghost-button" type="button" data-module-view="${item.view}">Ir</button>` : ""}
       </article>
     `).join("")}
+  </section>`;
+}
+
+function renderDailyOperationPanel({ todaySales, criticalProducts, debtTotal, cashOpen }) {
+  const checks = [
+    {
+      step: "1",
+      title: cashOpen ? "Caja abierta" : "Abrir caja",
+      detail: cashOpen ? `Caja ${num(cashSession.registerNumber)} lista para vender.` : "Inicia el turno antes de cobrar ventas.",
+      done: cashOpen,
+      view: "finance"
+    },
+    {
+      step: "2",
+      title: todaySales.length ? "Ventas del dia" : "Primera venta",
+      detail: todaySales.length ? `${num(todaySales.length)} venta${todaySales.length === 1 ? "" : "s"} registrada${todaySales.length === 1 ? "" : "s"} hoy.` : "Empieza desde el POS tactil.",
+      done: todaySales.length > 0,
+      view: "sell"
+    },
+    {
+      step: "3",
+      title: criticalProducts.length ? "Stock por reponer" : "Stock controlado",
+      detail: criticalProducts.length ? `${num(criticalProducts.length)} producto${criticalProducts.length === 1 ? "" : "s"} bajo minimo o agotado${criticalProducts.length === 1 ? "" : "s"}.` : "Sin alertas criticas de stock.",
+      done: criticalProducts.length === 0,
+      view: criticalProducts.length ? "inventory" : "alerts"
+    },
+    {
+      step: "4",
+      title: debtTotal ? "Cobrar pendientes" : "Cartera limpia",
+      detail: debtTotal ? `${money(debtTotal)} pendiente en cuentas por cobrar.` : "No hay saldos pendientes visibles.",
+      done: debtTotal <= 0,
+      view: "customers"
+    },
+    {
+      step: "5",
+      title: "Cierre y reporte",
+      detail: cashOpen ? "Al terminar el turno, cuadra caja y revisa reportes." : "Cuando abras caja, podras cerrar el turno al finalizar.",
+      done: false,
+      view: cashOpen ? "finance" : "reports"
+    }
+  ];
+  const progress = Math.round((checks.filter((item) => item.done).length / checks.length) * 100);
+  return `<section class="daily-operation-panel">
+    <div class="daily-operation-head">
+      <div>
+        <p class="eyebrow">Rutina diaria</p>
+        <h3>Guia rapida para operar hoy</h3>
+        <span>Ordena las tareas principales para que caja, ventas, inventario y cobranza no queden sueltas.</span>
+      </div>
+      <strong>${progress}%</strong>
+    </div>
+    <div class="daily-operation-track">
+      ${checks.map((item) => `<article class="${item.done ? "is-done" : "is-pending"}">
+        <b>${escapeHtml(item.step)}</b>
+        <div><strong>${escapeHtml(item.title)}</strong><span>${escapeHtml(item.detail)}</span></div>
+        ${canAccessView(item.view) ? `<button class="ghost-button" type="button" data-module-view="${item.view}">Abrir</button>` : ""}
+      </article>`).join("")}
+    </div>
   </section>`;
 }
 
