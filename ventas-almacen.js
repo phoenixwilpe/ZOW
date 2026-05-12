@@ -1690,6 +1690,7 @@ function renderCustomers() {
         <button class="ghost-button" type="button" id="exportCustomersCommandCsv">Exportar clientes</button>
       </div>
     </section>
+    ${ventasMessage ? `<div class="cloud-safe-note"><strong>${escapeHtml(ventasMessage)}</strong><span>Usa esta informacion para seguimiento interno o contacto con el cliente.</span></div>` : ""}
     <section class="customer-health-grid">
       <article><span>Clientes activos</span><strong>${num(customerHealth.activeCustomers)}</strong><small>${num(customers.length)} registrados</small></article>
       <article class="${customerHealth.highRisk ? "is-danger" : "is-ok"}"><span>Riesgo alto</span><strong>${num(customerHealth.highRisk)}</strong><small>Requieren cobro o bloqueo</small></article>
@@ -1729,6 +1730,9 @@ function renderCustomers() {
   `;
   document.querySelectorAll("[data-pay-receivable]").forEach((button) => {
     button.addEventListener("click", () => payReceivable(button.dataset.payReceivable));
+  });
+  document.querySelectorAll("[data-copy-collection]").forEach((button) => {
+    button.addEventListener("click", () => copyCollectionMessage(button.dataset.copyCollection));
   });
   document.querySelectorAll("[data-pay-customer]").forEach((button) => {
     button.addEventListener("click", () => payOldestReceivableForCustomer(button.dataset.payCustomer));
@@ -1773,15 +1777,58 @@ function renderReceivableRow(sale) {
   const paidPercent = Math.min(100, Math.round((Number(sale.amount_paid || 0) / Math.max(Number(sale.total || 1), 1)) * 100));
   const age = daysSince(sale.created_at);
   const ageClass = age > 30 ? "danger-text" : age > 15 ? "warn-text" : "ok-text";
+  const contactActions = renderReceivableContactActions(sale);
   return `<article class="admin-row receivable-row">
     <div>
       <strong>${escapeHtml(sale.code)}</strong>
       <span>${escapeHtml(sale.customer_name || "Cliente sin registrar")} / ${formatDateTime(sale.created_at)} / <b class="${ageClass}">${age} dia${age === 1 ? "" : "s"}</b></span>
       <span>Pagado ${money(sale.amount_paid)} de ${money(sale.total)}</span>
       <div class="receivable-progress"><i style="width:${paidPercent}%"></i></div>
+      ${contactActions}
     </div>
     <div class="admin-row-meta"><span class="warn-text">Debe ${money(sale.balance_due)}</span><button class="primary-button" type="button" data-pay-receivable="${sale.id}">Registrar pago</button></div>
   </article>`;
+}
+
+function renderReceivableContactActions(sale) {
+  const customer = findCustomerForSale(sale);
+  const whatsAppUrl = customerWhatsAppUrl(customer, sale);
+  return `<div class="receivable-contact-actions">
+    ${whatsAppUrl ? `<a class="ghost-button" href="${whatsAppUrl}" target="_blank" rel="noopener">WhatsApp</a>` : `<span>Sin celular para WhatsApp</span>`}
+    <button class="ghost-button" type="button" data-copy-collection="${sale.id}">Copiar mensaje</button>
+  </div>`;
+}
+
+function findCustomerForSale(sale) {
+  const saleName = String(sale.customer_name || "").trim().toLowerCase();
+  if (!saleName) return null;
+  return customers.find((customer) => String(customer.name || "").trim().toLowerCase() === saleName) || null;
+}
+
+function customerWhatsAppUrl(customer, sale) {
+  const phone = String(customer?.phone || sale.customer_phone || "").replace(/\D/g, "");
+  if (!phone) return "";
+  const normalized = phone.startsWith("591") ? phone : `591${phone.replace(/^0+/, "")}`;
+  return `https://wa.me/${normalized}?text=${encodeURIComponent(collectionMessage(sale))}`;
+}
+
+function collectionMessage(sale) {
+  const storeName = storeSettings.storeName || storeSettings.companyName || currentUser.companyName || "la tienda";
+  const customerName = sale.customer_name || "cliente";
+  return `Hola ${customerName}, le saludamos de ${storeName}. Tenemos registrado un saldo pendiente de ${money(sale.balance_due)} correspondiente a la venta ${sale.code}. Podemos coordinar el pago cuando le sea conveniente.`;
+}
+
+async function copyCollectionMessage(saleId) {
+  const sale = receivables.find((item) => item.id === saleId);
+  if (!sale) return;
+  const message = collectionMessage(sale);
+  try {
+    await navigator.clipboard.writeText(message);
+    ventasMessage = "Mensaje de cobranza copiado al portapapeles.";
+  } catch (error) {
+    ventasMessage = message;
+  }
+  renderMain();
 }
 
 function renderComboBuilderLine(combo, index) {

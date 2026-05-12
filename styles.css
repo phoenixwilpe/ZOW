@@ -2823,6 +2823,30 @@ body.app-correspondencia .metrics article:hover {
   transform: translateY(-1px);
 }
 
+.receivable-contact-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin-top: 8px;
+}
+
+.receivable-contact-actions .ghost-button {
+  min-height: 34px;
+  border-radius: 999px;
+  padding: 0 11px;
+  text-decoration: none;
+}
+
+.receivable-contact-actions span {
+  align-self: center;
+  border-radius: 999px;
+  padding: 6px 10px;
+  background: color-mix(in srgb, var(--muted) 8%, white);
+  color: var(--muted);
+  font-size: 0.76rem;
+  font-weight: 900;
+}
+
 .setup-overview span,
 .admin-panel-head span {
   color: var(--muted);
