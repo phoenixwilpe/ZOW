@@ -724,6 +724,44 @@ function renderActivityTimelineItem(event) {
   </article>`;
 }
 
+function buildSaleReadiness({ isCashOpen }) {
+  const stockIssues = saleCart.map((item) => {
+    const product = products.find((entry) => entry.id === item.productId);
+    if (!product) return { level: "danger", title: item.name, detail: "Producto no encontrado en inventario." };
+    const stock = Number(product.stock || 0);
+    const requested = Number(item.quantity || 0);
+    if (requested > stock) return { level: "danger", title: product.name, detail: `Stock disponible ${num(stock)}, solicitado ${num(requested)}.` };
+    if (stock - requested <= Number(product.min_stock || 0)) return { level: "warning", title: product.name, detail: `Quedara en ${num(stock - requested)} despues de vender.` };
+    return null;
+  }).filter(Boolean);
+  const checks = [
+    { label: "Caja", done: Boolean(isCashOpen), detail: isCashOpen ? "Lista para cobrar." : "Abre caja antes de confirmar ventas.", level: isCashOpen ? "ok" : "danger" },
+    { label: "Carrito", done: saleCart.length > 0, detail: saleCart.length ? `${num(saleCart.length)} item${saleCart.length === 1 ? "" : "s"} cargado${saleCart.length === 1 ? "" : "s"}.` : "Agrega productos.", level: saleCart.length ? "ok" : "danger" },
+    { label: "Cliente", done: !storeSettings.requireCustomerForSale || Boolean(saleCustomerId), detail: storeSettings.requireCustomerForSale ? (saleCustomerId ? "Cliente seleccionado." : "Cliente obligatorio pendiente.") : "Cliente opcional.", level: storeSettings.requireCustomerForSale && !saleCustomerId ? "danger" : "ok" },
+    { label: "Stock", done: !stockIssues.some((item) => item.level === "danger"), detail: stockIssues.length ? `${num(stockIssues.length)} alerta${stockIssues.length === 1 ? "" : "s"} de stock.` : "Stock suficiente.", level: stockIssues.some((item) => item.level === "danger") ? "danger" : stockIssues.length ? "warning" : "ok" }
+  ];
+  return {
+    checks,
+    stockIssues,
+    canCharge: checks.every((item) => item.done)
+  };
+}
+
+function renderSaleReadinessPanel(readiness) {
+  if (!saleCart.length) return "";
+  const statusClass = readiness.canCharge ? "is-ok" : "is-warning";
+  return `<section class="sale-readiness-panel ${statusClass}">
+    <div class="sale-readiness-head">
+      <div><strong>${readiness.canCharge ? "Venta lista para cobrar" : "Revisa antes de cobrar"}</strong><span>${readiness.canCharge ? "Caja, carrito, cliente y stock se ven correctos." : "Hay condiciones pendientes para confirmar la venta."}</span></div>
+      <b>${readiness.checks.filter((item) => item.done).length}/${readiness.checks.length}</b>
+    </div>
+    <div class="sale-readiness-grid">
+      ${readiness.checks.map((item) => `<article class="is-${item.level}"><span>${escapeHtml(item.label)}</span><strong>${item.done ? "OK" : "Pendiente"}</strong><small>${escapeHtml(item.detail)}</small></article>`).join("")}
+    </div>
+    ${readiness.stockIssues.length ? `<div class="sale-readiness-alerts">${readiness.stockIssues.slice(0, 3).map((item) => `<span class="is-${item.level}">${escapeHtml(item.title)}: ${escapeHtml(item.detail)}</span>`).join("")}</div>` : ""}
+  </section>`;
+}
+
 function renderAlerts() {
   const alerts = products.filter((product) => isProductActive(product) && Number(product.stock || 0) <= Number(product.min_stock || 0));
   const outOfStock = alerts.filter((product) => Number(product.stock || 0) <= 0);
@@ -780,6 +818,7 @@ function renderSell() {
   const lowStockInCart = saleCart
     .map((item) => products.find((product) => product.id === item.productId))
     .filter((product) => product && Number(product.stock || 0) <= Number(product.min_stock || 0));
+  const saleReadiness = buildSaleReadiness({ isCashOpen });
   mainList().innerHTML = `
     <section class="pos-shell touch-pos-shell pos-mode-${posMobilePanel}">
       <div class="pos-ambient-strip" aria-hidden="true">
@@ -866,6 +905,7 @@ function renderSell() {
           ${!storeSettings.allowDiscounts ? `<div class="cloud-safe-note"><strong>Descuentos desactivados</strong><span>Solo el encargado puede volver a habilitarlos desde configuracion.</span></div>` : ""}
           ${lowStockInCart.length ? `<div class="pos-stock-note"><strong>Atencion stock bajo:</strong> ${lowStockInCart.map((product) => escapeHtml(product.name)).join(", ")}</div>` : ""}
           <div class="pos-cart-list touch-cart-list">${saleCart.map(renderCartItem).join("") || empty("Toca un producto para agregarlo")}</div>
+          ${renderSaleReadinessPanel(saleReadiness)}
           <div class="pos-section-block pos-total-block">
             <div class="pos-section-title"><strong>Resumen de cobro</strong><span>Totales de la venta actual</span></div>
             <div class="sale-total-card">
@@ -886,7 +926,7 @@ function renderSell() {
               <button class="ghost-button danger-action icon-text-button" type="button" id="cancelSaleBtn"><span class="ui-ico">x</span>Cancelar</button>
             </div>
           </div>
-          <button class="primary-button touch-charge-button icon-text-button" type="button" id="chargeSaleBtn" ${saleCart.length && isCashOpen ? "" : "disabled"}><span class="ui-ico">$</span>${isCashOpen ? `Cobrar ${money(totals.total)}` : "Abre caja para cobrar"}</button>
+          <button class="primary-button touch-charge-button icon-text-button" type="button" id="chargeSaleBtn" ${saleReadiness.canCharge ? "" : "disabled"}><span class="ui-ico">$</span>${isCashOpen ? `Cobrar ${money(totals.total)}` : "Abre caja para cobrar"}</button>
         </form>
       </section>
     </section>
@@ -3549,6 +3589,11 @@ async function recoverSuspendedSale() {
 
 function openPaymentModal() {
   if (!saleCart.length) return;
+  const readiness = buildSaleReadiness({ isCashOpen: cashSession?.status === "abierta" });
+  if (!readiness.canCharge) {
+    ventasMessage = saleReadinessMessage(readiness);
+    return renderMain();
+  }
   if (storeSettings.requireCustomerForSale && !saleCustomerId) {
     ventasMessage = "Selecciona o registra un cliente antes de cobrar.";
     return renderMain();
@@ -3560,6 +3605,13 @@ function openPaymentModal() {
   renderPaymentModal();
   paymentModal.showModal();
   window.requestAnimationFrame(() => focusPaymentReceived(!isMobilePos()));
+}
+
+function saleReadinessMessage(readiness) {
+  const issue = readiness.checks.find((item) => !item.done);
+  if (issue) return issue.detail;
+  const stockIssue = readiness.stockIssues.find((item) => item.level === "danger");
+  return stockIssue?.detail || "Revisa la venta antes de cobrar.";
 }
 
 function quickCheckoutCash() {
