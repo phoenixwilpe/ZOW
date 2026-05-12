@@ -2191,6 +2191,7 @@ function renderSettings() {
         <div class="modal-actions"><button class="primary-button" type="submit">Guardar configuracion</button></div>
       </form>
     </section>
+    ${renderReceiptPreview()}
     ${renderRoleConfigGuide()}
   `;
   document.querySelector("#storeSettingsForm")?.addEventListener("submit", saveStoreSettings);
@@ -2208,6 +2209,37 @@ function renderStoreSettingsOverview() {
   ];
   return `<section class="settings-overview-grid">
     ${rules.map((item) => `<article><span>${escapeHtml(item.label)}</span><strong>${escapeHtml(item.value)}</strong><small>${escapeHtml(item.detail)}</small></article>`).join("")}
+  </section>`;
+}
+
+function renderReceiptPreview() {
+  const title = storeSettings.storeName || storeSettings.companyName || currentUser.companyName || "Zow Ventas-Almacen";
+  const sampleNote = storeSettings.ticketNote || "Gracias por su compra";
+  const sampleTotal = 42.5;
+  return `<section class="admin-panel receipt-preview-panel">
+    <div class="admin-panel-head"><div><p class="eyebrow">Comprobante</p><h3>Vista previa de impresion</h3></div><span>${escapeHtml(storeSettings.currency || "BOB")}</span></div>
+    <div class="receipt-preview-shell">
+      <article class="receipt-preview-ticket">
+        <div class="receipt-preview-brand">
+          <strong>${escapeHtml(title)}</strong>
+          <span>${escapeHtml(storeSettings.taxId ? `NIT/CI ${storeSettings.taxId}` : "Datos fiscales pendientes")}</span>
+          <small>${escapeHtml(storeSettings.address || "Direccion de la tienda")}</small>
+        </div>
+        <div class="receipt-preview-meta">
+          <span>COM-000001</span><span>Caja 1</span><span>${escapeHtml(formatShortDate(new Date().toISOString()))}</span>
+        </div>
+        <div class="receipt-preview-lines">
+          <div><span>Producto ejemplo x2</span><strong>${money(24)}</strong></div>
+          <div><span>Servicio / articulo x1</span><strong>${money(18.5)}</strong></div>
+        </div>
+        <div class="receipt-preview-total"><span>Total</span><strong>${money(sampleTotal)}</strong></div>
+        <p>${escapeHtml(sampleNote)}</p>
+      </article>
+      <div class="receipt-preview-tips">
+        <strong>Antes de vender a una empresa</strong>
+        <span>Completa nombre comercial, NIT, telefono, direccion y nota. Estos datos aparecen en tickets, precomprobantes y cierres de caja.</span>
+      </div>
+    </div>
   </section>`;
 }
 
@@ -3675,6 +3707,7 @@ function printTicket(sale, items) {
   const itemCount = items.reduce((sum, item) => sum + Number(item.quantity || 0), 0);
   const paidAmount = Number(sale.amount_paid ?? sale.cash_received ?? 0);
   const changeAmount = Number(sale.change_amount || 0);
+  const isCreditSale = Number(sale.balance_due || 0) > 0;
   printable.document.write(`<!doctype html><html><head><meta charset="UTF-8"><title>Ticket ${escapeHtml(sale.code)}</title><style>
     *{box-sizing:border-box}body{font-family:Arial,sans-serif;margin:0;padding:14px;max-width:390px;color:#111;background:#fff}
     .toolbar{margin-bottom:12px}.toolbar button{width:100%;border:0;border-radius:10px;padding:11px;background:#0f172a;color:#fff;font-weight:900}
@@ -3685,6 +3718,8 @@ function printTicket(sale, items) {
     table{width:100%;border-collapse:collapse;margin-top:8px}th{font-size:10px;text-align:left;border-bottom:2px solid #111;padding:6px 0;text-transform:uppercase}th:last-child,td:last-child{text-align:right}td{padding:8px 0;border-bottom:1px dashed #bbb;font-size:12px;vertical-align:top}td:last-child{font-weight:800}.muted{color:#555;font-size:10px;line-height:1.35}
     .total{margin-top:4px;padding-top:8px;border-top:2px solid #111;font-weight:900;font-size:18px}.payment{background:#f7f7f7}.barcode{height:36px;margin:10px 20px;background:repeating-linear-gradient(90deg,#111 0 2px,transparent 2px 5px,#111 5px 6px,transparent 6px 10px)}
     .verify{display:grid;grid-template-columns:58px 1fr;gap:10px;align-items:center;margin:12px 0}.qr{width:58px;height:58px;background:linear-gradient(90deg,#111 50%,transparent 0),linear-gradient(#111 50%,transparent 0);background-size:14px 14px;border:7px solid #fff;box-shadow:0 0 0 1px #111}.foot{margin-top:10px;text-align:center;font-size:11px;color:#555}.thanks{color:#111;font-weight:900}
+    .signature{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-top:34px}.signature div{border-top:1px solid #111;text-align:center;padding-top:7px;color:#555;font-size:10px}
+    .copy-note{margin:8px 0;border:1px dashed #999;border-radius:10px;padding:8px;text-align:center;color:#333;font-size:10px;font-weight:800;text-transform:uppercase}
     @media print{.toolbar{display:none}body{padding:0}.ticket-box,.meta-grid div{break-inside:avoid}}
   </style></head><body><div class="toolbar"><button onclick="window.print()">Imprimir comprobante</button></div>
   <div class="brand"><b>${escapeHtml(title)}</b><span>Comprobante de venta</span><em class="stamp">${escapeHtml(sale.status === "anulada" ? "Anulado" : sale.code === "PREVENTA" ? "Preventa" : "Pagado")}</em></div>
@@ -3694,6 +3729,7 @@ function printTicket(sale, items) {
   <div class="ticket-box"><div class="row"><span>Subtotal</span><strong>${money(sale.subtotal)}</strong></div><div class="row"><span>Descuento</span><strong>${money(sale.discount)}</strong></div><div class="row"><span>Impuesto</span><strong>${money(sale.tax || 0)}</strong></div><div class="row total"><span>Total</span><strong>${money(sale.total)}</strong></div><div class="row payment"><span>Metodo</span><strong>${escapeHtml(paymentLabel(sale.payment_method || paymentDraft.method || "efectivo"))}</strong></div><div class="row"><span>Pagado</span><strong>${money(paidAmount)}</strong></div><div class="row"><span>Cambio</span><strong>${money(changeAmount)}</strong></div>${Number(sale.balance_due || 0) > 0 ? `<div class="row"><span>Saldo</span><strong>${money(sale.balance_due)}</strong></div>` : ""}</div>
   ${renderTicketPaymentDetail(sale)}
   ${sale.note ? `<p class="muted"><strong>Obs.:</strong> ${escapeHtml(sale.note)}</p>` : ""}
+  ${isCreditSale ? `<div class="copy-note">Venta con saldo pendiente. Conservar copia firmada.</div><div class="signature"><div>Firma cliente</div><div>Firma cajero</div></div>` : ""}
   <div class="verify"><div class="qr"></div><div><div class="barcode"></div><p class="muted">Codigo de control: ${escapeHtml(sale.code)}<br>Moneda: ${escapeHtml(storeSettings.currency || "BOB")}</p></div></div><p class="foot thanks">${escapeHtml(storeSettings.ticketNote || "Gracias por su compra")}</p><p class="foot">Sistema de venta y almacen ZOW SAAS</p></body></html>`);
   printable.document.close();
   printable.focus();
