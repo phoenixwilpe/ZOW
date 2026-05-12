@@ -4685,6 +4685,101 @@ body.app-ventas .executive-action-plan button {
   margin: 12px 0 0;
 }
 
+.store-launch-panel {
+  position: relative;
+  overflow: hidden;
+  display: grid;
+  gap: 14px;
+  margin-bottom: 14px;
+  border: 1px solid color-mix(in srgb, var(--accent) 18%, var(--line));
+  border-radius: 18px;
+  padding: clamp(14px, 2vw, 18px);
+  background:
+    radial-gradient(circle at 88% 10%, color-mix(in srgb, var(--accent) 16%, transparent), transparent 34%),
+    linear-gradient(145deg, #ffffff, color-mix(in srgb, var(--accent-tint) 46%, white));
+  box-shadow: 0 18px 44px rgb(15 32 28 / 7%);
+}
+
+.store-launch-panel.is-pending {
+  border-color: rgb(245 158 11 / 24%);
+  background:
+    radial-gradient(circle at 88% 10%, rgb(245 158 11 / 12%), transparent 34%),
+    linear-gradient(145deg, #ffffff, #fffbeb);
+}
+
+.store-launch-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.store-launch-head h3 {
+  margin: 4px 0 5px;
+  color: var(--accent-dark);
+  font-size: clamp(1.12rem, 2.2vw, 1.55rem);
+}
+
+.store-launch-head span,
+.store-launch-grid span {
+  color: var(--muted);
+  font-size: 0.86rem;
+  font-weight: 820;
+  line-height: 1.35;
+}
+
+.store-launch-head > strong {
+  min-width: 74px;
+  text-align: right;
+  color: var(--accent);
+  font-size: clamp(1.7rem, 3vw, 2.3rem);
+  line-height: 1;
+}
+
+.store-launch-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  gap: 10px;
+}
+
+.store-launch-grid article {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  border: 1px solid color-mix(in srgb, var(--accent) 14%, var(--line));
+  border-radius: 13px;
+  padding: 11px;
+  background: rgb(255 255 255 / 78%);
+}
+
+.store-launch-grid article.is-pending {
+  border-color: rgb(245 158 11 / 24%);
+  background: rgb(255 251 235 / 72%);
+}
+
+.store-launch-grid b {
+  display: grid;
+  width: 30px;
+  height: 30px;
+  place-items: center;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--accent) 12%, white);
+  color: var(--accent);
+  font-size: 0.78rem;
+  font-weight: 950;
+}
+
+.store-launch-grid article.is-pending b {
+  background: rgb(254 243 199 / 82%);
+  color: #b45309;
+}
+
+.store-launch-grid strong {
+  display: block;
+  color: var(--accent-dark);
+}
+
 .business-health-panel {
   overflow: hidden;
 }
@@ -11546,6 +11641,7 @@ body.system-zow-site .site-footer {
   .inventory-decision-strip,
   body.app-ventas .history-control-strip,
   .settings-overview-grid,
+  .store-launch-grid,
   .settings-preset-row,
   body.app-ventas .receipt-preview-shell {
     grid-template-columns: 1fr;
@@ -12791,6 +12887,19 @@ body.app-ventas .cloud-safe-note {
   body.app-ventas .shift-command-actions {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  body.app-ventas .store-launch-head {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  body.app-ventas .store-launch-grid article {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  body.app-ventas .store-launch-grid button {
+    grid-column: 1 / -1;
   }
 
   body.app-ventas .shift-command-main > strong {

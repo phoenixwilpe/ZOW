@@ -2335,6 +2335,7 @@ function renderSettings() {
   setCount("Tienda");
   mainList().innerHTML = `
     ${renderSetupAssistant()}
+    ${renderStoreLaunchChecklist()}
     ${renderStoreSettingsOverview()}
     <section class="admin-panel settings-command-panel">
       <div class="admin-panel-head"><div><p class="eyebrow">Empresa</p><h3>Datos para ventas e impresion</h3></div></div>
@@ -2381,6 +2382,46 @@ function renderStoreSettingsOverview() {
   return `<section class="settings-overview-grid">
     ${rules.map((item) => `<article><span>${escapeHtml(item.label)}</span><strong>${escapeHtml(item.value)}</strong><small>${escapeHtml(item.detail)}</small></article>`).join("")}
   </section>`;
+}
+
+function renderStoreLaunchChecklist() {
+  const missing = buildStoreLaunchChecks().filter((item) => !item.done);
+  const completed = buildStoreLaunchChecks().filter((item) => item.done);
+  const ready = missing.length === 0;
+  return `<section class="store-launch-panel ${ready ? "is-ready" : "is-pending"}">
+    <div class="store-launch-head">
+      <div>
+        <p class="eyebrow">Entrega de tienda</p>
+        <h3>${ready ? "Lista para operar con usuarios reales" : "Ajustes antes de entregar accesos"}</h3>
+        <span>${ready ? "La configuracion minima esta completa. Puedes iniciar pruebas reales con caja y ventas." : `${missing.length} punto${missing.length === 1 ? "" : "s"} pendiente${missing.length === 1 ? "" : "s"} para una entrega ordenada.`}</span>
+      </div>
+      <strong>${completed.length}/${completed.length + missing.length}</strong>
+    </div>
+    <div class="store-launch-grid">
+      ${buildStoreLaunchChecks().map((item) => `<article class="${item.done ? "is-done" : "is-pending"}">
+        <b>${item.done ? "OK" : "!"}</b>
+        <div><strong>${escapeHtml(item.label)}</strong><span>${escapeHtml(item.detail)}</span></div>
+        ${item.view && canAccessView(item.view) ? `<button class="ghost-button" type="button" data-module-view="${item.view}">Abrir</button>` : ""}
+      </article>`).join("")}
+    </div>
+  </section>`;
+}
+
+function buildStoreLaunchChecks() {
+  const companyName = String(storeSettings.companyName || currentUser.companyName || "").trim();
+  const hasPrintData = Boolean(String(storeSettings.taxId || "").trim() && String(storeSettings.address || "").trim());
+  const hasCashiers = users.some((user) => ["cajero", "ventas_admin"].includes(user.role) && user.active);
+  const hasWarehouse = users.some((user) => ["almacen", "ventas_admin"].includes(user.role) && user.active);
+  const activeProducts = products.filter(isProductActive);
+  return [
+    { label: "Datos de empresa", done: Boolean(companyName && storeSettings.currency), detail: companyName ? `${companyName} / ${storeSettings.currency || "Sin moneda"}` : "Falta nombre legal y moneda.", view: "settings" },
+    { label: "Datos de comprobante", done: hasPrintData, detail: hasPrintData ? "NIT/CI y direccion configurados." : "Completa NIT/CI y direccion para tickets.", view: "settings" },
+    { label: "Cajas", done: Number(storeSettings.cashRegisterCount || 0) >= 1, detail: `${num(storeSettings.cashRegisterCount || 0)} caja${Number(storeSettings.cashRegisterCount || 0) === 1 ? "" : "s"} configurada${Number(storeSettings.cashRegisterCount || 0) === 1 ? "" : "s"}.`, view: "settings" },
+    { label: "Cajeros", done: hasCashiers, detail: hasCashiers ? "Hay usuario habilitado para venta/caja." : "Crea al menos un cajero u operador integral.", view: "users" },
+    { label: "Almacen", done: hasWarehouse, detail: hasWarehouse ? "Hay responsable para inventario." : "Asigna almacen u operador integral.", view: "users" },
+    { label: "Productos", done: activeProducts.length > 0, detail: activeProducts.length ? `${num(activeProducts.length)} producto${activeProducts.length === 1 ? "" : "s"} activo${activeProducts.length === 1 ? "" : "s"}.` : "Carga productos antes de vender.", view: "inventory" },
+    { label: "Caja de prueba", done: Boolean(cashSession?.status === "abierta" || cashClosures.length || sales.length), detail: cashSession?.status === "abierta" ? "Caja abierta para prueba." : cashClosures.length || sales.length ? "Ya existe movimiento de prueba." : "Abre caja y realiza una venta de prueba.", view: "finance" }
+  ];
 }
 
 function renderReceiptPreview() {
