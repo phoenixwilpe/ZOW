@@ -746,21 +746,11 @@ function renderSell() {
         </div>
         ${posNotice ? `<div class="pos-toast">${escapeHtml(posNotice)}</div>` : ""}
         ${lastSaleReceipt ? renderLastSaleReceipt() : ""}
-        <div class="pos-quick-status">
-          <article><span>Turno</span><strong>${isCashOpen ? `Caja ${num(cashSession.registerNumber)}` : "Sin caja"}</strong></article>
-          <article><span>Items</span><strong>${num(saleCart.length)}</strong></article>
-          <article><span>Total</span><strong>${money(totals.total)}</strong></article>
-        </div>
-        ${!isCashOpen ? `
-          <div class="pos-cash-warning">
-            <div><strong>Abre una caja antes de vender</strong><span>El sistema necesita una caja activa para registrar pagos y cierres.</span></div>
-            <button class="primary-button icon-text-button" type="button" id="goOpenCashBtn"><span class="ui-ico">+</span>Abrir caja</button>
-          </div>
-        ` : ""}
+        ${renderPosShiftPanel(isCashOpen, totals)}
         ${saleCart.length ? renderPosMiniCartPreview(totals, isCashOpen) : ""}
         <div class="pos-search-row">
           <label class="toolbar-search touch-search">Buscar o escanear<input id="productSearchInput" type="search" value="${escapeHtml(productSearch)}" placeholder="Codigo, barras o nombre del producto" enterkeyhint="search" autocomplete="off" /></label>
-          <button class="ghost-button touch-action icon-text-button" type="button" id="applyProductSearchBtn"><span class="ui-ico">⌕</span>Buscar</button>
+          <button class="ghost-button touch-action icon-text-button" type="button" id="applyProductSearchBtn"><span class="ui-ico">B</span>Buscar</button>
           <button class="primary-button touch-action icon-text-button" type="button" id="scanAddBtn"><span class="ui-ico">+</span>Agregar</button>
           ${productSearch ? `<button class="ghost-button touch-action icon-text-button" type="button" id="clearSearchBtn"><span class="ui-ico">x</span>Limpiar</button>` : ""}
         </div>
@@ -902,6 +892,46 @@ function renderSell() {
     event.preventDefault();
     openPaymentModal();
   });
+}
+
+function renderPosShiftPanel(isCashOpen, totals) {
+  const pendingCount = cash.pendingSales?.length || 0;
+  const lastSale = sales.find((sale) => sale.status !== "anulada");
+  const openedAt = cashSession?.openedAt ? formatDateTime(cashSession.openedAt) : "";
+  const cashier = currentUser?.name || currentUser?.username || "Cajero";
+  return `
+    <section class="pos-shift-panel ${isCashOpen ? "is-open" : "is-closed"}">
+      <div class="pos-shift-grid">
+        <article>
+          <span>Turno</span>
+          <strong>${isCashOpen ? `Caja ${num(cashSession.registerNumber)}` : "Sin caja"}</strong>
+          <small>${isCashOpen ? `Apertura ${openedAt}` : "Abre caja antes de cobrar"}</small>
+        </article>
+        <article>
+          <span>Cajero</span>
+          <strong>${escapeHtml(cashier)}</strong>
+          <small>${escapeHtml(roleLabel(currentUser?.role || ""))}</small>
+        </article>
+        <article>
+          <span>Pendiente caja</span>
+          <strong>${money(cash.total || 0)}</strong>
+          <small>${num(pendingCount)} venta${pendingCount === 1 ? "" : "s"} sin cierre</small>
+        </article>
+        <article>
+          <span>Venta actual</span>
+          <strong>${money(totals.total)}</strong>
+          <small>${num(saleCart.length)} item${saleCart.length === 1 ? "" : "s"} en carrito</small>
+        </article>
+      </div>
+      ${lastSale ? `<div class="pos-shift-last"><span>Ultima venta</span><strong>${escapeHtml(lastSale.code)} / ${money(lastSale.total)}</strong><small>${formatDateTime(lastSale.created_at)}</small></div>` : ""}
+      ${!isCashOpen ? `
+        <div class="pos-cash-warning">
+          <div><strong>Abre una caja antes de vender</strong><span>El sistema necesita una caja activa para registrar pagos y cierres.</span></div>
+          <button class="primary-button icon-text-button" type="button" id="goOpenCashBtn"><span class="ui-ico">+</span>Abrir caja</button>
+        </div>
+      ` : ""}
+    </section>
+  `;
 }
 
 function renderFinance() {

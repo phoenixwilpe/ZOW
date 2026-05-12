@@ -3961,6 +3961,7 @@ body.app-correspondencia .metrics article:hover {
 }
 
 .pos-quick-status,
+.pos-shift-grid,
 .inventory-health-grid,
 .owner-dashboard-grid {
   display: grid;
@@ -5335,7 +5336,8 @@ body.app-ventas .business-health-grid article {
     justify-content: flex-start;
   }
 
-  body.app-ventas .pos-quick-status {
+  body.app-ventas .pos-quick-status,
+  body.app-ventas .pos-shift-grid {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
@@ -5415,7 +5417,9 @@ body.app-ventas .business-health-grid article {
   }
 
   body.app-ventas .metrics,
-  body.app-ventas .pos-quick-status {
+  body.app-ventas .pos-quick-status,
+  body.app-ventas .pos-shift-grid,
+  body.app-ventas .pos-shift-last {
     grid-template-columns: 1fr;
   }
 
@@ -11183,6 +11187,7 @@ body.system-zow-site .site-footer {
   }
 
   .pos-quick-status,
+  .pos-shift-grid,
   .inventory-health-grid,
   .cash-health-grid,
   .debt-aging-grid,
@@ -12449,6 +12454,74 @@ body.app-ventas .pos-quick-status article::after {
   border-radius: 18px;
   background: rgb(16 185 129 / 10%);
   transform: rotate(12deg);
+}
+
+body.app-ventas .pos-shift-panel {
+  display: grid;
+  gap: 10px;
+  margin-bottom: 12px;
+  border: 1px solid rgb(15 118 110 / 12%);
+  border-radius: 20px;
+  padding: 12px;
+  background:
+    radial-gradient(circle at 92% 0%, rgb(245 158 11 / 12%), transparent 30%),
+    linear-gradient(145deg, rgb(255 255 255 / 92%), rgb(236 253 245 / 72%));
+  box-shadow: 0 16px 38px rgb(8 30 26 / 7%);
+}
+
+body.app-ventas .pos-shift-panel.is-closed {
+  border-color: rgb(245 158 11 / 24%);
+  background:
+    radial-gradient(circle at 92% 0%, rgb(245 158 11 / 18%), transparent 30%),
+    linear-gradient(145deg, rgb(255 255 255 / 94%), rgb(255 251 235 / 78%));
+}
+
+body.app-ventas .pos-shift-grid {
+  margin-bottom: 0;
+}
+
+body.app-ventas .pos-shift-grid article {
+  position: relative;
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid rgb(15 118 110 / 10%);
+  border-radius: 16px;
+  padding: 12px;
+  background: rgb(255 255 255 / 76%);
+}
+
+body.app-ventas .pos-shift-grid span,
+body.app-ventas .pos-shift-grid small,
+body.app-ventas .pos-shift-last span,
+body.app-ventas .pos-shift-last small {
+  display: block;
+  color: var(--muted);
+  font-size: 0.74rem;
+  font-weight: 900;
+}
+
+body.app-ventas .pos-shift-grid strong,
+body.app-ventas .pos-shift-last strong {
+  display: block;
+  min-width: 0;
+  margin: 4px 0;
+  overflow: hidden;
+  color: #10251f;
+  font-size: 0.98rem;
+  font-weight: 950;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+body.app-ventas .pos-shift-last {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  border: 1px dashed rgb(15 118 110 / 16%);
+  border-radius: 14px;
+  padding: 9px 11px;
+  background: rgb(255 255 255 / 66%);
 }
 
 body.app-ventas .pos-search-row {
