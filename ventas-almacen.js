@@ -944,6 +944,19 @@ function renderFinance() {
   const totalClosureDifference = cashClosures.reduce((sum, closure) => sum + Number(closure.differenceAmount || 0), 0);
   const paymentBreakdown = cashPaymentBreakdown();
   const cashHealth = buildCashHealth(expectedCash, movementsTotal, totalClosureDifference);
+  const movementForm = can("cashMovements")
+    ? `<form class="admin-form" id="cashMovementForm">
+        <div class="form-grid">
+          <label>Tipo<select id="cashMovementType"><option value="ingreso">Ingreso manual</option><option value="egreso">Egreso manual</option></select></label>
+          <label>Monto<input id="cashMovementAmount" type="number" min="0.01" step="0.01" required /></label>
+          <label class="span-2">Motivo<input id="cashMovementReason" type="text" required placeholder="Cambio, compra menor, retiro, etc." /></label>
+        </div>
+        <button class="ghost-button" type="submit" ${cashSession?.status === "abierta" ? "" : "disabled"}>Registrar movimiento</button>
+      </form>`
+    : `<div class="permission-note">
+        <strong>Movimiento manual bloqueado para este rol</strong>
+        <span>El cajero puede abrir, cobrar y cerrar su caja. Ingresos o egresos manuales quedan para encargado o administrador de ventas.</span>
+      </div>`;
   mainList().innerHTML = `
     <section class="setup-overview">
       <article><span>${cashLabel}</span><strong>${cash.pendingSales?.length || 0}</strong></article>
@@ -973,14 +986,7 @@ function renderFinance() {
       </section>
       <section class="admin-panel">
         <div class="admin-panel-head"><div><p class="eyebrow">Movimientos</p><h3>Ingresos y egresos</h3></div><span>${money(movementsTotal)}</span></div>
-        <form class="admin-form" id="cashMovementForm">
-          <div class="form-grid">
-            <label>Tipo<select id="cashMovementType"><option value="ingreso">Ingreso manual</option><option value="egreso">Egreso manual</option></select></label>
-            <label>Monto<input id="cashMovementAmount" type="number" min="0.01" step="0.01" required /></label>
-            <label class="span-2">Motivo<input id="cashMovementReason" type="text" required placeholder="Cambio, compra menor, retiro, etc." /></label>
-          </div>
-          <button class="ghost-button" type="submit" ${cashSession?.status === "abierta" ? "" : "disabled"}>Registrar movimiento</button>
-        </form>
+        ${movementForm}
       </section>
       <section class="admin-panel">
         <div class="admin-panel-head"><div><p class="eyebrow">Cierre</p><h3>Cuadre de caja</h3></div></div>
@@ -2858,6 +2864,7 @@ function renderVentasUsersPanel() {
         <button type="button" data-role-template="cashier"><span>Mostrador</span><strong>Cajero vendedor</strong><small>Venta, clientes, caja y rutas basicas.</small></button>
         <button type="button" data-role-template="warehouse"><span>Almacen</span><strong>Responsable stock</strong><small>Inventario, entradas, salidas y alertas.</small></button>
       </div>
+      ${renderRolePermissionsOverview()}
       <form class="admin-form" id="ventasUserForm">
         <div class="form-grid">
           <label>Nombre completo<input id="ventasUserName" type="text" value="${escapeHtml(editing?.name || "")}" required /></label>
@@ -2932,6 +2939,27 @@ function renderVentasUserRow(user) {
       <button class="ghost-button" type="button" data-toggle-user="${user.id}">${user.active ? "Desactivar" : "Activar"}</button>
     </div>
   </article>`;
+}
+
+function renderRolePermissionsOverview() {
+  const roles = rolePermissionMatrix();
+  return `<section class="role-permission-grid" aria-label="Permisos por rol">
+    ${roles.map((role) => `<article>
+      <div><span>${escapeHtml(role.context)}</span><strong>${escapeHtml(role.label)}</strong></div>
+      <ul>${role.permissions.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul>
+    </article>`).join("")}
+  </section>`;
+}
+
+function rolePermissionMatrix() {
+  return [
+    { label: "Encargado de sistema", context: "Configuracion", permissions: ["Usuarios y roles", "Datos de empresa", "Cajas, permisos y reglas"] },
+    { label: "Operador integral", context: "Empresa pequena", permissions: ["Ventas y caja", "Inventario y compras", "Reportes operativos"] },
+    { label: "Cajero", context: "Mostrador", permissions: ["Venta POS", "Abrir y cerrar su caja", "Historial y reimpresion"] },
+    { label: "Almacen", context: "Stock", permissions: ["Productos e inventario", "Compras y reposicion", "Kardex y alertas"] },
+    { label: "Supervisor", context: "Control", permissions: ["Reportes y auditoria", "Anular o devolver ventas", "Revision de caja"] },
+    { label: "Vendedor", context: "Atencion", permissions: ["Venta rapida", "Clientes", "Historial propio"] }
+  ];
 }
 
 function addToCart(productId, quantity = 1, options = {}) {
@@ -5169,7 +5197,7 @@ function can(permission) {
     managePromotions: ["admin", "ventas_admin", "supervisor"],
     managePurchases: ["admin", "ventas_admin", "almacen"],
     closeCash: ["admin", "ventas_admin", "cajero"],
-    cashMovements: ["admin", "ventas_admin", "cajero"],
+    cashMovements: ["admin", "ventas_admin"],
     voidSales: ["admin", "ventas_admin", "supervisor"],
     returnSales: ["admin", "ventas_admin", "supervisor"],
     manageCustomers: ["admin", "ventas_admin", "cajero", "vendedor"],
@@ -5183,9 +5211,9 @@ function accessibleViewsForRole(role) {
     ventas_admin: ["sell", "summary", "alerts", "finance", "history", "routes", "promotions", "reports", "catalog", "customers", "inventory", "purchases", "settings"],
     cajero: ["sell", "finance", "history"],
     vendedor: ["sell", "customers", "history"],
-    almacen: ["inventory", "purchases", "alerts", "routes", "reports", "catalog", "summary"],
+    almacen: ["inventory", "purchases", "alerts", "catalog", "summary"],
     supervisor: ["sell", "summary", "alerts", "finance", "history", "routes", "promotions", "reports", "catalog", "customers", "inventory", "purchases"],
-    funcionario: ["sell", "routes", "customers", "summary"]
+    funcionario: ["sell", "customers", "summary"]
   };
   return views[role] || ["summary"];
 }

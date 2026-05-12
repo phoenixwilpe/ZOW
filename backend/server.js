@@ -2334,7 +2334,7 @@ app.post("/api/ventas/cash/open", requireAuth, requireSystemAccess("ventas_almac
   });
 });
 
-app.post("/api/ventas/cash/movements", requireAuth, requireSystemAccess("ventas_almacen"), requireVentasRole("admin", "ventas_admin", "cajero"), (req, res) => {
+app.post("/api/ventas/cash/movements", requireAuth, requireSystemAccess("ventas_almacen"), requireVentasRole("admin", "ventas_admin"), (req, res) => {
   const session = db
     .prepare("SELECT * FROM cash_sessions WHERE company_id = ? AND opened_by = ? AND status = 'abierta'")
     .get(req.user.company_id, req.user.id);

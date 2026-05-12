@@ -3275,6 +3275,80 @@ body.app-correspondencia .metrics article:hover {
   line-height: 1.45;
 }
 
+.role-permission-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin: 0 0 16px;
+}
+
+.role-permission-grid article,
+.permission-note {
+  border: 1px solid color-mix(in srgb, var(--accent) 16%, var(--line));
+  border-radius: 12px;
+  background:
+    linear-gradient(145deg, #ffffff, color-mix(in srgb, var(--accent-tint) 42%, white));
+  box-shadow: 0 12px 28px rgb(15 23 42 / 5%);
+}
+
+.role-permission-grid article {
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+}
+
+.role-permission-grid span,
+.permission-note span {
+  color: var(--muted);
+}
+
+.role-permission-grid span {
+  display: block;
+  margin-bottom: 3px;
+  font-size: 0.72rem;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.role-permission-grid strong {
+  color: var(--ink);
+}
+
+.role-permission-grid ul {
+  display: grid;
+  gap: 7px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  color: var(--muted);
+  font-size: 0.86rem;
+  line-height: 1.35;
+}
+
+.role-permission-grid li {
+  position: relative;
+  padding-left: 18px;
+}
+
+.role-permission-grid li::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0.48em;
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: linear-gradient(135deg, var(--accent), var(--accent-2));
+}
+
+.permission-note {
+  display: grid;
+  gap: 6px;
+  padding: 14px;
+  line-height: 1.45;
+}
+
 .pos-shell {
   display: grid;
   grid-template-columns: minmax(0, 1.25fr) minmax(360px, 0.75fr);
@@ -10952,7 +11026,8 @@ body.system-zow-site .site-footer {
   .customer-workspace-grid,
   .service-strip,
   .operation-model-grid,
-  .role-template-grid {
+  .role-template-grid,
+  .role-permission-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
@@ -11232,6 +11307,7 @@ body.system-zow-site .site-footer {
   .service-strip,
   .operation-model-grid,
   .role-template-grid,
+  .role-permission-grid,
   .settings-overview-grid,
   .settings-preset-row,
   body.app-ventas .receipt-preview-shell {

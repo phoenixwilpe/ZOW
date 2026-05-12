@@ -2226,7 +2226,7 @@ app.post("/api/ventas/cash/open", requireAuth, async (req, res) => {
 
 app.post("/api/ventas/cash/movements", requireAuth, async (req, res) => {
   if (!(await requireSystemAccess("ventas_almacen", req, res))) return;
-  if (!requireVentasRole(req, res, "admin", "ventas_admin", "cajero")) return;
+  if (!requireVentasRole(req, res, "admin", "ventas_admin")) return;
   await ensureVentasSchema();
   const session = await pg.get("SELECT * FROM cash_sessions WHERE company_id = ? AND opened_by = ? AND status = 'abierta'", [req.user.company_id, req.user.id]);
   if (!session) return res.status(400).json({ error: "Abre caja antes de registrar movimientos" });
