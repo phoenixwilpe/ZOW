@@ -1212,6 +1212,7 @@ function renderFinance() {
       </div>`;
   mainList().innerHTML = `
     ${renderShiftCommandPanel({ expectedCash, movementsTotal, paymentBreakdown })}
+    ${ventasMessage ? `<div class="cloud-safe-note"><strong>${escapeHtml(ventasMessage)}</strong><span>Usa este resumen para validar el turno antes del cierre.</span></div>` : ""}
     <section class="setup-overview">
       <article><span>${cashLabel}</span><strong>${cash.pendingSales?.length || 0}</strong></article>
       <article><span>${totalLabel}</span><strong>${money(cash.total || 0)}</strong></article>
@@ -1293,6 +1294,8 @@ function renderFinance() {
   document.querySelector("#cashMovementForm")?.addEventListener("submit", addCashMovement);
   document.querySelector("#cashCloseForm")?.addEventListener("submit", closeCashSession);
   bindCashCounting(expectedCash);
+  document.querySelector("#copyShiftSummary")?.addEventListener("click", copyShiftSummary);
+  document.querySelector("#printShiftSummary")?.addEventListener("click", printShiftSummary);
   document.querySelectorAll("[data-print-closure]").forEach((button) => {
     button.addEventListener("click", () => printCashClosure(button.dataset.printClosure));
   });
@@ -1334,8 +1337,73 @@ function renderShiftCommandPanel({ expectedCash, movementsTotal, paymentBreakdow
       ${canAccessView("sell") ? `<button class="primary-button" type="button" data-module-view="sell">Ir a vender</button>` : ""}
       ${canAccessView("history") ? `<button class="ghost-button" type="button" data-module-view="history">Ver operaciones</button>` : ""}
       ${canAccessView("reports") ? `<button class="ghost-button" type="button" data-module-view="reports">Auditoria</button>` : ""}
+      <button class="ghost-button" type="button" id="copyShiftSummary">Copiar resumen</button>
+      <button class="ghost-button" type="button" id="printShiftSummary">Pre-cierre</button>
     </div>
   </section>`;
+}
+
+async function copyShiftSummary() {
+  const message = buildShiftSummaryText();
+  try {
+    await navigator.clipboard.writeText(message);
+    ventasMessage = "Resumen de caja copiado al portapapeles.";
+  } catch {
+    ventasMessage = message;
+  }
+  renderMain();
+}
+
+function buildShiftSummaryText() {
+  const expectedCash = cashExpectedTotal();
+  const movementsTotal = cashMovementsTotal();
+  const paymentBreakdown = cashPaymentBreakdown().filter((item) => Number(item.total || 0) > 0 || Number(item.count || 0) > 0);
+  const pendingCount = cash.pendingSales?.length || 0;
+  const opening = cashSession?.status === "abierta" ? Number(cashSession.openingAmount || 0) : 0;
+  const manualIncome = cashMovements.filter((item) => item.type === "ingreso").reduce((sum, item) => sum + Number(item.amount || 0), 0);
+  const manualExpense = cashMovements.filter((item) => item.type === "egreso").reduce((sum, item) => sum + Number(item.amount || 0), 0);
+  const company = storeSettings.storeName || storeSettings.companyName || currentUser.companyName || "Empresa cliente";
+  const lines = [
+    `Pre-cierre de caja - ${company}`,
+    `Caja: ${cashSession?.status === "abierta" ? `Caja ${num(cashSession.registerNumber)}` : "Sin caja abierta"}`,
+    `Cajero: ${cashSession?.openedBy || currentUser.name || currentUser.username || "Usuario"}`,
+    `Fecha: ${formatDateTime(new Date().toISOString())}`,
+    "",
+    `Monto inicial: ${money(opening)}`,
+    `Ventas pendientes de cierre: ${num(pendingCount)}`,
+    `Total pendiente de caja: ${money(cash.total || 0)}`,
+    `Ingresos manuales: ${money(manualIncome)}`,
+    `Egresos manuales: ${money(manualExpense)}`,
+    `Movimientos netos: ${money(movementsTotal)}`,
+    `Efectivo esperado: ${money(expectedCash)}`,
+    "",
+    "Cobros por metodo:"
+  ];
+  if (paymentBreakdown.length) {
+    paymentBreakdown.forEach((item) => lines.push(`- ${item.label}: ${money(item.total)} (${num(item.count)} operacion${item.count === 1 ? "" : "es"})`));
+  } else {
+    lines.push("- Sin cobros registrados.");
+  }
+  lines.push("", "Revision antes de cerrar:");
+  lines.push(cashSession?.status === "abierta" ? "- Caja abierta correctamente." : "- Abrir caja antes de vender.");
+  lines.push(pendingCount ? "- Verificar comprobantes pendientes de cierre." : "- Sin ventas pendientes de cierre.");
+  lines.push(Math.abs(movementsTotal) ? "- Revisar motivos de ingresos/egresos manuales." : "- Sin movimientos manuales.");
+  lines.push("- Contar efectivo fisico y registrar observacion si existe diferencia.");
+  return lines.join("\n");
+}
+
+function printShiftSummary() {
+  const text = buildShiftSummaryText();
+  const printable = window.open("", "_blank", "width=820,height=900");
+  if (!printable) return;
+  printable.document.write(`<!doctype html><html><head><meta charset="UTF-8"><title>Pre-cierre de caja</title><style>
+    *{box-sizing:border-box}body{font-family:Arial,sans-serif;margin:0;padding:30px;color:#10251f;background:#fff}.toolbar{margin-bottom:16px}.toolbar button{border:0;border-radius:10px;padding:11px 18px;background:#0f172a;color:#fff;font-weight:900}
+    h1{margin:0 0 6px;font-size:25px;text-transform:uppercase}.muted{color:#64746f;font-size:12px}.box{white-space:pre-wrap;border:1px solid #d9ebe5;border-radius:16px;padding:18px;background:#f8fffc;line-height:1.55;font-size:13px}
+    .signature{display:grid;grid-template-columns:1fr 1fr;gap:30px;margin-top:48px}.signature div{border-top:1px solid #111;text-align:center;padding-top:8px;color:#475569;font-size:12px}.foot{text-align:center;margin-top:18px;color:#64748b;font-size:11px}
+    @media print{.toolbar{display:none}body{padding:18px}}
+  </style></head><body><div class="toolbar"><button onclick="print()">Imprimir / Guardar PDF</button></div><h1>Pre-cierre de caja</h1><p class="muted">Documento de revision antes de cerrar el turno.</p><div class="box">${escapeHtml(text)}</div><div class="signature"><div>Firma cajero</div><div>Firma supervisor</div></div><p class="foot">SYSTEM ZOW SAAS - Ventas-Almacen</p></body></html>`);
+  printable.document.close();
+  printable.focus();
 }
 
 function renderHistory() {
