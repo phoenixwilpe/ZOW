@@ -5430,7 +5430,7 @@ body.app-ventas .top-products-list {
 
 body.app-ventas .top-products-list article {
   display: grid;
-  grid-template-columns: 34px minmax(0, 1fr) auto;
+  grid-template-columns: 34px minmax(0, 1fr) minmax(150px, auto);
   gap: 12px;
   align-items: center;
   border: 1px solid rgb(15 118 110 / 10%);
@@ -5474,6 +5474,43 @@ body.app-ventas .top-products-list i span {
   height: 100%;
   border-radius: inherit;
   background: linear-gradient(90deg, #10b981, #f59e0b);
+}
+
+body.app-ventas .top-product-side {
+  display: grid;
+  justify-items: end;
+  gap: 5px;
+  text-align: right;
+}
+
+body.app-ventas .top-product-side em {
+  border-radius: 999px;
+  padding: 5px 8px;
+  background: rgb(15 118 110 / 8%);
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-style: normal;
+  font-weight: 950;
+}
+
+body.app-ventas .top-product-side em.is-ok {
+  background: rgb(16 185 129 / 10%);
+  color: #047857;
+}
+
+body.app-ventas .top-product-side em.is-warning {
+  background: rgb(245 158 11 / 12%);
+  color: #92400e;
+}
+
+body.app-ventas .top-product-side em.is-danger {
+  background: rgb(220 38 38 / 10%);
+  color: #991b1b;
+}
+
+body.app-ventas .top-product-side .ghost-button {
+  min-height: 32px;
+  padding: 6px 10px;
 }
 
 body.app-ventas .product-margin-preview {
@@ -12504,6 +12541,16 @@ body.system-zow-site .site-footer {
   .cart-item-name {
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  body.app-ventas .top-products-list article {
+    grid-template-columns: 34px minmax(0, 1fr);
+  }
+
+  body.app-ventas .top-product-side {
+    grid-column: 2;
+    justify-items: start;
+    text-align: left;
   }
 }
 

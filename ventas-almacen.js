@@ -700,6 +700,7 @@ function renderHourlySalesPanel(todaySales = []) {
 function renderTopProductsTodayPanel() {
   if (!todayProductLeaders.length) return "";
   const maxQuantity = Math.max(...todayProductLeaders.map((item) => Number(item.quantity || 0)), 1);
+  const productsById = new Map(products.map((product) => [product.id, product]));
   return `<section class="top-products-panel">
     <div class="admin-panel-head">
       <div><p class="eyebrow">Productos fuertes</p><h3>Mas vendidos hoy</h3></div>
@@ -708,6 +709,25 @@ function renderTopProductsTodayPanel() {
     <div class="top-products-list">
       ${todayProductLeaders.slice(0, 6).map((item, index) => {
         const percent = Math.max(Math.round(Number(item.quantity || 0) / maxQuantity * 100), 8);
+        const product = productsById.get(item.productId);
+        const currentStock = Number(product?.stock || 0);
+        const minStock = Number(product?.min_stock || 0);
+        const soldQuantity = Number(item.quantity || 0);
+        const stockAfterSimilarDay = currentStock - soldQuantity;
+        const stockClass = !product
+          ? "is-neutral"
+          : currentStock <= 0 || stockAfterSimilarDay <= 0
+            ? "is-danger"
+            : currentStock <= minStock || stockAfterSimilarDay <= minStock
+              ? "is-warning"
+              : "is-ok";
+        const stockLabel = !product
+          ? "Sin stock local"
+          : stockClass === "is-danger"
+            ? `Riesgo de agotarse: stock ${num(currentStock)}`
+            : stockClass === "is-warning"
+              ? `Reponer pronto: stock ${num(currentStock)} / min ${num(minStock)}`
+              : `Stock ${num(currentStock)} disponible`;
         return `<article>
           <b>${index + 1}</b>
           <div>
@@ -715,7 +735,11 @@ function renderTopProductsTodayPanel() {
             <span>${num(item.quantity)} unidad${Number(item.quantity || 0) === 1 ? "" : "es"} / ${money(item.netSales || 0)}</span>
             <i><span style="width:${percent}%"></span></i>
           </div>
-          <small>${money(item.profit || 0)} utilidad</small>
+          <div class="top-product-side">
+            <small>${money(item.profit || 0)} utilidad</small>
+            <em class="${stockClass}">${escapeHtml(stockLabel)}</em>
+            ${["is-danger", "is-warning"].includes(stockClass) && canAccessView("inventory") ? `<button class="ghost-button" type="button" data-module-view="inventory">Reponer</button>` : ""}
+          </div>
         </article>`;
       }).join("")}
     </div>
