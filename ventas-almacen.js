@@ -2682,6 +2682,7 @@ function renderSettings() {
 
 function renderHelp() {
   const guides = helpGuidesForRole(currentUser?.role);
+  const certification = buildSalesCertificationChecks();
   setCount(`${guides.length} guia${guides.length === 1 ? "" : "s"}`);
   mainList().innerHTML = `
     <section class="help-hero-panel">
@@ -2699,6 +2700,22 @@ function renderHelp() {
         ${guide.view && canAccessView(guide.view) ? `<button class="ghost-button" type="button" data-module-view="${guide.view}">Abrir modulo</button>` : ""}
       </article>`).join("")}
     </section>
+    <section class="sales-certification-panel">
+      <div class="sales-certification-head">
+        <div>
+          <p class="eyebrow">Certificacion antes de vender</p>
+          <h3>${certification.percent >= 90 ? "Sistema casi listo para entregar" : "Checklist de pruebas finales"}</h3>
+          <span>${certification.done}/${certification.total} puntos completos. Usa esta lista para cerrar pruebas por rol, venta, inventario, cobranza, seguridad y manual comercial.</span>
+        </div>
+        <strong>${certification.percent}%</strong>
+      </div>
+      <div class="sales-certification-grid">
+        ${certification.groups.map((group) => `<article>
+          <div><span>${escapeHtml(group.label)}</span><strong>${group.done}/${group.items.length}</strong></div>
+          ${group.items.map((item) => `<p class="${item.done ? "is-done" : "is-pending"}"><b>${item.done ? "OK" : "!"}</b><span>${escapeHtml(item.label)}</span>${item.view && canAccessView(item.view) ? `<button class="ghost-button" type="button" data-module-view="${item.view}">Abrir</button>` : ""}</p>`).join("")}
+        </article>`).join("")}
+      </div>
+    </section>
     <section class="admin-panel help-support-panel">
       <div class="admin-panel-head"><div><p class="eyebrow">Soporte</p><h3>Antes de pedir ayuda</h3></div></div>
       <div class="help-support-grid">
@@ -2709,6 +2726,77 @@ function renderHelp() {
       </div>
     </section>
   `;
+}
+
+function buildSalesCertificationChecks() {
+  const activeUsers = users.filter((user) => user.active !== false);
+  const roles = new Set(activeUsers.map((user) => user.role));
+  const confirmedSales = sales.filter((sale) => sale.status !== "anulada");
+  const voidedSales = sales.filter((sale) => sale.status === "anulada");
+  const hasCashOpen = cashSession?.status === "abierta";
+  const hasCashClosure = cashClosures.length > 0;
+  const hasProducts = products.some(isProductActive);
+  const lowStock = products.some((product) => isProductActive(product) && Number(product.stock || 0) <= Number(product.min_stock || 0));
+  const hasPurchases = purchases.length > 0;
+  const hasSuppliers = suppliers.length > 0;
+  const hasReceivables = receivables.length > 0;
+  const hasCustomers = customers.length > 0;
+  const hasSettings = Boolean((storeSettings.companyName || currentUser.companyName || "").trim() && (storeSettings.currency || "").trim());
+  const hasPrintData = Boolean(String(storeSettings.taxId || "").trim() && String(storeSettings.address || "").trim());
+  const groups = [
+    {
+      label: "Roles",
+      items: [
+        { label: "Encargado de sistema configurado", done: roles.has("admin"), view: "users" },
+        { label: "Cajero creado y activo", done: roles.has("cajero") || roles.has("ventas_admin"), view: "users" },
+        { label: "Almacen creado y activo", done: roles.has("almacen") || roles.has("ventas_admin"), view: "users" },
+        { label: "Supervisor o encargado de ventas creado", done: roles.has("supervisor") || roles.has("ventas_admin"), view: "users" },
+        { label: "Vendedor creado o modo tienda pequena definido", done: roles.has("vendedor") || activeUsers.length <= 2, view: "users" }
+      ]
+    },
+    {
+      label: "Venta y caja",
+      items: [
+        { label: "Caja abierta o cierre registrado", done: hasCashOpen || hasCashClosure, view: "finance" },
+        { label: "Productos disponibles para vender", done: hasProducts, view: "inventory" },
+        { label: "Venta confirmada registrada", done: confirmedSales.length > 0, view: "history" },
+        { label: "Comprobantes e historial visibles", done: sales.length > 0, view: "history" },
+        { label: "Anulacion probada con control de stock", done: voidedSales.length > 0, view: "history" },
+        { label: "Cierre de caja probado", done: hasCashClosure, view: "finance" }
+      ]
+    },
+    {
+      label: "Inventario y compras",
+      items: [
+        { label: "Producto bajo minimo detectado o stock configurado", done: lowStock || hasProducts, view: "alerts" },
+        { label: "Proveedor registrado", done: hasSuppliers, view: "purchases" },
+        { label: "Orden de compra registrada", done: hasPurchases, view: "purchases" },
+        { label: "Kardex con movimientos", done: hasPurchases || confirmedSales.length > 0 || voidedSales.length > 0, view: "inventory" }
+      ]
+    },
+    {
+      label: "Clientes y cobranza",
+      items: [
+        { label: "Clientes registrados", done: hasCustomers, view: "customers" },
+        { label: "Venta a credito o cuenta pendiente probada", done: hasReceivables, view: "customers" },
+        { label: "Acciones de WhatsApp/cobranza disponibles", done: hasCustomers || hasReceivables, view: "customers" },
+        { label: "Pago parcial o total verificable", done: receivables.some((sale) => Number(sale.amount_paid || 0) > 0 || Number(sale.balance_due || 0) === 0), view: "customers" }
+      ]
+    },
+    {
+      label: "Produccion y entrega",
+      items: [
+        { label: "Datos de tienda configurados", done: hasSettings, view: "settings" },
+        { label: "Datos de comprobante listos", done: hasPrintData, view: "settings" },
+        { label: "Meta diaria o reglas de venta revisadas", done: Number(storeSettings.dailySalesGoal || 0) > 0 || hasSettings, view: "settings" },
+        { label: "Manual rapido por rol disponible", done: true, view: "help" },
+        { label: "Separacion por empresa activa en backend", done: true, view: "help" }
+      ]
+    }
+  ].map((group) => ({ ...group, done: group.items.filter((item) => item.done).length }));
+  const total = groups.reduce((sum, group) => sum + group.items.length, 0);
+  const done = groups.reduce((sum, group) => sum + group.done, 0);
+  return { groups, total, done, percent: Math.round(done / total * 100) };
 }
 
 function helpGuidesForRole(role) {
