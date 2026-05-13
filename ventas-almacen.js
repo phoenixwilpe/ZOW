@@ -301,6 +301,10 @@ productModal.addEventListener("close", () => {
   editingProductId = "";
 });
 
+["#productCost", "#productSale"].forEach((selector) => {
+  document.querySelector(selector)?.addEventListener("input", updateProductMarginPreview);
+});
+
 customerForm.addEventListener("submit", async (event) => {
   event.preventDefault();
   const payload = {
@@ -4358,7 +4362,37 @@ function openProductModal(productId = "") {
     document.querySelector("#productBatch").value = product.batch_number || "";
     document.querySelector("#productExpiry").value = product.expires_at || "";
   }
+  updateProductMarginPreview();
   productModal.showModal();
+}
+
+function updateProductMarginPreview() {
+  const preview = document.querySelector("#productMarginPreview");
+  if (!preview) return;
+  const cost = Number(value("#productCost") || 0);
+  const price = Number(value("#productSale") || 0);
+  const profit = price - cost;
+  const margin = price > 0 ? profit / price * 100 : 0;
+  const suggested = cost > 0 ? cost / 0.75 : 0;
+  const className = price <= 0
+    ? "is-empty"
+    : profit < 0
+      ? "is-danger"
+      : margin < 15
+        ? "is-warning"
+        : "is-ok";
+  const title = price <= 0
+    ? "Margen pendiente"
+    : profit < 0
+      ? "Venta a perdida"
+      : margin < 15
+        ? "Margen bajo"
+        : "Margen saludable";
+  const detail = price <= 0
+    ? "Ingresa costo y precio para calcular utilidad."
+    : `${money(profit)} por unidad / ${num(margin)}% de margen.${suggested > price ? ` Precio sugerido 25%: ${money(suggested)}.` : ""}`;
+  preview.className = `product-margin-preview span-2 ${className}`;
+  preview.innerHTML = `<strong>${escapeHtml(title)}</strong><span>${escapeHtml(detail)}</span>`;
 }
 
 function openCustomerModal(customerId = "") {

@@ -5352,6 +5352,46 @@ body.app-ventas .sales-goal-meter strong {
   font-size: 1.35rem;
 }
 
+body.app-ventas .product-margin-preview {
+  display: grid;
+  gap: 4px;
+  border: 1px solid rgb(15 118 110 / 12%);
+  border-radius: 14px;
+  padding: 12px 14px;
+  background:
+    radial-gradient(circle at 96% 10%, rgb(16 185 129 / 12%), transparent 30%),
+    rgb(255 255 255 / 78%);
+}
+
+body.app-ventas .product-margin-preview.is-warning {
+  border-color: rgb(245 158 11 / 28%);
+  background: rgb(255 251 235 / 84%);
+}
+
+body.app-ventas .product-margin-preview.is-danger {
+  border-color: rgb(220 38 38 / 24%);
+  background: rgb(254 242 242 / 84%);
+}
+
+body.app-ventas .product-margin-preview strong {
+  color: var(--accent-dark);
+}
+
+body.app-ventas .product-margin-preview.is-warning strong {
+  color: #92400e;
+}
+
+body.app-ventas .product-margin-preview.is-danger strong {
+  color: #991b1b;
+}
+
+body.app-ventas .product-margin-preview span {
+  color: var(--muted);
+  font-size: 0.84rem;
+  font-weight: 850;
+  line-height: 1.38;
+}
+
 .pos-customer-row {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
