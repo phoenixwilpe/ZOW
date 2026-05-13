@@ -4917,6 +4917,94 @@ body.app-ventas .daily-operation-track strong {
   color: var(--accent-dark);
 }
 
+.help-hero-panel {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  margin-bottom: 14px;
+  border: 1px solid color-mix(in srgb, var(--accent) 18%, var(--line));
+  border-radius: 18px;
+  padding: clamp(16px, 2.4vw, 22px);
+  background:
+    radial-gradient(circle at 88% 14%, color-mix(in srgb, var(--accent) 18%, transparent), transparent 34%),
+    linear-gradient(145deg, #ffffff, color-mix(in srgb, var(--accent-tint) 48%, white));
+  box-shadow: 0 18px 44px rgb(15 32 28 / 7%);
+}
+
+.help-hero-panel h3 {
+  margin: 4px 0 6px;
+  color: var(--accent-dark);
+  font-size: clamp(1.16rem, 2.4vw, 1.72rem);
+}
+
+.help-hero-panel span,
+.help-guide-grid li,
+.help-support-grid span {
+  color: var(--muted);
+  font-size: 0.88rem;
+  font-weight: 820;
+  line-height: 1.48;
+}
+
+.help-hero-panel > strong {
+  max-width: 240px;
+  border-radius: 16px;
+  padding: 12px 14px;
+  background: color-mix(in srgb, var(--accent) 10%, white);
+  color: var(--accent-dark);
+  text-align: right;
+}
+
+.help-guide-grid,
+.help-support-grid {
+  display: grid;
+  gap: 12px;
+}
+
+.help-guide-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin-bottom: 14px;
+}
+
+.help-guide-grid article,
+.help-support-grid article {
+  display: grid;
+  gap: 10px;
+  border: 1px solid color-mix(in srgb, var(--accent) 15%, var(--line));
+  border-radius: 14px;
+  padding: 14px;
+  background: linear-gradient(145deg, #ffffff, color-mix(in srgb, var(--accent-tint) 36%, white));
+}
+
+.help-guide-grid span {
+  display: block;
+  color: var(--muted);
+  font-size: 0.74rem;
+  font-weight: 950;
+  text-transform: uppercase;
+}
+
+.help-guide-grid strong,
+.help-support-grid strong {
+  color: var(--accent-dark);
+}
+
+.help-guide-grid ol {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding-left: 20px;
+}
+
+.help-guide-grid button {
+  justify-self: start;
+}
+
+.help-support-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
 .business-health-panel {
   overflow: hidden;
 }
@@ -11678,6 +11766,8 @@ body.system-zow-site .site-footer {
   .user-role-coverage,
   .shift-command-grid,
   .shift-checklist,
+  .help-guide-grid,
+  .help-support-grid,
   body.app-ventas .daily-operation-track,
   body.app-ventas .history-control-strip {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -11963,6 +12053,8 @@ body.system-zow-site .site-footer {
   .user-role-coverage,
   .shift-command-grid,
   .shift-checklist,
+  .help-guide-grid,
+  .help-support-grid,
   .inventory-decision-strip,
   body.app-ventas .history-control-strip,
   .report-decision-grid,
@@ -11972,6 +12064,17 @@ body.system-zow-site .site-footer {
   .settings-preset-row,
   body.app-ventas .receipt-preview-shell {
     grid-template-columns: 1fr;
+  }
+
+  .help-hero-panel {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .help-hero-panel > strong {
+    max-width: none;
+    width: 100%;
+    text-align: left;
   }
 
   .route-card-head,

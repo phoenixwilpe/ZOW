@@ -440,13 +440,14 @@ function renderMain() {
     inventory: ["Inventario", "Stock y reabastecimiento"],
     purchases: ["Compras", "Proveedores y entradas de mercaderia"],
     users: ["Usuarios", "Credenciales y roles de Ventas-Almacen"],
-    settings: ["Configuracion", "Tienda, moneda y datos de impresion"]
+    settings: ["Configuracion", "Tienda, moneda y datos de impresion"],
+    help: ["Ayuda", "Guia rapida por rol"]
   };
   document.querySelector("#viewEyebrow").textContent = titles[activeView][0];
   document.querySelector("#viewTitle").textContent = titles[activeView][1];
   document.querySelector("#ventasMenuLabel").textContent = document.querySelector(`[data-view="${activeView}"]`)?.textContent || titles[activeView][0];
   renderWorkflow();
-  const renderers = { summary: renderSummary, alerts: renderAlerts, sell: renderSell, finance: renderFinance, history: renderHistory, routes: renderRoutes, promotions: renderPromotions, reports: renderReports, catalog: renderCatalog, customers: renderCustomers, inventory: renderInventory, purchases: renderPurchases, users: renderUsers, settings: renderSettings };
+  const renderers = { summary: renderSummary, alerts: renderAlerts, sell: renderSell, finance: renderFinance, history: renderHistory, routes: renderRoutes, promotions: renderPromotions, reports: renderReports, catalog: renderCatalog, customers: renderCustomers, inventory: renderInventory, purchases: renderPurchases, users: renderUsers, settings: renderSettings, help: renderHelp };
   renderers[activeView]();
   if (notificationsOpen) {
     mainList().insertAdjacentHTML("afterbegin", renderNotificationCenter());
@@ -555,7 +556,8 @@ function renderWorkflow() {
     inventory: [`<strong>Inventario</strong><span>Controla stock actual y regulariza entradas o salidas.</span>`, can("manageInventory") ? `<button class="ghost-button" type="button" id="downloadProductTemplate">Plantilla Excel/CSV</button><label class="ghost-button file-action">Importar Excel/CSV<input id="importProductsFile" type="file" accept=".csv,text/csv,.xlsx,.xls,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" /></label><button class="primary-button" type="button" id="newProductInventoryBtn">Nuevo producto</button>` : ""],
     purchases: [`<strong>Compras</strong><span>Registra proveedores y entradas de mercaderia con Kardex automatico.</span>`, ""],
     users: [`<strong>Usuarios operativos</strong><span>Crea cajeros, vendedores, almacen y operador integral para la empresa.</span>`, ""],
-    settings: [`<strong>Configuracion comercial</strong><span>Define datos de tienda, moneda y textos del comprobante.</span>`, ""]
+    settings: [`<strong>Configuracion comercial</strong><span>Define datos de tienda, moneda y textos del comprobante.</span>`, ""],
+    help: [`<strong>Ayuda rapida</strong><span>Capacita usuarios por rol sin salir del sistema.</span>`, ""]
   };
   panel.innerHTML = `<div>${actions[activeView][0]}</div><div class="admin-actions">${actions[activeView][1]}</div>`;
   document.querySelector("#showProductForm")?.addEventListener("click", openProductModal);
@@ -2518,6 +2520,50 @@ function renderSettings() {
   document.querySelectorAll("[data-settings-preset]").forEach((button) => {
     button.addEventListener("click", () => applySettingsPreset(button.dataset.settingsPreset));
   });
+}
+
+function renderHelp() {
+  const guides = helpGuidesForRole(currentUser?.role);
+  setCount(`${guides.length} guia${guides.length === 1 ? "" : "s"}`);
+  mainList().innerHTML = `
+    <section class="help-hero-panel">
+      <div>
+        <p class="eyebrow">Capacitacion interna</p>
+        <h3>Manual rapido para ${escapeHtml(roleLabel(currentUser?.role || ""))}</h3>
+        <span>Usa estas guias para entrenar usuarios, resolver dudas en mostrador y operar sin depender de soporte para tareas diarias.</span>
+      </div>
+      <strong>${escapeHtml(storeSettings.storeName || storeSettings.companyName || currentUser.companyName || "Zow Ventas-Almacen")}</strong>
+    </section>
+    <section class="help-guide-grid">
+      ${guides.map((guide) => `<article>
+        <div><span>${escapeHtml(guide.context)}</span><strong>${escapeHtml(guide.title)}</strong></div>
+        <ol>${guide.steps.map((step) => `<li>${escapeHtml(step)}</li>`).join("")}</ol>
+        ${guide.view && canAccessView(guide.view) ? `<button class="ghost-button" type="button" data-module-view="${guide.view}">Abrir modulo</button>` : ""}
+      </article>`).join("")}
+    </section>
+    <section class="admin-panel help-support-panel">
+      <div class="admin-panel-head"><div><p class="eyebrow">Soporte</p><h3>Antes de pedir ayuda</h3></div></div>
+      <div class="help-support-grid">
+        <article><strong>1. Revisa rol</strong><span>Si una opcion no aparece, primero confirma permisos del usuario.</span></article>
+        <article><strong>2. Revisa caja</strong><span>Para cobrar, debe existir una caja abierta en el turno.</span></article>
+        <article><strong>3. Revisa stock</strong><span>Si no permite vender, confirma stock, vencimiento y estado del producto.</span></article>
+        <article><strong>4. Exporta datos</strong><span>Reportes y CSV ayudan a revisar ventas, inventario, caja y auditoria.</span></article>
+      </div>
+    </section>
+  `;
+}
+
+function helpGuidesForRole(role) {
+  const allGuides = [
+    { roles: ["admin", "ventas_admin", "cajero", "vendedor"], context: "POS", title: "Realizar una venta", view: "sell", steps: ["Abrir caja si el sistema lo solicita.", "Buscar producto por nombre, codigo o lector.", "Agregar productos al carrito y revisar validaciones.", "Seleccionar cliente si la tienda lo exige.", "Cobrar e imprimir o generar comprobante."] },
+    { roles: ["admin", "ventas_admin", "cajero", "supervisor"], context: "Caja", title: "Cerrar turno", view: "finance", steps: ["Entrar a Finanzas.", "Contar efectivo real en caja.", "Comparar esperado contra contado.", "Registrar observacion si hay diferencia.", "Imprimir cierre para control interno."] },
+    { roles: ["admin", "ventas_admin", "almacen", "supervisor"], context: "Inventario", title: "Reponer stock", view: "inventory", steps: ["Revisar prioridad del dia en Inventario.", "Exportar riesgos o preparar compra sugerida.", "Validar cantidades y costos.", "Registrar compra o dejar orden pendiente.", "Recibir compra para sumar stock y Kardex."] },
+    { roles: ["admin", "ventas_admin", "cajero", "vendedor", "supervisor"], context: "Clientes", title: "Cobrar deuda", view: "customers", steps: ["Entrar a Clientes.", "Buscar cuentas por cobrar.", "Usar WhatsApp o copiar mensaje de cobro.", "Registrar pago parcial o total.", "Confirmar que el saldo cambie."] },
+    { roles: ["admin", "ventas_admin", "supervisor"], context: "Auditoria", title: "Revisar reportes", view: "reports", steps: ["Seleccionar periodo.", "Leer decision recomendada.", "Atender alertas de caja, stock o cobranza.", "Exportar CSV necesario.", "Revisar eventos de auditoria visibles."] },
+    { roles: ["admin"], context: "Configuracion", title: "Entregar una tienda", view: "settings", steps: ["Completar datos de empresa y comprobante.", "Configurar cantidad de cajas.", "Crear usuarios por rol.", "Cargar productos iniciales.", "Realizar venta y cierre de prueba."] },
+    { roles: ["admin"], context: "Usuarios", title: "Auditar permisos", view: "users", steps: ["Revisar cobertura de roles activos.", "Evitar accesos amplios innecesarios.", "Asignar caja fija si corresponde.", "Desactivar usuarios que ya no trabajan.", "Probar ingreso con cada rol clave."] }
+  ];
+  return allGuides.filter((guide) => guide.roles.includes(role));
 }
 
 function renderStoreSettingsOverview() {
@@ -5721,13 +5767,13 @@ function can(permission) {
 }
 function accessibleViewsForRole(role) {
   const views = {
-    admin: ["sell", "summary", "alerts", "finance", "history", "routes", "promotions", "reports", "catalog", "customers", "inventory", "purchases", "users", "settings"],
-    ventas_admin: ["sell", "summary", "alerts", "finance", "history", "routes", "promotions", "reports", "catalog", "customers", "inventory", "purchases", "settings"],
-    cajero: ["sell", "finance", "history"],
-    vendedor: ["sell", "customers", "history"],
-    almacen: ["inventory", "purchases", "alerts", "catalog", "summary"],
-    supervisor: ["sell", "summary", "alerts", "finance", "history", "routes", "promotions", "reports", "catalog", "customers", "inventory", "purchases"],
-    funcionario: ["sell", "customers", "summary"]
+    admin: ["sell", "summary", "alerts", "finance", "history", "routes", "promotions", "reports", "catalog", "customers", "inventory", "purchases", "users", "settings", "help"],
+    ventas_admin: ["sell", "summary", "alerts", "finance", "history", "routes", "promotions", "reports", "catalog", "customers", "inventory", "purchases", "settings", "help"],
+    cajero: ["sell", "finance", "history", "help"],
+    vendedor: ["sell", "customers", "history", "help"],
+    almacen: ["inventory", "purchases", "alerts", "catalog", "summary", "help"],
+    supervisor: ["sell", "summary", "alerts", "finance", "history", "routes", "promotions", "reports", "catalog", "customers", "inventory", "purchases", "help"],
+    funcionario: ["sell", "customers", "summary", "help"]
   };
   return views[role] || ["summary"];
 }
