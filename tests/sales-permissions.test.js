@@ -290,6 +290,71 @@ test("orden de compra pendiente al recibirse aumenta stock y Kardex", async () =
   assert.ok(movementsResponse.body.movements.some((movement) => movement.reference === purchaseResponse.body.purchase.code && Number(movement.quantity) === 6));
 });
 
+test("cierre de caja calcula esperado, diferencia y marca ventas cerradas", async () => {
+  const token = await login("ventas.admin@zow.com", "TestVentasAdmin2026#");
+  await request("/ventas/cash/close", { method: "POST", token, body: { countedAmount: 1000, note: "Cierre previo de prueba" } });
+
+  const suffix = Date.now();
+  const productResponse = await request("/ventas/products", {
+    method: "POST",
+    token,
+    body: {
+      code: `CASH-${suffix}`,
+      name: "Producto cierre caja",
+      category: "Pruebas",
+      unit: "Unidad",
+      costPrice: 5,
+      salePrice: 20,
+      minStock: 1,
+      stock: 3
+    }
+  });
+  assert.equal(productResponse.status, 201, JSON.stringify(productResponse.body));
+
+  const openCashResponse = await request("/ventas/cash/open", {
+    method: "POST",
+    token,
+    body: { registerNumber: 1, openingAmount: 50 }
+  });
+  assert.equal(openCashResponse.status, 201, JSON.stringify(openCashResponse.body));
+
+  const saleResponse = await request("/ventas/sales", {
+    method: "POST",
+    token,
+    body: {
+      customerName: "Cliente caja",
+      items: [{ productId: productResponse.body.product.id, quantity: 1, unitPrice: 20, discount: 0 }],
+      paymentMethod: "efectivo",
+      cashReceived: 20,
+      discount: 0,
+      note: "Prueba automatizada de cierre"
+    }
+  });
+  assert.equal(saleResponse.status, 201, JSON.stringify(saleResponse.body));
+  assert.equal(Number(saleResponse.body.sale.cash_closed), 0);
+
+  const closeResponse = await request("/ventas/cash/close", {
+    method: "POST",
+    token,
+    body: { countedAmount: 75, note: "Sobrante controlado de prueba" }
+  });
+  assert.equal(closeResponse.status, 201, JSON.stringify(closeResponse.body));
+  assert.equal(Number(closeResponse.body.closure.opening_amount), 50);
+  assert.equal(Number(closeResponse.body.closure.total_sales), 20);
+  assert.equal(Number(closeResponse.body.closure.expected_amount), 70);
+  assert.equal(Number(closeResponse.body.closure.counted_amount), 75);
+  assert.equal(Number(closeResponse.body.closure.difference_amount), 5);
+  assert.equal(Number(closeResponse.body.closure.sale_count), 1);
+
+  const saleDetailResponse = await request(`/ventas/sales/${saleResponse.body.sale.id}`, { token });
+  assert.equal(saleDetailResponse.status, 200, JSON.stringify(saleDetailResponse.body));
+  assert.equal(Number(saleDetailResponse.body.sale.cash_closed), 1);
+
+  const cashResponse = await request("/ventas/cash", { token });
+  assert.equal(cashResponse.status, 200, JSON.stringify(cashResponse.body));
+  assert.equal(cashResponse.body.activeSession || null, null);
+});
+
 async function login(username, password) {
   const response = await request("/auth/login", {
     method: "POST",
