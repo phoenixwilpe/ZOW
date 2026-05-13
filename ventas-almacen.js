@@ -2679,6 +2679,7 @@ function renderSettings() {
     ${renderRoleConfigGuide()}
   `;
   document.querySelector("#storeSettingsForm")?.addEventListener("submit", saveStoreSettings);
+  document.querySelector("#copySetupPlanBtn")?.addEventListener("click", copySetupImplementationSummary);
   document.querySelector("#printSetupPlanBtn")?.addEventListener("click", printSetupImplementationPlan);
   document.querySelectorAll("[data-settings-preset]").forEach((button) => {
     button.addEventListener("click", () => applySettingsPreset(button.dataset.settingsPreset));
@@ -3052,6 +3053,7 @@ function renderSetupAssistant() {
       <div><p class="eyebrow">Configuracion inicial</p><h3>Listo para operar al ${percent}%</h3></div>
       <div class="setup-assistant-actions">
         <span>${completed}/${checks.length}</span>
+        <button class="ghost-button" type="button" id="copySetupPlanBtn">Copiar resumen</button>
         <button class="ghost-button" type="button" id="printSetupPlanBtn">Plan de implementacion</button>
       </div>
     </div>
@@ -3128,6 +3130,41 @@ function printSetupImplementationPlan() {
   </body></html>`);
   printable.document.close();
   printable.focus();
+}
+
+async function copySetupImplementationSummary() {
+  const message = buildSetupImplementationSummaryText();
+  try {
+    await navigator.clipboard.writeText(message);
+    ventasMessage = "Resumen de implementacion copiado al portapapeles.";
+  } catch {
+    ventasMessage = message;
+  }
+  renderMain();
+}
+
+function buildSetupImplementationSummaryText() {
+  const steps = buildSetupAssistantSteps();
+  const completed = steps.filter((item) => item.done).length;
+  const percent = Math.round((completed / steps.length) * 100);
+  const company = storeSettings.storeName || storeSettings.companyName || currentUser.companyName || "Empresa cliente";
+  const pending = steps.filter((item) => !item.done);
+  const lines = [
+    "SYSTEM ZOW SAAS - Plan de implementacion Ventas-Almacen",
+    `Empresa: ${company}`,
+    `Avance: ${completed}/${steps.length} (${percent}%)`,
+    ""
+  ];
+  if (pending.length) {
+    lines.push("Pendientes:");
+    pending.forEach((step, index) => {
+      lines.push(`${index + 1}. ${step.label} - ${step.detail} (${step.owner}, ${step.estimate})`);
+    });
+  } else {
+    lines.push("Estado: configuracion inicial completa.");
+  }
+  lines.push("", "Sugerencia: antes de entregar credenciales, realizar venta de prueba, anulacion, compra recibida y cierre de caja.");
+  return lines.join("\n");
 }
 
 function applySettingsPreset(preset) {
