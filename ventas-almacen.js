@@ -72,6 +72,7 @@ let storeSettings = {
   address: "",
   ticketNote: "",
   cashRegisterCount: 1,
+  dailySalesGoal: 0,
   taxRate: 0,
   allowCredit: true,
   allowDiscounts: true,
@@ -600,6 +601,7 @@ function renderSummary() {
       <article><span>${scopeText}</span><strong>${summary.sales || 0}</strong></article>
       <article><span>${incomeText}</span><strong>${money(summary.income || 0)}</strong></article>
     </section>
+    ${renderSalesGoalPanel(todayIncome, todaySales.length)}
     <section class="owner-dashboard-grid">
       <article><span>Hoy</span><strong>${money(todayIncome)}</strong><small>${todaySales.length} venta${todaySales.length === 1 ? "" : "s"}</small></article>
       <article><span>Caja</span><strong>${cashSession?.status === "abierta" ? `Caja ${num(cashSession.registerNumber)}` : "Sin abrir"}</strong><small>${cashSession?.status === "abierta" ? money(cashExpectedTotal()) : "Sin turno activo"}</small></article>
@@ -632,6 +634,26 @@ function buildExecutiveScore({ todaySales, criticalProducts, debtTotal, cashOpen
       ? "Operacion activa con puntos por revisar antes de cerrar el dia."
       : "Hay alertas importantes: prioriza caja, stock o cobranzas.";
   return { score, message };
+}
+
+function renderSalesGoalPanel(todayIncome, saleCount = 0) {
+  const goal = Number(storeSettings.dailySalesGoal || 0);
+  if (goal <= 0) return "";
+  const progress = Math.min(Math.round(Number(todayIncome || 0) / goal * 100), 999);
+  const remaining = Math.max(goal - Number(todayIncome || 0), 0);
+  const status = progress >= 100 ? "is-ok" : progress >= 70 ? "is-warning" : "is-info";
+  return `<section class="sales-goal-panel ${status}">
+    <div>
+      <p class="eyebrow">Meta diaria</p>
+      <h3>${progress >= 100 ? "Meta alcanzada" : "Avance de ventas del dia"}</h3>
+      <span>${progress >= 100 ? `Superaste la meta por ${money(Number(todayIncome || 0) - goal)}.` : `Faltan ${money(remaining)} para llegar a la meta configurada.`}</span>
+    </div>
+    <div class="sales-goal-meter">
+      <div><span style="width:${Math.min(progress, 100)}%"></span></div>
+      <strong>${num(progress)}%</strong>
+      <small>${money(todayIncome)} de ${money(goal)} / ${num(saleCount)} venta${saleCount === 1 ? "" : "s"}</small>
+    </div>
+  </section>`;
 }
 
 function renderExecutiveActionPlan({ todaySales, criticalProducts, debtTotal, cashOpen }) {
@@ -1025,6 +1047,12 @@ function renderPosShiftPanel(isCashOpen, totals) {
   const lastSale = sales.find((sale) => sale.status !== "anulada");
   const openedAt = cashSession?.openedAt ? formatDateTime(cashSession.openedAt) : "";
   const cashier = currentUser?.name || currentUser?.username || "Cajero";
+  const goal = Number(storeSettings.dailySalesGoal || 0);
+  const today = new Date().toISOString().slice(0, 10);
+  const todayIncome = sales
+    .filter((sale) => String(sale.created_at || "").startsWith(today) && sale.status !== "anulada")
+    .reduce((sum, sale) => sum + Number(sale.amount_paid || sale.cash_received || sale.total || 0), 0);
+  const goalProgress = goal > 0 ? Math.min(Math.round(todayIncome / goal * 100), 999) : 0;
   return `
     <section class="pos-shift-panel ${isCashOpen ? "is-open" : "is-closed"}">
       <div class="pos-shift-grid">
@@ -1048,6 +1076,11 @@ function renderPosShiftPanel(isCashOpen, totals) {
           <strong>${money(totals.total)}</strong>
           <small>${num(saleCart.length)} item${saleCart.length === 1 ? "" : "s"} en carrito</small>
         </article>
+        ${goal > 0 ? `<article>
+          <span>Meta diaria</span>
+          <strong>${num(goalProgress)}%</strong>
+          <small>${money(todayIncome)} de ${money(goal)}</small>
+        </article>` : ""}
       </div>
       ${lastSale ? `<div class="pos-shift-last"><span>Ultima venta</span><strong>${escapeHtml(lastSale.code)} / ${money(lastSale.total)}</strong><small>${formatDateTime(lastSale.created_at)}</small></div>` : ""}
       ${!isCashOpen ? `
@@ -2526,6 +2559,7 @@ function renderSettings() {
           <label>Nombre comercial<input id="storeName" type="text" value="${escapeHtml(storeSettings.storeName || "")}" placeholder="Sucursal central" /></label>
           <label>Moneda<input id="storeCurrency" type="text" value="${escapeHtml(storeSettings.currency || "BOB")}" required /></label>
           <label>Cantidad de cajas<input id="storeCashRegisterCount" type="number" min="1" max="20" step="1" value="${Number(storeSettings.cashRegisterCount || 1)}" /></label>
+          <label>Meta diaria de ventas<input id="storeDailySalesGoal" type="number" min="0" step="0.01" value="${Number(storeSettings.dailySalesGoal || 0)}" placeholder="0 para no usar meta" /></label>
           <label>Impuesto %<input id="storeTaxRate" type="number" min="0" max="100" step="0.01" value="${Number(storeSettings.taxRate || 0)}" /></label>
           <label>NIT / Identificacion<input id="storeTaxId" type="text" value="${escapeHtml(storeSettings.taxId || "")}" /></label>
           <label>Telefono<input id="storePhone" type="tel" value="${escapeHtml(storeSettings.phone || "")}" /></label>
@@ -2595,6 +2629,7 @@ function renderStoreSettingsOverview() {
   const rules = [
     { label: "Cajas", value: `${num(storeSettings.cashRegisterCount || 1)} configurada${Number(storeSettings.cashRegisterCount || 1) === 1 ? "" : "s"}`, detail: "Define cuantos puntos de cobro puede abrir la empresa." },
     { label: "Moneda", value: storeSettings.currency || "BOB", detail: "Aparece en POS, tickets, cierres y reportes." },
+    { label: "Meta diaria", value: Number(storeSettings.dailySalesGoal || 0) > 0 ? money(storeSettings.dailySalesGoal) : "Sin meta", detail: "Permite medir avance comercial del dia." },
     { label: "Credito", value: storeSettings.allowCredit ? "Permitido" : "Bloqueado", detail: storeSettings.allowCredit ? "Puede vender con saldo pendiente." : "Solo pagos completos." },
     { label: "Cliente", value: storeSettings.requireCustomerForSale ? "Obligatorio" : "Opcional", detail: storeSettings.requireCustomerForSale ? "Toda venta exige cliente registrado." : "Permite venta rapida sin cliente." }
   ];
@@ -2961,6 +2996,7 @@ function validateStoreSettingsPayload(settings) {
   if (!settings.companyName) return "El nombre legal de la empresa es obligatorio.";
   if (!settings.currency || settings.currency.length < 2) return "La moneda debe tener al menos 2 caracteres. Ej: BOB, USD.";
   if (!Number.isFinite(settings.cashRegisterCount) || settings.cashRegisterCount < 1 || settings.cashRegisterCount > 20) return "La cantidad de cajas debe estar entre 1 y 20.";
+  if (!Number.isFinite(settings.dailySalesGoal) || settings.dailySalesGoal < 0) return "La meta diaria debe ser cero o mayor.";
   if (!Number.isFinite(settings.taxRate) || settings.taxRate < 0 || settings.taxRate > 100) return "El impuesto debe estar entre 0 y 100%.";
   return "";
 }
@@ -4664,6 +4700,7 @@ async function saveStoreSettings(event) {
     address: value("#storeAddress").trim(),
     ticketNote: value("#storeTicketNote").trim(),
     cashRegisterCount: Number(value("#storeCashRegisterCount") || 1),
+    dailySalesGoal: Number(value("#storeDailySalesGoal") || 0),
     taxRate: Number(value("#storeTaxRate") || 0),
     allowCredit: Boolean(document.querySelector("#storeAllowCredit")?.checked),
     allowDiscounts: Boolean(document.querySelector("#storeAllowDiscounts")?.checked),

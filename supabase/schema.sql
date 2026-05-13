@@ -86,6 +86,7 @@ create table if not exists organization_settings (
   address text not null default '',
   ticket_note text not null default '',
   cash_register_count integer not null default 1,
+  daily_sales_goal numeric not null default 0,
   tax_rate numeric not null default 0,
   allow_credit boolean not null default true,
   allow_discounts boolean not null default true,

@@ -1540,6 +1540,7 @@ app.patch("/api/ventas/settings", requireAuth, requireSystemAccess("ventas_almac
     address: String(req.body.address || "").trim(),
     ticketNote: String(req.body.ticketNote || "").trim(),
     cashRegisterCount: clampNumber(req.body.cashRegisterCount ?? current.cashRegisterCount, 1, 20, 1),
+    dailySalesGoal: clampDecimal(req.body.dailySalesGoal ?? current.dailySalesGoal, 0, 1000000000, 0),
     taxRate: clampDecimal(req.body.taxRate ?? current.taxRate, 0, 100, 0),
     allowCredit: req.body.allowCredit !== false,
     allowDiscounts: req.body.allowDiscounts !== false,
@@ -1551,9 +1552,9 @@ app.patch("/api/ventas/settings", requireAuth, requireSystemAccess("ventas_almac
   db.prepare(
     `INSERT INTO organization_settings (
        id, company_id, company_name, store_name, currency, tax_id, phone, address, ticket_note, cash_register_count,
-       tax_rate, allow_credit, allow_discounts, require_customer_sale, updated_at
+       daily_sales_goal, tax_rate, allow_credit, allow_discounts, require_customer_sale, updated_at
      )
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
      ON CONFLICT(id) DO UPDATE SET
        company_name = excluded.company_name,
        store_name = excluded.store_name,
@@ -1563,6 +1564,7 @@ app.patch("/api/ventas/settings", requireAuth, requireSystemAccess("ventas_almac
        address = excluded.address,
        ticket_note = excluded.ticket_note,
        cash_register_count = excluded.cash_register_count,
+       daily_sales_goal = excluded.daily_sales_goal,
        tax_rate = excluded.tax_rate,
        allow_credit = excluded.allow_credit,
        allow_discounts = excluded.allow_discounts,
@@ -1579,6 +1581,7 @@ app.patch("/api/ventas/settings", requireAuth, requireSystemAccess("ventas_almac
     settings.address,
     settings.ticketNote,
     settings.cashRegisterCount,
+    settings.dailySalesGoal,
     settings.taxRate,
     settings.allowCredit ? 1 : 0,
     settings.allowDiscounts ? 1 : 0,
@@ -3012,6 +3015,7 @@ function mapSettings(settings = {}) {
     address: settings.address || "",
     ticketNote: settings.ticket_note || "",
     cashRegisterCount: clampNumber(settings.cash_register_count, 1, 20, 1),
+    dailySalesGoal: clampDecimal(settings.daily_sales_goal, 0, 1000000000, 0),
     taxRate: clampDecimal(settings.tax_rate, 0, 100, 0),
     allowCredit: Number(settings.allow_credit ?? 1) === 1,
     allowDiscounts: Number(settings.allow_discounts ?? 1) === 1,

@@ -1418,6 +1418,7 @@ app.patch("/api/ventas/settings", requireAuth, async (req, res) => {
     address: String(req.body.address || "").trim(),
     ticketNote: String(req.body.ticketNote || "").trim(),
     cashRegisterCount: clampNumber(req.body.cashRegisterCount ?? current.cashRegisterCount, 1, 20, 1),
+    dailySalesGoal: clampDecimal(req.body.dailySalesGoal ?? current.dailySalesGoal, 0, 1000000000, 0),
     taxRate: clampDecimal(req.body.taxRate ?? current.taxRate, 0, 100, 0),
     allowCredit: req.body.allowCredit !== false,
     allowDiscounts: req.body.allowDiscounts !== false,
@@ -1428,9 +1429,9 @@ app.patch("/api/ventas/settings", requireAuth, async (req, res) => {
   await pg.run(
     `INSERT INTO organization_settings (
        id, company_id, company_name, store_name, currency, tax_id, phone, address, ticket_note, cash_register_count,
-       tax_rate, allow_credit, allow_discounts, require_customer_sale, updated_at
+       daily_sales_goal, tax_rate, allow_credit, allow_discounts, require_customer_sale, updated_at
      )
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, now())
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, now())
      ON CONFLICT(id) DO UPDATE SET
        company_name = excluded.company_name,
        store_name = excluded.store_name,
@@ -1440,6 +1441,7 @@ app.patch("/api/ventas/settings", requireAuth, async (req, res) => {
        address = excluded.address,
        ticket_note = excluded.ticket_note,
        cash_register_count = excluded.cash_register_count,
+       daily_sales_goal = excluded.daily_sales_goal,
        tax_rate = excluded.tax_rate,
        allow_credit = excluded.allow_credit,
        allow_discounts = excluded.allow_discounts,
@@ -1456,6 +1458,7 @@ app.patch("/api/ventas/settings", requireAuth, async (req, res) => {
       settings.address,
       settings.ticketNote,
       settings.cashRegisterCount,
+      settings.dailySalesGoal,
       settings.taxRate,
       settings.allowCredit,
       settings.allowDiscounts,
@@ -2515,6 +2518,7 @@ async function mapSettings(settings = {}) {
     address: settings?.address || "",
     ticketNote: settings?.ticket_note || "",
     cashRegisterCount: clampNumber(settings?.cash_register_count, 1, 20, 1),
+    dailySalesGoal: clampDecimal(settings?.daily_sales_goal, 0, 1000000000, 0),
     taxRate: clampDecimal(settings?.tax_rate, 0, 100, 0),
     allowCredit: settings?.allow_credit !== false,
     allowDiscounts: settings?.allow_discounts !== false,
@@ -2542,6 +2546,7 @@ async function ensureSettingsSchema() {
       pg.run("ALTER TABLE organization_settings ADD COLUMN IF NOT EXISTS logo_mime text not null default ''"),
       pg.run("ALTER TABLE organization_settings ADD COLUMN IF NOT EXISTS logo_updated_at timestamptz"),
       pg.run("ALTER TABLE organization_settings ADD COLUMN IF NOT EXISTS cash_register_count integer not null default 1"),
+      pg.run("ALTER TABLE organization_settings ADD COLUMN IF NOT EXISTS daily_sales_goal numeric not null default 0"),
       pg.run("ALTER TABLE organization_settings ADD COLUMN IF NOT EXISTS tax_rate numeric not null default 0"),
       pg.run("ALTER TABLE organization_settings ADD COLUMN IF NOT EXISTS allow_credit boolean not null default true"),
       pg.run("ALTER TABLE organization_settings ADD COLUMN IF NOT EXISTS allow_discounts boolean not null default true"),

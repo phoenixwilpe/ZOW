@@ -557,6 +557,7 @@ function migrateSchema() {
   ensureColumn("organization_settings", "address", "TEXT NOT NULL DEFAULT ''");
   ensureColumn("organization_settings", "ticket_note", "TEXT NOT NULL DEFAULT ''");
   ensureColumn("organization_settings", "cash_register_count", "INTEGER NOT NULL DEFAULT 1");
+  ensureColumn("organization_settings", "daily_sales_goal", "REAL NOT NULL DEFAULT 0");
   ensureColumn("organization_settings", "tax_rate", "REAL NOT NULL DEFAULT 0");
   ensureColumn("organization_settings", "allow_credit", "INTEGER NOT NULL DEFAULT 1");
   ensureColumn("organization_settings", "allow_discounts", "INTEGER NOT NULL DEFAULT 1");
