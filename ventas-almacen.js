@@ -2223,6 +2223,12 @@ function renderCustomers() {
   document.querySelectorAll("[data-edit-customer]").forEach((button) => {
     button.addEventListener("click", () => openCustomerModal(button.dataset.editCustomer));
   });
+  document.querySelectorAll("[data-copy-customer-statement]").forEach((button) => {
+    button.addEventListener("click", () => copyCustomerStatement(button.dataset.copyCustomerStatement));
+  });
+  document.querySelectorAll("[data-print-customer-statement]").forEach((button) => {
+    button.addEventListener("click", () => printCustomerStatement(button.dataset.printCustomerStatement));
+  });
   document.querySelector("#quickNewCustomer")?.addEventListener("click", () => openCustomerModal());
   document.querySelector("#exportCustomersCommandCsv")?.addEventListener("click", exportCustomersCsv);
   document.querySelector("#exportReceivablesCsv")?.addEventListener("click", exportReceivablesCsv);
@@ -2250,10 +2256,68 @@ function renderCustomerDirectoryRow(customer) {
       <span>Credito ${money(creditLimit)}</span>
       <span class="${usageClass}">Usado ${usage}%</span>
       <span>Debe ${money(debt)}</span>
-      ${debt > 0 ? `<button class="primary-button" type="button" data-pay-customer="${escapeHtml(customer.name)}">Cobrar</button>` : ""}
+      ${debt > 0 ? `<button class="primary-button" type="button" data-pay-customer="${escapeHtml(customer.name)}">Cobrar</button><button class="ghost-button" type="button" data-copy-customer-statement="${escapeHtml(customer.name)}">Copiar estado</button><button class="ghost-button" type="button" data-print-customer-statement="${escapeHtml(customer.name)}">Imprimir estado</button>` : ""}
       <button class="ghost-button" type="button" data-edit-customer="${customer.id}">Editar</button>
     </div>
   </article>`;
+}
+
+async function copyCustomerStatement(customerName) {
+  const text = buildCustomerStatementText(customerName);
+  try {
+    await navigator.clipboard.writeText(text);
+    ventasMessage = "Estado de cuenta copiado al portapapeles.";
+  } catch {
+    ventasMessage = text;
+  }
+  renderMain();
+}
+
+function buildCustomerStatementText(customerName) {
+  const customer = customers.find((entry) => entry.name === customerName) || { name: customerName };
+  const pendingSales = receivables.filter((sale) => (sale.customer_name || "Cliente sin registrar") === customerName);
+  const totalDebt = pendingSales.reduce((sum, sale) => sum + Number(sale.balance_due || 0), 0);
+  const totalPaid = pendingSales.reduce((sum, sale) => sum + Number(sale.amount_paid || 0), 0);
+  const creditLimit = Number(customer.credit_limit || 0);
+  const oldest = pendingSales.slice().sort((a, b) => new Date(a.created_at) - new Date(b.created_at))[0];
+  const storeName = storeSettings.storeName || storeSettings.companyName || currentUser.companyName || "SYSTEM ZOW";
+  const lines = [
+    `Estado de cuenta - ${storeName}`,
+    `Cliente: ${customer.name || customerName}`,
+    `CI/NIT: ${customer.ci || "Sin dato"}`,
+    `Celular: ${customer.phone || "Sin dato"}`,
+    `Fecha: ${formatDateTime(new Date().toISOString())}`,
+    "",
+    `Limite de credito: ${money(creditLimit)}`,
+    `Total pagado parcial: ${money(totalPaid)}`,
+    `Saldo pendiente: ${money(totalDebt)}`,
+    `Mayor antiguedad: ${oldest ? `${num(daysSince(oldest.created_at))} dia${daysSince(oldest.created_at) === 1 ? "" : "s"}` : "Sin deuda"}`,
+    "",
+    "Ventas pendientes:"
+  ];
+  if (pendingSales.length) {
+    pendingSales.forEach((sale) => {
+      lines.push(`- ${sale.code} / ${formatDateTime(sale.created_at)} / Total ${money(sale.total)} / Pagado ${money(sale.amount_paid)} / Debe ${money(sale.balance_due)}`);
+    });
+  } else {
+    lines.push("- Sin ventas pendientes.");
+  }
+  lines.push("", "Nota: este estado de cuenta es informativo y debe ser validado con el comprobante de pago registrado en caja.");
+  return lines.join("\n");
+}
+
+function printCustomerStatement(customerName) {
+  const text = buildCustomerStatementText(customerName);
+  const printable = window.open("", "_blank", "width=820,height=900");
+  if (!printable) return;
+  printable.document.write(`<!doctype html><html><head><meta charset="UTF-8"><title>Estado de cuenta</title><style>
+    *{box-sizing:border-box}body{font-family:Arial,sans-serif;margin:0;padding:30px;color:#10251f;background:#fff}.toolbar{margin-bottom:16px}.toolbar button{border:0;border-radius:10px;padding:11px 18px;background:#0f172a;color:#fff;font-weight:900}
+    h1{margin:0 0 6px;font-size:25px;text-transform:uppercase}.muted{color:#64746f;font-size:12px}.box{white-space:pre-wrap;border:1px solid #d9ebe5;border-radius:16px;padding:18px;background:#f8fffc;line-height:1.55;font-size:13px}
+    .signature{display:grid;grid-template-columns:1fr 1fr;gap:30px;margin-top:48px}.signature div{border-top:1px solid #111;text-align:center;padding-top:8px;color:#475569;font-size:12px}.foot{text-align:center;margin-top:18px;color:#64748b;font-size:11px}
+    @media print{.toolbar{display:none}body{padding:18px}}
+  </style></head><body><div class="toolbar"><button onclick="print()">Imprimir / Guardar PDF</button></div><h1>Estado de cuenta</h1><p class="muted">Detalle de saldos pendientes por cliente.</p><div class="box">${escapeHtml(text)}</div><div class="signature"><div>Firma cliente</div><div>Firma responsable</div></div><p class="foot">SYSTEM ZOW SAAS - Ventas-Almacen</p></body></html>`);
+  printable.document.close();
+  printable.focus();
 }
 
 function renderReceivableRow(sale) {
