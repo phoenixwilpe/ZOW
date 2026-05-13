@@ -4967,6 +4967,11 @@ body.app-ventas .daily-operation-track strong {
   white-space: nowrap;
 }
 
+.help-hero-actions .ghost-button {
+  min-height: 38px;
+  white-space: nowrap;
+}
+
 .help-guide-grid,
 .help-support-grid {
   display: grid;

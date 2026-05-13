@@ -2694,6 +2694,7 @@ function renderHelp() {
       <div class="help-hero-actions">
         <strong>${escapeHtml(storeSettings.storeName || storeSettings.companyName || currentUser.companyName || "Zow Ventas-Almacen")}</strong>
         <button class="primary-button" type="button" id="printSalesManualBtn">Imprimir manual</button>
+        <button class="ghost-button" type="button" id="printCertificationBtn">Reporte de certificacion</button>
       </div>
     </section>
     <section class="help-guide-grid">
@@ -2730,6 +2731,7 @@ function renderHelp() {
     </section>
   `;
   document.querySelector("#printSalesManualBtn")?.addEventListener("click", printSalesCommercialManual);
+  document.querySelector("#printCertificationBtn")?.addEventListener("click", printSalesCertificationReport);
 }
 
 function printSalesCommercialManual() {
@@ -2769,6 +2771,34 @@ function printSalesCommercialManual() {
     ${sections.map(([heading, steps]) => `<section><h2>${escapeHtml(heading)}</h2><ol>${steps.map((step) => `<li>${escapeHtml(step)}</li>`).join("")}</ol></section>`).join("")}
     <div class="box"><strong>Credenciales de ejemplo</strong><p class="muted">La empresa debe recibir usuarios reales creados desde el panel del encargado. Cambiar contrasenas iniciales y evitar compartir accesos.</p></div>
     <p class="foot">Sistema ZOW SaaS - Manual comercial para empresas</p>
+  </body></html>`);
+  printable.document.close();
+  printable.focus();
+}
+
+function printSalesCertificationReport() {
+  const printable = window.open("", "_blank", "width=860,height=900");
+  if (!printable) return;
+  const certification = buildSalesCertificationChecks();
+  const title = storeSettings.storeName || storeSettings.companyName || currentUser.companyName || "Zow Ventas-Almacen";
+  printable.document.write(`<!doctype html><html><head><meta charset="UTF-8"><title>Certificacion ${escapeHtml(title)}</title><style>
+    *{box-sizing:border-box}body{font-family:Arial,sans-serif;margin:0;padding:28px;color:#10251f;background:#fff}
+    .toolbar{margin-bottom:16px}.toolbar button{border:0;border-radius:10px;padding:11px 18px;background:#0f172a;color:#fff;font-weight:900}
+    .head{display:flex;justify-content:space-between;gap:22px;border-bottom:3px solid #0f766e;padding-bottom:16px;margin-bottom:18px}
+    h1{margin:0;font-size:24px;text-transform:uppercase}h2{margin:18px 0 8px;color:#0f766e;font-size:16px}.muted{color:#5b6f69;font-size:12px;line-height:1.45}.score{font-size:42px;font-weight:900;color:#0f766e;text-align:right}
+    .grid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}.group{break-inside:avoid;border:1px solid #d9ebe5;border-radius:14px;padding:14px;background:#f8fffc}
+    .group h2{display:flex;justify-content:space-between;gap:12px;margin-top:0}.item{display:grid;grid-template-columns:28px 1fr;gap:8px;align-items:start;border-radius:10px;padding:8px;margin:6px 0;background:#fff}
+    .item b{display:grid;place-items:center;width:24px;height:24px;border-radius:999px;background:#dcfce7;color:#047857;font-size:10px}.item.pending{background:#fffbeb}.item.pending b{background:#fef3c7;color:#92400e}
+    .item span{font-size:12px;line-height:1.35}.summary{border:1px dashed #94a3b8;border-radius:12px;padding:12px;margin:14px 0}.foot{margin-top:20px;text-align:center;color:#64748b;font-size:11px}
+    @media print{.toolbar{display:none}body{padding:18px}}
+  </style></head><body>
+    <div class="toolbar"><button onclick="print()">Imprimir / Guardar PDF</button></div>
+    <div class="head"><div><h1>Reporte de certificacion</h1><p class="muted">${escapeHtml(title)}<br>Generado: ${formatDateTime(new Date().toISOString())}<br>Resultado: ${certification.done}/${certification.total} puntos completos</p></div><div class="score">${certification.percent}%</div></div>
+    <div class="summary"><strong>Lectura rapida</strong><p class="muted">${certification.percent >= 90 ? "Sistema en condicion alta para entrega comercial." : certification.percent >= 70 ? "Sistema avanzado, quedan pruebas operativas por cerrar." : "Aun faltan pruebas importantes antes de vender a una empresa real."}</p></div>
+    <div class="grid">
+      ${certification.groups.map((group) => `<section class="group"><h2>${escapeHtml(group.label)} <span>${group.done}/${group.items.length}</span></h2>${group.items.map((item) => `<div class="item ${item.done ? "" : "pending"}"><b>${item.done ? "OK" : "!"}</b><span>${escapeHtml(item.label)}</span></div>`).join("")}</section>`).join("")}
+    </div>
+    <p class="foot">ZOW Ventas-Almacen - Control interno de entrega</p>
   </body></html>`);
   printable.document.close();
   printable.focus();
