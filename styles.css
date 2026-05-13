@@ -5412,6 +5412,70 @@ body.app-ventas .hourly-sales-bar span {
   background: linear-gradient(180deg, #10b981, #f59e0b);
 }
 
+body.app-ventas .top-products-panel {
+  margin-bottom: 14px;
+  border: 1px solid rgb(15 118 110 / 12%);
+  border-radius: 18px;
+  padding: clamp(14px, 2vw, 18px);
+  background:
+    radial-gradient(circle at 94% 14%, rgb(245 158 11 / 12%), transparent 34%),
+    linear-gradient(145deg, rgb(255 255 255 / 94%), rgb(245 252 249 / 82%));
+  box-shadow: 0 18px 42px rgb(15 32 28 / 6%);
+}
+
+body.app-ventas .top-products-list {
+  display: grid;
+  gap: 10px;
+}
+
+body.app-ventas .top-products-list article {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  border: 1px solid rgb(15 118 110 / 10%);
+  border-radius: 14px;
+  padding: 10px;
+  background: rgb(255 255 255 / 74%);
+}
+
+body.app-ventas .top-products-list b {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 12px;
+  background: rgb(16 185 129 / 12%);
+  color: var(--accent-dark);
+}
+
+body.app-ventas .top-products-list strong {
+  color: var(--accent-dark);
+}
+
+body.app-ventas .top-products-list span,
+body.app-ventas .top-products-list small {
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-weight: 850;
+}
+
+body.app-ventas .top-products-list i {
+  display: block;
+  height: 8px;
+  margin-top: 7px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgb(15 118 110 / 8%);
+}
+
+body.app-ventas .top-products-list i span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #10b981, #f59e0b);
+}
+
 body.app-ventas .product-margin-preview {
   display: grid;
   gap: 4px;

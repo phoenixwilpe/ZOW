@@ -1334,6 +1334,39 @@ app.get("/api/ventas/reports/profit", requireAuth, requireSystemAccess("ventas_a
   });
 });
 
+app.get("/api/ventas/reports/top-products/today", requireAuth, requireSystemAccess("ventas_almacen"), (req, res) => {
+  const ownOnly = ventasOwnOnly(req.user.role);
+  const today = new Date().toISOString().slice(0, 10);
+  const params = ownOnly ? [req.user.company_id, today, req.user.id] : [req.user.company_id, today];
+  const rows = db
+    .prepare(
+      `SELECT sales_order_items.product_id,
+              sales_order_items.product_name,
+              COALESCE(SUM(sales_order_items.quantity), 0) AS quantity,
+              COALESCE(SUM(sales_order_items.total), 0) AS net_sales,
+              COALESCE(SUM(sales_order_items.total - (sales_order_items.quantity * sales_order_items.cost_price_at_sale)), 0) AS profit
+       FROM sales_order_items
+       JOIN sales_orders ON sales_orders.id = sales_order_items.sale_id AND sales_orders.company_id = sales_order_items.company_id
+       WHERE sales_orders.company_id = ?
+         AND sales_orders.status = 'confirmada'
+         AND substr(sales_orders.created_at, 1, 10) = ?
+         ${ownOnly ? "AND sales_orders.created_by = ?" : ""}
+       GROUP BY sales_order_items.product_id, sales_order_items.product_name
+       ORDER BY quantity DESC, net_sales DESC
+       LIMIT 8`
+    )
+    .all(...params);
+  res.json({
+    rows: rows.map((row) => ({
+      productId: row.product_id,
+      productName: row.product_name,
+      quantity: Number(row.quantity || 0),
+      netSales: Number(row.net_sales || 0),
+      profit: Number(row.profit || 0)
+    }))
+  });
+});
+
 app.get("/api/ventas/suspended-sales", requireAuth, requireSystemAccess("ventas_almacen"), (req, res) => {
   const ownOnly = ventasOwnOnly(req.user.role);
   const rows = db

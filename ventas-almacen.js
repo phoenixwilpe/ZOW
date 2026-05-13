@@ -32,6 +32,7 @@ let promotions = [];
 let combos = [];
 let auditEvents = [];
 let profitReport = { rows: [], totals: {} };
+let todayProductLeaders = [];
 let cash = { pendingSales: [], total: 0 };
 let summary = {};
 let saleCart = [];
@@ -351,7 +352,7 @@ async function render() {
   try {
     await assertVentasAccess();
     const canReadPurchases = canAccessView("purchases");
-    const [settingsResponse, summaryResponse, productsResponse, customersResponse, categoriesResponse, salesResponse, cashResponse, cashHistoryResponse, suppliersResponse, purchasesResponse, receivablesResponse, promotionsResponse, combosResponse, auditResponse, profitResponse, suspendedResponse, favoritesResponse, usersResponse, unitsResponse] = await Promise.all([
+    const [settingsResponse, summaryResponse, productsResponse, customersResponse, categoriesResponse, salesResponse, cashResponse, cashHistoryResponse, suppliersResponse, purchasesResponse, receivablesResponse, promotionsResponse, combosResponse, auditResponse, profitResponse, topProductsResponse, suspendedResponse, favoritesResponse, usersResponse, unitsResponse] = await Promise.all([
       apiRequest("/ventas/settings"),
       apiRequest("/ventas/summary"),
       apiRequest("/ventas/products"),
@@ -367,6 +368,7 @@ async function render() {
       canAccessView("promotions") || canAccessView("sell") ? apiRequest("/ventas/combos") : Promise.resolve({ combos: [] }),
       canAccessView("reports") ? apiRequest("/ventas/audit") : Promise.resolve({ events: [] }),
       canAccessView("reports") ? apiRequest(`/ventas/reports/profit${profitReportQuery()}`) : Promise.resolve({ rows: [], totals: {} }),
+      apiRequest("/ventas/reports/top-products/today").catch(() => ({ rows: [] })),
       apiRequest("/ventas/suspended-sales").catch(() => ({ sales: suspendedSales })),
       apiRequest("/ventas/favorites").catch(() => ({ favorites: favoriteProducts })),
       currentUser?.role === "admin" ? apiRequest("/users") : Promise.resolve({ users: [] }),
@@ -385,6 +387,7 @@ async function render() {
     combos = (combosResponse.combos || []).map(normalizeCombo);
     auditEvents = auditResponse.events || [];
     profitReport = { rows: profitResponse.rows || [], totals: profitResponse.totals || {} };
+    todayProductLeaders = topProductsResponse.rows || [];
     const localSuspended = loadJson(SUSPENDED_SALES_KEY, []).map((sale) => normalizeSuspendedSale({ ...sale, localOnly: true }));
     suspendedSales = [...(suspendedResponse.sales || []).map(normalizeSuspendedSale), ...localSuspended].slice(0, 30);
     favoriteProducts = Array.isArray(favoritesResponse.favorites) ? favoritesResponse.favorites : favoriteProducts;
@@ -607,6 +610,7 @@ function renderSummary() {
     </section>
     ${renderSalesGoalPanel(todayIncome, todaySales.length)}
     ${renderHourlySalesPanel(todaySales)}
+    ${renderTopProductsTodayPanel()}
     <section class="owner-dashboard-grid">
       <article><span>Hoy</span><strong>${money(todayIncome)}</strong><small>${todaySales.length} venta${todaySales.length === 1 ? "" : "s"}</small></article>
       <article><span>Caja</span><strong>${cashSession?.status === "abierta" ? `Caja ${num(cashSession.registerNumber)}` : "Sin abrir"}</strong><small>${cashSession?.status === "abierta" ? money(cashExpectedTotal()) : "Sin turno activo"}</small></article>
@@ -687,6 +691,31 @@ function renderHourlySalesPanel(todaySales = []) {
           <div><span>${String(item.hour).padStart(2, "0")}:00</span><strong>${money(item.total)}</strong></div>
           <div class="hourly-sales-bar"><span style="height:${percent}%"></span></div>
           <small>${num(item.count)} ticket${item.count === 1 ? "" : "s"}</small>
+        </article>`;
+      }).join("")}
+    </div>
+  </section>`;
+}
+
+function renderTopProductsTodayPanel() {
+  if (!todayProductLeaders.length) return "";
+  const maxQuantity = Math.max(...todayProductLeaders.map((item) => Number(item.quantity || 0)), 1);
+  return `<section class="top-products-panel">
+    <div class="admin-panel-head">
+      <div><p class="eyebrow">Productos fuertes</p><h3>Mas vendidos hoy</h3></div>
+      <span>${todayProductLeaders.length} producto${todayProductLeaders.length === 1 ? "" : "s"}</span>
+    </div>
+    <div class="top-products-list">
+      ${todayProductLeaders.slice(0, 6).map((item, index) => {
+        const percent = Math.max(Math.round(Number(item.quantity || 0) / maxQuantity * 100), 8);
+        return `<article>
+          <b>${index + 1}</b>
+          <div>
+            <strong>${escapeHtml(item.productName || "Producto")}</strong>
+            <span>${num(item.quantity)} unidad${Number(item.quantity || 0) === 1 ? "" : "es"} / ${money(item.netSales || 0)}</span>
+            <i><span style="width:${percent}%"></span></i>
+          </div>
+          <small>${money(item.profit || 0)} utilidad</small>
         </article>`;
       }).join("")}
     </div>
