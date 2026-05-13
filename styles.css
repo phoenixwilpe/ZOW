@@ -3613,6 +3613,16 @@ body.app-correspondencia .metrics article:hover {
 }
 
 @media (max-width: 760px) {
+  .setup-assistant-actions {
+    align-items: stretch;
+    flex-direction: column;
+    width: 100%;
+  }
+
+  .setup-assistant-actions .ghost-button {
+    width: 100%;
+  }
+
   .setup-next-step {
     align-items: stretch;
     flex-direction: column;
@@ -4940,6 +4950,24 @@ body.app-ventas .daily-operation-track strong {
 
 .setup-assistant-panel {
   overflow: hidden;
+}
+
+.setup-assistant-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.setup-assistant-actions > span {
+  color: var(--accent-dark);
+  font-size: 1.05rem;
+  font-weight: 950;
+}
+
+.setup-assistant-actions .ghost-button {
+  min-height: 36px;
+  white-space: nowrap;
 }
 
 .setup-next-step {

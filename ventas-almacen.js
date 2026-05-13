@@ -2679,6 +2679,7 @@ function renderSettings() {
     ${renderRoleConfigGuide()}
   `;
   document.querySelector("#storeSettingsForm")?.addEventListener("submit", saveStoreSettings);
+  document.querySelector("#printSetupPlanBtn")?.addEventListener("click", printSetupImplementationPlan);
   document.querySelectorAll("[data-settings-preset]").forEach((button) => {
     button.addEventListener("click", () => applySettingsPreset(button.dataset.settingsPreset));
   });
@@ -3047,7 +3048,13 @@ function renderSetupAssistant() {
   const percent = Math.round((completed / checks.length) * 100);
   const nextStep = checks.find((item) => !item.done) || checks[checks.length - 1];
   return `<section class="admin-panel setup-assistant-panel">
-    <div class="admin-panel-head"><div><p class="eyebrow">Configuracion inicial</p><h3>Listo para operar al ${percent}%</h3></div><span>${completed}/${checks.length}</span></div>
+    <div class="admin-panel-head">
+      <div><p class="eyebrow">Configuracion inicial</p><h3>Listo para operar al ${percent}%</h3></div>
+      <div class="setup-assistant-actions">
+        <span>${completed}/${checks.length}</span>
+        <button class="ghost-button" type="button" id="printSetupPlanBtn">Plan de implementacion</button>
+      </div>
+    </div>
     <div class="setup-progress"><span style="width:${percent}%"></span></div>
     <div class="setup-next-step ${nextStep.done ? "is-done" : "is-pending"}">
       <div>
@@ -3088,6 +3095,37 @@ function buildSetupAssistantSteps() {
     { label: "Clientes y credito", done: hasCustomerRuleReady, detail: hasCustomerRuleReady ? "Reglas de cliente listas para vender." : "Registra clientes si exigirás cliente en cada venta.", view: "customers" },
     { label: "Prueba de operacion", done: hasOperationTest, detail: hasOperationTest ? "Ya existe venta, caja o cierre de prueba." : "Abre caja, vende, cobra y cierra un turno de prueba.", view: "sell" }
   ];
+}
+
+function printSetupImplementationPlan() {
+  const printable = window.open("", "_blank", "width=860,height=900");
+  if (!printable) return;
+  const steps = buildSetupAssistantSteps();
+  const completed = steps.filter((item) => item.done).length;
+  const percent = Math.round((completed / steps.length) * 100);
+  const company = storeSettings.storeName || storeSettings.companyName || currentUser.companyName || "Empresa cliente";
+  printable.document.write(`<!doctype html><html><head><meta charset="UTF-8"><title>Plan de implementacion ${escapeHtml(company)}</title><style>
+    *{box-sizing:border-box}body{font-family:Arial,sans-serif;margin:0;padding:28px;color:#10251f;background:#fff}
+    .toolbar{margin-bottom:16px}.toolbar button{border:0;border-radius:10px;padding:11px 18px;background:#0f172a;color:#fff;font-weight:900}
+    .head{display:flex;justify-content:space-between;gap:22px;border-bottom:3px solid #0f766e;padding-bottom:16px;margin-bottom:18px}
+    h1{margin:0;font-size:24px;text-transform:uppercase}h2{margin:18px 0 8px;color:#0f766e;font-size:16px}.muted{color:#5b6f69;font-size:12px;line-height:1.45}
+    .score{font-size:40px;font-weight:900;color:#0f766e;text-align:right}.grid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}
+    .step{break-inside:avoid;border:1px solid #d9ebe5;border-radius:14px;padding:14px;background:#f8fffc}.step.pending{background:#fffbeb;border-color:#fde68a}
+    .step b{display:inline-grid;place-items:center;border-radius:999px;padding:5px 9px;background:#dcfce7;color:#047857;font-size:10px}.step.pending b{background:#fef3c7;color:#92400e}
+    .step strong{display:block;margin:8px 0 4px;color:#0f3d34}.step span{display:block;color:#53645f;font-size:12px;line-height:1.38}
+    .box{border:1px dashed #94a3b8;border-radius:12px;padding:12px;margin:14px 0}.foot{margin-top:20px;text-align:center;color:#64748b;font-size:11px}
+    @media print{.toolbar{display:none}body{padding:18px}}
+  </style></head><body>
+    <div class="toolbar"><button onclick="print()">Imprimir / Guardar PDF</button></div>
+    <div class="head"><div><h1>Plan de implementacion</h1><p class="muted">${escapeHtml(company)}<br>ZOW Ventas-Almacen<br>Generado: ${formatDateTime(new Date().toISOString())}</p></div><div class="score">${percent}%</div></div>
+    <div class="box"><strong>Objetivo</strong><p class="muted">Completar la configuracion minima para que la empresa pueda operar ventas, caja, inventario, compras y cobranza con usuarios reales.</p></div>
+    <h2>Pasos de configuracion</h2>
+    <div class="grid">${steps.map((step, index) => `<article class="step ${step.done ? "" : "pending"}"><b>${step.done ? "OK" : `Paso ${index + 1}`}</b><strong>${escapeHtml(step.label)}</strong><span>${escapeHtml(step.detail)}</span></article>`).join("")}</div>
+    <div class="box"><strong>Recomendacion ZOW</strong><p class="muted">Antes de entregar credenciales a cajeros, realiza una venta de prueba, una anulacion, una compra pendiente recibida y un cierre de caja.</p></div>
+    <p class="foot">SYSTEM ZOW SAAS - Plan operativo para entrega de tienda</p>
+  </body></html>`);
+  printable.document.close();
+  printable.focus();
 }
 
 function applySettingsPreset(preset) {
