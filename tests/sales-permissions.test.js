@@ -225,6 +225,71 @@ test("venta a credito registra deuda y pagos parcial y total", async () => {
   assert.equal(receivablesResponse.body.receivables.some((sale) => sale.id === saleResponse.body.sale.id), false);
 });
 
+test("orden de compra pendiente al recibirse aumenta stock y Kardex", async () => {
+  const token = await login("ventas.admin@zow.com", "TestVentasAdmin2026#");
+  const suffix = Date.now();
+  const productResponse = await request("/ventas/products", {
+    method: "POST",
+    token,
+    body: {
+      code: `COMP-${suffix}`,
+      name: "Producto compra prueba",
+      category: "Pruebas",
+      unit: "Unidad",
+      costPrice: 9,
+      salePrice: 14,
+      minStock: 3,
+      stock: 4
+    }
+  });
+  assert.equal(productResponse.status, 201, JSON.stringify(productResponse.body));
+
+  const supplierResponse = await request("/ventas/suppliers", {
+    method: "POST",
+    token,
+    body: {
+      name: "Proveedor prueba",
+      phone: "71111111",
+      taxId: `NIT-${suffix}`,
+      address: "Direccion prueba"
+    }
+  });
+  assert.equal(supplierResponse.status, 201, JSON.stringify(supplierResponse.body));
+
+  const purchaseResponse = await request("/ventas/purchases", {
+    method: "POST",
+    token,
+    body: {
+      supplierId: supplierResponse.body.supplier.id,
+      invoiceNumber: `FAC-${suffix}`,
+      note: "Orden pendiente de prueba",
+      status: "pendiente",
+      items: [{ productId: productResponse.body.product.id, quantity: 6, unitCost: 10 }]
+    }
+  });
+  assert.equal(purchaseResponse.status, 201, JSON.stringify(purchaseResponse.body));
+  assert.equal(purchaseResponse.body.purchase.status, "pendiente");
+  assert.equal(Number(purchaseResponse.body.purchase.total), 60);
+
+  let updatedProduct = await getProductByCode(`COMP-${suffix}`, token);
+  assert.equal(Number(updatedProduct.stock), 4);
+
+  const receiveResponse = await request(`/ventas/purchases/${purchaseResponse.body.purchase.id}/receive`, {
+    method: "PATCH",
+    token
+  });
+  assert.equal(receiveResponse.status, 200, JSON.stringify(receiveResponse.body));
+  assert.equal(receiveResponse.body.purchase.status, "recibida");
+
+  updatedProduct = await getProductByCode(`COMP-${suffix}`, token);
+  assert.equal(Number(updatedProduct.stock), 10);
+  assert.equal(Number(updatedProduct.cost_price), 10);
+
+  const movementsResponse = await request(`/ventas/products/${productResponse.body.product.id}/movements`, { token });
+  assert.equal(movementsResponse.status, 200, JSON.stringify(movementsResponse.body));
+  assert.ok(movementsResponse.body.movements.some((movement) => movement.reference === purchaseResponse.body.purchase.code && Number(movement.quantity) === 6));
+});
+
 async function login(username, password) {
   const response = await request("/auth/login", {
     method: "POST",
