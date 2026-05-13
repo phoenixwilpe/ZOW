@@ -3061,6 +3061,7 @@ function renderSetupAssistant() {
         <span>${nextStep.done ? "Entrega lista" : "Siguiente paso recomendado"}</span>
         <strong>${escapeHtml(nextStep.label)}</strong>
         <small>${escapeHtml(nextStep.detail)}</small>
+        <em>${escapeHtml(nextStep.owner)} / ${escapeHtml(nextStep.estimate)}</em>
       </div>
       ${nextStep.view && canAccessView(nextStep.view) ? `<button class="primary-button" type="button" data-module-view="${nextStep.view}">${nextStep.done ? "Revisar" : "Continuar"}</button>` : ""}
     </div>
@@ -3069,6 +3070,7 @@ function renderSetupAssistant() {
         <strong>${item.done ? "Listo" : `Paso ${index + 1}`}</strong>
         <span>${escapeHtml(item.label)}</span>
         <small>${escapeHtml(item.detail)}</small>
+        <em>${escapeHtml(item.owner)} / ${escapeHtml(item.estimate)}</em>
         ${item.view && canAccessView(item.view) ? `<button class="ghost-button" type="button" data-module-view="${item.view}">${item.done ? "Ver" : "Completar"}</button>` : ""}
       </article>`).join("")}
     </div>
@@ -3086,14 +3088,14 @@ function buildSetupAssistantSteps() {
   const hasCustomerRuleReady = customers.length > 0 || !storeSettings.requireCustomerForSale;
   const hasOperationTest = cashSession?.status === "abierta" || cashClosures.length > 0 || sales.length > 0;
   return [
-    { label: "Datos de empresa", done: hasCompanyData, detail: hasCompanyData ? "Nombre y moneda listos para operar." : "Completa nombre legal/comercial y moneda.", view: "settings" },
-    { label: "Comprobante", done: hasPrintData, detail: hasPrintData ? "Datos fiscales y direccion listos para imprimir." : "Añade NIT/CI, direccion y nota de ticket.", view: "settings" },
-    { label: "Cajas y reglas", done: hasCashRegisters, detail: hasCashRegisters ? `${num(storeSettings.cashRegisterCount || 1)} caja(s) configurada(s).` : "Define cuantas cajas usara la tienda.", view: "settings" },
-    { label: "Usuarios operativos", done: hasUsers, detail: hasUsers ? "Ya existen roles comerciales activos." : "Crea cajero, almacen, supervisor o operador integral.", view: "users" },
-    { label: "Inventario inicial", done: hasProducts, detail: hasProducts ? `${num(products.filter(isProductActive).length)} producto(s) activo(s).` : "Carga productos o importa inventario inicial.", view: "inventory" },
-    { label: "Proveedor y reposicion", done: hasSupplierOrPurchase, detail: hasSupplierOrPurchase ? "Compras o proveedor ya estan configurados." : "Registra proveedor para reposicion y compras.", view: "purchases" },
-    { label: "Clientes y credito", done: hasCustomerRuleReady, detail: hasCustomerRuleReady ? "Reglas de cliente listas para vender." : "Registra clientes si exigirás cliente en cada venta.", view: "customers" },
-    { label: "Prueba de operacion", done: hasOperationTest, detail: hasOperationTest ? "Ya existe venta, caja o cierre de prueba." : "Abre caja, vende, cobra y cierra un turno de prueba.", view: "sell" }
+    { label: "Datos de empresa", done: hasCompanyData, detail: hasCompanyData ? "Nombre y moneda listos para operar." : "Completa nombre legal/comercial y moneda.", owner: "Encargado", estimate: "5 min", view: "settings" },
+    { label: "Comprobante", done: hasPrintData, detail: hasPrintData ? "Datos fiscales y direccion listos para imprimir." : "Añade NIT/CI, direccion y nota de ticket.", owner: "Encargado", estimate: "8 min", view: "settings" },
+    { label: "Cajas y reglas", done: hasCashRegisters, detail: hasCashRegisters ? `${num(storeSettings.cashRegisterCount || 1)} caja(s) configurada(s).` : "Define cuantas cajas usara la tienda.", owner: "Encargado", estimate: "5 min", view: "settings" },
+    { label: "Usuarios operativos", done: hasUsers, detail: hasUsers ? "Ya existen roles comerciales activos." : "Crea cajero, almacen, supervisor o operador integral.", owner: "Encargado", estimate: "10 min", view: "users" },
+    { label: "Inventario inicial", done: hasProducts, detail: hasProducts ? `${num(products.filter(isProductActive).length)} producto(s) activo(s).` : "Carga productos o importa inventario inicial.", owner: "Almacen", estimate: "20-60 min", view: "inventory" },
+    { label: "Proveedor y reposicion", done: hasSupplierOrPurchase, detail: hasSupplierOrPurchase ? "Compras o proveedor ya estan configurados." : "Registra proveedor para reposicion y compras.", owner: "Almacen", estimate: "10 min", view: "purchases" },
+    { label: "Clientes y credito", done: hasCustomerRuleReady, detail: hasCustomerRuleReady ? "Reglas de cliente listas para vender." : "Registra clientes si exigirás cliente en cada venta.", owner: "Ventas", estimate: "10 min", view: "customers" },
+    { label: "Prueba de operacion", done: hasOperationTest, detail: hasOperationTest ? "Ya existe venta, caja o cierre de prueba." : "Abre caja, vende, cobra y cierra un turno de prueba.", owner: "Cajero", estimate: "12 min", view: "sell" }
   ];
 }
 
@@ -3112,7 +3114,7 @@ function printSetupImplementationPlan() {
     .score{font-size:40px;font-weight:900;color:#0f766e;text-align:right}.grid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}
     .step{break-inside:avoid;border:1px solid #d9ebe5;border-radius:14px;padding:14px;background:#f8fffc}.step.pending{background:#fffbeb;border-color:#fde68a}
     .step b{display:inline-grid;place-items:center;border-radius:999px;padding:5px 9px;background:#dcfce7;color:#047857;font-size:10px}.step.pending b{background:#fef3c7;color:#92400e}
-    .step strong{display:block;margin:8px 0 4px;color:#0f3d34}.step span{display:block;color:#53645f;font-size:12px;line-height:1.38}
+    .step strong{display:block;margin:8px 0 4px;color:#0f3d34}.step span,.step em{display:block;color:#53645f;font-size:12px;line-height:1.38}.step em{margin-top:6px;color:#0f766e;font-style:normal;font-weight:700}
     .box{border:1px dashed #94a3b8;border-radius:12px;padding:12px;margin:14px 0}.foot{margin-top:20px;text-align:center;color:#64748b;font-size:11px}
     @media print{.toolbar{display:none}body{padding:18px}}
   </style></head><body>
@@ -3120,7 +3122,7 @@ function printSetupImplementationPlan() {
     <div class="head"><div><h1>Plan de implementacion</h1><p class="muted">${escapeHtml(company)}<br>ZOW Ventas-Almacen<br>Generado: ${formatDateTime(new Date().toISOString())}</p></div><div class="score">${percent}%</div></div>
     <div class="box"><strong>Objetivo</strong><p class="muted">Completar la configuracion minima para que la empresa pueda operar ventas, caja, inventario, compras y cobranza con usuarios reales.</p></div>
     <h2>Pasos de configuracion</h2>
-    <div class="grid">${steps.map((step, index) => `<article class="step ${step.done ? "" : "pending"}"><b>${step.done ? "OK" : `Paso ${index + 1}`}</b><strong>${escapeHtml(step.label)}</strong><span>${escapeHtml(step.detail)}</span></article>`).join("")}</div>
+    <div class="grid">${steps.map((step, index) => `<article class="step ${step.done ? "" : "pending"}"><b>${step.done ? "OK" : `Paso ${index + 1}`}</b><strong>${escapeHtml(step.label)}</strong><span>${escapeHtml(step.detail)}</span><em>Responsable: ${escapeHtml(step.owner)} / Tiempo: ${escapeHtml(step.estimate)}</em></article>`).join("")}</div>
     <div class="box"><strong>Recomendacion ZOW</strong><p class="muted">Antes de entregar credenciales a cajeros, realiza una venta de prueba, una anulacion, una compra pendiente recibida y un cierre de caja.</p></div>
     <p class="foot">SYSTEM ZOW SAAS - Plan operativo para entrega de tienda</p>
   </body></html>`);
