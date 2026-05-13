@@ -731,25 +731,42 @@ function renderActivityTimelineItem(event) {
 }
 
 function buildSaleReadiness({ isCashOpen }) {
+  const totals = cartTotals();
+  const discountPercent = totals.subtotal > 0 ? Number(totals.discount || 0) / totals.subtotal * 100 : 0;
+  const estimatedProfit = cartEstimatedProfit();
+  const marginPercent = totals.total > 0 ? estimatedProfit / totals.total * 100 : 0;
   const stockIssues = saleCart.map((item) => {
     const product = products.find((entry) => entry.id === item.productId);
     if (!product) return { level: "danger", title: item.name, detail: "Producto no encontrado en inventario." };
     const stock = Number(product.stock || 0);
     const requested = Number(item.quantity || 0);
+    const expiry = expiryStatus(product);
+    if (expiry.level === "danger") return { level: "danger", title: product.name, detail: expiry.label };
+    if (expiry.level === "warning") return { level: "warning", title: product.name, detail: expiry.label };
     if (requested > stock) return { level: "danger", title: product.name, detail: `Stock disponible ${num(stock)}, solicitado ${num(requested)}.` };
     if (stock - requested <= Number(product.min_stock || 0)) return { level: "warning", title: product.name, detail: `Quedara en ${num(stock - requested)} despues de vender.` };
     return null;
   }).filter(Boolean);
+  const hasDiscountWarning = discountPercent >= 15;
+  const hasMarginWarning = saleCart.length > 0 && marginPercent < 8;
   const checks = [
     { label: "Caja", done: Boolean(isCashOpen), detail: isCashOpen ? "Lista para cobrar." : "Abre caja antes de confirmar ventas.", level: isCashOpen ? "ok" : "danger" },
     { label: "Carrito", done: saleCart.length > 0, detail: saleCart.length ? `${num(saleCart.length)} item${saleCart.length === 1 ? "" : "s"} cargado${saleCart.length === 1 ? "" : "s"}.` : "Agrega productos.", level: saleCart.length ? "ok" : "danger" },
     { label: "Cliente", done: !storeSettings.requireCustomerForSale || Boolean(saleCustomerId), detail: storeSettings.requireCustomerForSale ? (saleCustomerId ? "Cliente seleccionado." : "Cliente obligatorio pendiente.") : "Cliente opcional.", level: storeSettings.requireCustomerForSale && !saleCustomerId ? "danger" : "ok" },
-    { label: "Stock", done: !stockIssues.some((item) => item.level === "danger"), detail: stockIssues.length ? `${num(stockIssues.length)} alerta${stockIssues.length === 1 ? "" : "s"} de stock.` : "Stock suficiente.", level: stockIssues.some((item) => item.level === "danger") ? "danger" : stockIssues.length ? "warning" : "ok" }
+    { label: "Stock", done: !stockIssues.some((item) => item.level === "danger"), detail: stockIssues.length ? `${num(stockIssues.length)} alerta${stockIssues.length === 1 ? "" : "s"} de stock.` : "Stock suficiente.", level: stockIssues.some((item) => item.level === "danger") ? "danger" : stockIssues.length ? "warning" : "ok" },
+    { label: "Descuento", done: true, detail: hasDiscountWarning ? `${num(discountPercent)}% sobre subtotal.` : "Dentro del rango normal.", level: hasDiscountWarning ? "warning" : "ok" },
+    { label: "Margen", done: true, detail: hasMarginWarning ? `Margen estimado ${num(marginPercent)}%.` : "Rentabilidad saludable.", level: hasMarginWarning ? "warning" : "ok" }
+  ];
+  const warnings = [
+    ...stockIssues,
+    ...(hasDiscountWarning ? [{ level: "warning", title: "Descuento alto", detail: `${money(totals.discount)} aplicado sobre ${money(totals.subtotal)}.` }] : []),
+    ...(hasMarginWarning ? [{ level: "warning", title: "Margen bajo", detail: `Utilidad estimada ${money(estimatedProfit)}.` }] : [])
   ];
   return {
     checks,
     stockIssues,
-    canCharge: checks.every((item) => item.done)
+    warnings,
+    canCharge: checks.filter((item) => item.level === "danger").every((item) => item.done)
   };
 }
 
@@ -764,7 +781,7 @@ function renderSaleReadinessPanel(readiness) {
     <div class="sale-readiness-grid">
       ${readiness.checks.map((item) => `<article class="is-${item.level}"><span>${escapeHtml(item.label)}</span><strong>${item.done ? "OK" : "Pendiente"}</strong><small>${escapeHtml(item.detail)}</small></article>`).join("")}
     </div>
-    ${readiness.stockIssues.length ? `<div class="sale-readiness-alerts">${readiness.stockIssues.slice(0, 3).map((item) => `<span class="is-${item.level}">${escapeHtml(item.title)}: ${escapeHtml(item.detail)}</span>`).join("")}</div>` : ""}
+    ${readiness.warnings.length ? `<div class="sale-readiness-alerts">${readiness.warnings.slice(0, 5).map((item) => `<span class="is-${item.level}">${escapeHtml(item.title)}: ${escapeHtml(item.detail)}</span>`).join("")}</div>` : ""}
   </section>`;
 }
 
