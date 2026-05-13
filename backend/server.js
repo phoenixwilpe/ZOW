@@ -41,6 +41,57 @@ const port = Number(process.env.PORT || 4174);
 const uploadsDir = process.env.UPLOADS_DIR || (process.env.VERCEL ? "/tmp/zow-uploads" : path.join(__dirname, "..", "uploads"));
 const showVentasSaas = true;
 const enabledPanelSystemIds = ["correspondencia", "ventas_almacen"];
+const VENTAS_ROLE_ACCESS = {
+  admin: {
+    label: "Encargado de sistema",
+    shortLabel: "Sistema",
+    context: "Configuracion",
+    views: ["sell", "summary", "alerts", "finance", "history", "routes", "promotions", "reports", "catalog", "customers", "inventory", "purchases", "users", "settings", "help"],
+    permissions: ["Usuarios y roles", "Datos de empresa", "Cajas, permisos y reglas"]
+  },
+  ventas_admin: {
+    label: "Operador integral",
+    shortLabel: "Integral",
+    context: "Empresa pequena",
+    views: ["sell", "summary", "alerts", "finance", "history", "routes", "promotions", "reports", "catalog", "customers", "inventory", "purchases", "settings", "help"],
+    permissions: ["Ventas y caja", "Inventario y compras", "Reportes operativos"]
+  },
+  cajero: {
+    label: "Cajero",
+    shortLabel: "Cajero",
+    context: "Mostrador",
+    views: ["sell", "finance", "history", "help"],
+    permissions: ["Venta POS", "Abrir y cerrar su caja", "Historial y reimpresion"]
+  },
+  almacen: {
+    label: "Almacen",
+    shortLabel: "Almacen",
+    context: "Stock",
+    views: ["inventory", "purchases", "alerts", "catalog", "summary", "help"],
+    permissions: ["Productos e inventario", "Compras y reposicion", "Kardex y alertas"]
+  },
+  supervisor: {
+    label: "Supervisor",
+    shortLabel: "Supervisor",
+    context: "Control",
+    views: ["sell", "summary", "alerts", "finance", "history", "routes", "promotions", "reports", "catalog", "customers", "inventory", "purchases", "help"],
+    permissions: ["Reportes y auditoria", "Anular o devolver ventas", "Revision de caja"]
+  },
+  vendedor: {
+    label: "Vendedor",
+    shortLabel: "Vendedor",
+    context: "Atencion",
+    views: ["sell", "customers", "history", "help"],
+    permissions: ["Venta rapida", "Clientes", "Historial propio"]
+  },
+  funcionario: {
+    label: "Funcionario",
+    shortLabel: "Funcionario",
+    context: "Apoyo",
+    views: ["sell", "customers", "summary", "help"],
+    permissions: ["Venta asistida", "Clientes", "Resumen basico"]
+  }
+};
 fs.mkdirSync(uploadsDir, { recursive: true });
 const logosDir = path.join(uploadsDir, "logos");
 fs.mkdirSync(logosDir, { recursive: true });
@@ -1203,6 +1254,14 @@ app.patch("/api/companies/:id/systems", requireAuth, requireRole("zow_owner"), (
     metadata: { systems: enabledSystems, plan }
   });
   res.json({ ok: true });
+});
+
+app.get("/api/ventas/permissions", requireAuth, requireSystemAccess("ventas_almacen"), (req, res) => {
+  res.json({
+    role: req.user.role,
+    views: ventasViewsForRole(req.user.role),
+    roles: ventasRoleAccessList()
+  });
 });
 
 app.get("/api/ventas/summary", requireAuth, requireSystemAccess("ventas_almacen"), (req, res) => {
@@ -2688,6 +2747,14 @@ function requireVentasRole(...roles) {
 
 function ventasOwnOnly(role) {
   return !["admin", "ventas_admin", "supervisor"].includes(role);
+}
+
+function ventasViewsForRole(role) {
+  return [...(VENTAS_ROLE_ACCESS[role]?.views || ["summary"])];
+}
+
+function ventasRoleAccessList() {
+  return Object.entries(VENTAS_ROLE_ACCESS).map(([key, value]) => ({ key, ...value }));
 }
 
 function payableToCash(sale) {

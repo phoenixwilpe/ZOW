@@ -87,6 +87,7 @@ let purchaseCart = [];
 let notificationsOpen = false;
 let activeSaleDraftRestored = false;
 let helpRolePreview = currentUser?.role || "cajero";
+let ventasPermissions = null;
 
 const starterProducts = [
   { code: "AB-001", name: "Agua mineral 600 ml", category: "Bebidas", unit: "Botella", costPrice: 2.1, salePrice: 4, minStock: 24, stock: 96 },
@@ -353,7 +354,8 @@ async function render() {
   try {
     await assertVentasAccess();
     const canReadPurchases = canAccessView("purchases");
-    const [settingsResponse, summaryResponse, productsResponse, customersResponse, categoriesResponse, salesResponse, cashResponse, cashHistoryResponse, suppliersResponse, purchasesResponse, receivablesResponse, promotionsResponse, combosResponse, auditResponse, profitResponse, topProductsResponse, suspendedResponse, favoritesResponse, usersResponse, unitsResponse] = await Promise.all([
+    const [permissionsResponse, settingsResponse, summaryResponse, productsResponse, customersResponse, categoriesResponse, salesResponse, cashResponse, cashHistoryResponse, suppliersResponse, purchasesResponse, receivablesResponse, promotionsResponse, combosResponse, auditResponse, profitResponse, topProductsResponse, suspendedResponse, favoritesResponse, usersResponse, unitsResponse] = await Promise.all([
+      apiRequest("/ventas/permissions").catch(() => null),
       apiRequest("/ventas/settings"),
       apiRequest("/ventas/summary"),
       apiRequest("/ventas/products"),
@@ -375,6 +377,7 @@ async function render() {
       currentUser?.role === "admin" ? apiRequest("/users") : Promise.resolve({ users: [] }),
       currentUser?.role === "admin" ? apiRequest("/units") : Promise.resolve({ units: [] })
     ]);
+    ventasPermissions = permissionsResponse;
     storeSettings = settingsResponse.settings || storeSettings;
     summary = summaryResponse.summary || {};
     products = productsResponse.products || [];
@@ -3779,6 +3782,9 @@ function renderRoleAccessSimulator() {
 }
 
 function rolePermissionMatrix() {
+  if (Array.isArray(ventasPermissions?.roles) && ventasPermissions.roles.length) {
+    return ventasPermissions.roles.filter((role) => ["admin", "ventas_admin", "cajero", "almacen", "supervisor", "vendedor"].includes(role.key));
+  }
   return [
     { key: "admin", shortLabel: "Sistema", label: "Encargado de sistema", context: "Configuracion", permissions: ["Usuarios y roles", "Datos de empresa", "Cajas, permisos y reglas"] },
     { key: "ventas_admin", shortLabel: "Integral", label: "Operador integral", context: "Empresa pequena", permissions: ["Ventas y caja", "Inventario y compras", "Reportes operativos"] },
@@ -6272,6 +6278,8 @@ function can(permission) {
   return (permissions[permission] || []).includes(role);
 }
 function accessibleViewsForRole(role) {
+  const serverRole = ventasPermissions?.roles?.find((item) => item.key === role);
+  if (serverRole?.views?.length) return serverRole.views;
   const views = {
     admin: ["sell", "summary", "alerts", "finance", "history", "routes", "promotions", "reports", "catalog", "customers", "inventory", "purchases", "users", "settings", "help"],
     ventas_admin: ["sell", "summary", "alerts", "finance", "history", "routes", "promotions", "reports", "catalog", "customers", "inventory", "purchases", "settings", "help"],
