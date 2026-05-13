@@ -1697,6 +1697,7 @@ function renderReports() {
         <label>Hasta<input id="reportDateTo" type="date" value="${escapeHtml(reportFilter.to)}" /></label>
         <button class="ghost-button" type="button" id="clearReportFilter">Limpiar filtro</button>
       </div>
+      ${ventasMessage ? `<div class="cloud-safe-note"><strong>${escapeHtml(ventasMessage)}</strong><span>Resumen listo para compartir con gerencia o encargado.</span></div>` : ""}
     </section>
     <section class="report-grid">
       <article><span>Ventas del periodo</span><strong>${num(confirmedSales.length)}</strong><small>${voidedSales} anulada${voidedSales === 1 ? "" : "s"}</small></article>
@@ -1713,6 +1714,7 @@ function renderReports() {
         ${businessHealth.items.map((item) => `<article class="${item.className}"><strong>${escapeHtml(item.label)}</strong><span>${escapeHtml(item.detail)}</span></article>`).join("")}
       </div>
     </section>
+    ${renderExecutiveBriefPanel({ businessHealth, confirmedSales, voidedSales, totalIncome, totalSold, averageSale, pendingTotal, stockRisks, expiryRisks, paymentBreakdown })}
     ${renderReportDecisionPanel({ businessHealth, confirmedSales, stockRisks, expiryRisks, pendingTotal, marginPercent, totalClosureDifference: cashClosures.reduce((sum, closure) => sum + Math.abs(Number(closure.differenceAmount || 0)), 0) })}
     ${renderInventoryValuationReport()}
     <section class="admin-panel">
@@ -1786,6 +1788,108 @@ function renderReports() {
   document.querySelector("#exportClosuresCsv")?.addEventListener("click", exportCashClosuresCsv);
   document.querySelector("#exportAuditCsv")?.addEventListener("click", exportAuditCsv);
   document.querySelector("#exportBackupJson")?.addEventListener("click", exportBackupJson);
+  document.querySelector("#copyExecutiveBrief")?.addEventListener("click", copyExecutiveBrief);
+  document.querySelector("#printExecutiveBrief")?.addEventListener("click", printExecutiveBrief);
+}
+
+function renderExecutiveBriefPanel({ businessHealth, confirmedSales, voidedSales, totalIncome, totalSold, averageSale, pendingTotal, stockRisks, expiryRisks, paymentBreakdown }) {
+  const mainPayment = paymentBreakdown.slice().sort((a, b) => Number(b.total || 0) - Number(a.total || 0))[0];
+  const priority = buildExecutiveBriefActions({ confirmedSales, pendingTotal, stockRisks, expiryRisks, businessHealth });
+  return `<section class="executive-brief-panel">
+    <div class="executive-brief-main">
+      <p class="eyebrow">Resumen gerencial</p>
+      <h3>${escapeHtml(reportDecisionTitle(businessHealth.score))}</h3>
+      <span>${escapeHtml(reportDecisionDetail(businessHealth.score, confirmedSales.length))}</span>
+      <div class="executive-brief-actions">
+        <button class="primary-button" type="button" id="copyExecutiveBrief">Copiar resumen</button>
+        <button class="ghost-button" type="button" id="printExecutiveBrief">Imprimir informe</button>
+      </div>
+    </div>
+    <div class="executive-brief-metrics">
+      <article><span>Vendido</span><strong>${money(totalSold)}</strong><small>Cobrado ${money(totalIncome)}</small></article>
+      <article><span>Ticket promedio</span><strong>${money(averageSale)}</strong><small>${num(confirmedSales.length)} venta${confirmedSales.length === 1 ? "" : "s"}</small></article>
+      <article><span>Metodo principal</span><strong>${escapeHtml(mainPayment?.label || "Sin ventas")}</strong><small>${money(mainPayment?.total || 0)}</small></article>
+      <article><span>Control</span><strong>${num(voidedSales)} anulada${voidedSales === 1 ? "" : "s"}</strong><small>${money(pendingTotal)} por cobrar</small></article>
+    </div>
+    <div class="executive-brief-priority">
+      ${priority.map((item) => `<article class="${item.className}"><strong>${escapeHtml(item.title)}</strong><span>${escapeHtml(item.detail)}</span>${item.view && canAccessView(item.view) ? `<button class="ghost-button" type="button" data-module-view="${item.view}">Abrir</button>` : ""}</article>`).join("")}
+    </div>
+  </section>`;
+}
+
+function buildExecutiveBriefActions({ confirmedSales, pendingTotal, stockRisks, expiryRisks, businessHealth }) {
+  const actions = [];
+  if (!confirmedSales.length) actions.push({ title: "Probar venta real", detail: "Registra una venta de prueba para validar caja, comprobante y stock.", view: "sell", className: "is-warning" });
+  if (pendingTotal > 0) actions.push({ title: "Cobranza pendiente", detail: `Hay ${money(pendingTotal)} por cobrar. Revisa clientes y pagos parciales.`, view: "customers", className: "is-warning" });
+  if (stockRisks.length) actions.push({ title: "Reponer inventario", detail: `${num(stockRisks.length)} producto(s) bajo minimo requieren compra o ajuste.`, view: "inventory", className: "is-danger" });
+  if (expiryRisks.length) actions.push({ title: "Revisar vencimientos", detail: `${num(expiryRisks.length)} producto(s) vencidos o por vencer.`, view: "inventory", className: "is-warning" });
+  if (businessHealth.score >= 80 && !actions.length) actions.push({ title: "Operacion estable", detail: "Ventas, stock, caja y cobranza estan en buen estado para el periodo.", view: "reports", className: "is-ok" });
+  if (!actions.length) actions.push({ title: "Revisar indicadores", detail: "La operacion no tiene alertas criticas, pero conviene revisar margen, caja y reportes.", view: "reports", className: "is-ok" });
+  return actions.slice(0, 3);
+}
+
+async function copyExecutiveBrief() {
+  const message = buildExecutiveBriefText();
+  try {
+    await navigator.clipboard.writeText(message);
+    ventasMessage = "Resumen gerencial copiado al portapapeles.";
+  } catch {
+    ventasMessage = message;
+  }
+  renderMain();
+}
+
+function buildExecutiveBriefText() {
+  const filteredSales = sales.filter(isSaleInsideReportFilter);
+  const confirmedSales = filteredSales.filter((sale) => sale.status !== "anulada");
+  const voidedSales = filteredSales.filter((sale) => sale.status === "anulada").length;
+  const stockRisks = products.filter((product) => isProductActive(product) && Number(product.stock || 0) <= Number(product.min_stock || 0));
+  const expiryRisks = products.filter((product) => isProductActive(product) && ["danger", "warning"].includes(expiryStatus(product).level));
+  const totalIncome = confirmedSales.reduce((sum, sale) => sum + Number(sale.amount_paid || sale.cash_received || sale.total || 0), 0);
+  const totalSold = confirmedSales.reduce((sum, sale) => sum + Number(sale.total || 0), 0);
+  const pendingTotal = receivables.reduce((sum, sale) => sum + Number(sale.balance_due || 0), 0);
+  const paymentBreakdown = buildSalesPaymentBreakdown(confirmedSales).filter((item) => Number(item.total || 0) > 0);
+  const company = storeSettings.storeName || storeSettings.companyName || currentUser.companyName || "Empresa cliente";
+  const period = reportFilter.from || reportFilter.to ? `${reportFilter.from || "inicio"} a ${reportFilter.to || "hoy"}` : "periodo actual";
+  const lines = [
+    `Resumen gerencial ZOW Ventas-Almacen - ${company}`,
+    `Periodo: ${period}`,
+    `Ventas validas: ${num(confirmedSales.length)} / Anuladas: ${num(voidedSales)}`,
+    `Total vendido: ${money(totalSold)}`,
+    `Total cobrado: ${money(totalIncome)}`,
+    `Cuentas por cobrar: ${money(pendingTotal)}`,
+    `Stock critico: ${num(stockRisks.length)} producto(s)`,
+    `Vencimientos: ${num(expiryRisks.length)} producto(s)`,
+    "",
+    "Cobro por metodo:"
+  ];
+  if (paymentBreakdown.length) {
+    paymentBreakdown.forEach((item) => lines.push(`- ${item.label}: ${money(item.total)} (${num(item.count)} venta${item.count === 1 ? "" : "s"})`));
+  } else {
+    lines.push("- Sin ventas cobradas en el periodo.");
+  }
+  lines.push("", "Acciones sugeridas:");
+  buildExecutiveBriefActions({
+    confirmedSales,
+    pendingTotal,
+    stockRisks,
+    expiryRisks,
+    businessHealth: buildBusinessHealth({ confirmedSales, stockRisks, expiryRisks, pendingTotal, marginPercent: 100, totalClosureDifference: 0 })
+  }).forEach((item, index) => lines.push(`${index + 1}. ${item.title}: ${item.detail}`));
+  return lines.join("\n");
+}
+
+function printExecutiveBrief() {
+  const text = buildExecutiveBriefText();
+  const printable = window.open("", "_blank", "width=820,height=900");
+  if (!printable) return;
+  printable.document.write(`<!doctype html><html><head><meta charset="UTF-8"><title>Resumen gerencial</title><style>
+    *{box-sizing:border-box}body{font-family:Arial,sans-serif;margin:0;padding:30px;color:#10251f;background:#fff}.toolbar{margin-bottom:16px}.toolbar button{border:0;border-radius:10px;padding:11px 18px;background:#0f172a;color:#fff;font-weight:900}
+    h1{margin:0 0 6px;font-size:25px;text-transform:uppercase}.muted{color:#64746f;font-size:12px}.box{white-space:pre-wrap;border:1px solid #d9ebe5;border-radius:16px;padding:18px;background:#f8fffc;line-height:1.55;font-size:13px}.foot{text-align:center;margin-top:18px;color:#64748b;font-size:11px}
+    @media print{.toolbar{display:none}body{padding:18px}}
+  </style></head><body><div class="toolbar"><button onclick="print()">Imprimir / Guardar PDF</button></div><h1>Resumen gerencial</h1><p class="muted">Generado: ${formatDateTime(new Date().toISOString())}</p><div class="box">${escapeHtml(text)}</div><p class="foot">SYSTEM ZOW SAAS - Ventas-Almacen</p></body></html>`);
+  printable.document.close();
+  printable.focus();
 }
 
 function buildBusinessHealth({ confirmedSales, stockRisks, expiryRisks, pendingTotal, marginPercent, totalClosureDifference }) {
