@@ -3603,12 +3603,30 @@ body.app-correspondencia .metrics article:hover {
 }
 
 @media (max-width: 1180px) {
+  .sales-qa-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .role-access-modules {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
 @media (max-width: 760px) {
+  .sales-qa-head {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .sales-qa-head code {
+    max-width: 100%;
+    white-space: normal;
+  }
+
+  .sales-qa-grid {
+    grid-template-columns: 1fr;
+  }
+
   .role-access-head {
     grid-template-columns: 1fr;
   }
@@ -5171,6 +5189,115 @@ body.app-ventas .daily-operation-track strong {
 
 .help-support-grid {
   grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.sales-qa-panel {
+  position: relative;
+  overflow: hidden;
+  display: grid;
+  gap: 14px;
+  margin-bottom: 14px;
+  border: 1px solid color-mix(in srgb, var(--accent) 18%, var(--line));
+  border-radius: 18px;
+  padding: clamp(14px, 2vw, 20px);
+  background:
+    radial-gradient(circle at 12% 8%, color-mix(in srgb, #22c55e 14%, transparent), transparent 34%),
+    radial-gradient(circle at 96% 16%, color-mix(in srgb, var(--accent) 16%, transparent), transparent 30%),
+    linear-gradient(145deg, #ffffff, color-mix(in srgb, var(--accent-tint) 36%, white));
+  box-shadow: 0 18px 44px rgb(15 32 28 / 7%);
+}
+
+.sales-qa-panel::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    linear-gradient(90deg, transparent, rgb(255 255 255 / 42%), transparent);
+  transform: translateX(-120%);
+  animation: qaScan 6s ease-in-out infinite;
+}
+
+.sales-qa-head {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.sales-qa-head h3 {
+  margin: 4px 0 6px;
+  color: var(--accent-dark);
+}
+
+.sales-qa-head span {
+  color: var(--muted);
+  font-size: 0.88rem;
+  font-weight: 820;
+  line-height: 1.42;
+}
+
+.sales-qa-head code {
+  flex: 0 0 auto;
+  border: 1px solid color-mix(in srgb, var(--accent) 20%, var(--line));
+  border-radius: 999px;
+  padding: 10px 12px;
+  background: rgb(255 255 255 / 82%);
+  color: var(--accent-dark);
+  font-size: 0.82rem;
+  font-weight: 950;
+  white-space: nowrap;
+}
+
+.sales-qa-grid {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.sales-qa-grid article {
+  min-width: 0;
+  display: grid;
+  gap: 7px;
+  border: 1px solid color-mix(in srgb, var(--accent) 14%, var(--line));
+  border-radius: 14px;
+  padding: 12px;
+  background: rgb(255 255 255 / 82%);
+  box-shadow: 0 12px 28px rgb(15 23 42 / 5%);
+}
+
+.sales-qa-grid b {
+  width: max-content;
+  border-radius: 999px;
+  padding: 4px 8px;
+  background: rgb(16 185 129 / 12%);
+  color: #047857;
+  font-size: 0.68rem;
+}
+
+.sales-qa-grid strong {
+  color: var(--accent-dark);
+}
+
+.sales-qa-grid span {
+  color: var(--muted);
+  font-size: 0.8rem;
+  font-weight: 760;
+  line-height: 1.34;
+}
+
+@keyframes qaScan {
+  0%,
+  68% {
+    transform: translateX(-120%);
+  }
+  100% {
+    transform: translateX(120%);
+  }
 }
 
 .sales-certification-panel {

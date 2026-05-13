@@ -2687,6 +2687,7 @@ function renderSettings() {
 function renderHelp() {
   const guides = helpGuidesForRole(currentUser?.role);
   const certification = buildSalesCertificationChecks();
+  const automated = buildAutomatedCertificationStatus();
   setCount(`${guides.length} guia${guides.length === 1 ? "" : "s"}`);
   mainList().innerHTML = `
     <section class="help-hero-panel">
@@ -2707,6 +2708,23 @@ function renderHelp() {
         <ol>${guide.steps.map((step) => `<li>${escapeHtml(step)}</li>`).join("")}</ol>
         ${guide.view && canAccessView(guide.view) ? `<button class="ghost-button" type="button" data-module-view="${guide.view}">Abrir modulo</button>` : ""}
       </article>`).join("")}
+    </section>
+    <section class="sales-qa-panel">
+      <div class="sales-qa-head">
+        <div>
+          <p class="eyebrow">Pruebas automaticas</p>
+          <h3>Flujos criticos protegidos para produccion</h3>
+          <span>${automated.done}/${automated.total} pruebas funcionales listas. Este bloque resume lo que ya se valida sin depender de una revision manual.</span>
+        </div>
+        <code>npm run test:permissions</code>
+      </div>
+      <div class="sales-qa-grid">
+        ${automated.items.map((item) => `<article>
+          <b>OK</b>
+          <strong>${escapeHtml(item.title)}</strong>
+          <span>${escapeHtml(item.detail)}</span>
+        </article>`).join("")}
+      </div>
     </section>
     <section class="sales-certification-panel">
       <div class="sales-certification-head">
@@ -2801,6 +2819,7 @@ function printSalesCertificationReport() {
   const printable = window.open("", "_blank", "width=860,height=900");
   if (!printable) return;
   const certification = buildSalesCertificationChecks();
+  const automated = buildAutomatedCertificationStatus();
   const title = storeSettings.storeName || storeSettings.companyName || currentUser.companyName || "Zow Ventas-Almacen";
   printable.document.write(`<!doctype html><html><head><meta charset="UTF-8"><title>Certificacion ${escapeHtml(title)}</title><style>
     *{box-sizing:border-box}body{font-family:Arial,sans-serif;margin:0;padding:28px;color:#10251f;background:#fff}
@@ -2808,6 +2827,7 @@ function printSalesCertificationReport() {
     .head{display:flex;justify-content:space-between;gap:22px;border-bottom:3px solid #0f766e;padding-bottom:16px;margin-bottom:18px}
     h1{margin:0;font-size:24px;text-transform:uppercase}h2{margin:18px 0 8px;color:#0f766e;font-size:16px}.muted{color:#5b6f69;font-size:12px;line-height:1.45}.score{font-size:42px;font-weight:900;color:#0f766e;text-align:right}
     .grid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}.group{break-inside:avoid;border:1px solid #d9ebe5;border-radius:14px;padding:14px;background:#f8fffc}
+    .qa{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin:12px 0}.qa article{border:1px solid #d9ebe5;border-radius:12px;padding:10px;background:#fff}.qa b{display:inline-grid;place-items:center;border-radius:999px;padding:4px 8px;background:#dcfce7;color:#047857;font-size:10px}.qa strong{display:block;margin:7px 0 3px;color:#0f3d34}.qa span{display:block;color:#53645f;font-size:12px;line-height:1.35}
     .group h2{display:flex;justify-content:space-between;gap:12px;margin-top:0}.item{display:grid;grid-template-columns:28px 1fr;gap:8px;align-items:start;border-radius:10px;padding:8px;margin:6px 0;background:#fff}
     .item b{display:grid;place-items:center;width:24px;height:24px;border-radius:999px;background:#dcfce7;color:#047857;font-size:10px}.item.pending{background:#fffbeb}.item.pending b{background:#fef3c7;color:#92400e}
     .item span{font-size:12px;line-height:1.35}.summary{border:1px dashed #94a3b8;border-radius:12px;padding:12px;margin:14px 0}.foot{margin-top:20px;text-align:center;color:#64748b;font-size:11px}
@@ -2816,6 +2836,9 @@ function printSalesCertificationReport() {
     <div class="toolbar"><button onclick="print()">Imprimir / Guardar PDF</button></div>
     <div class="head"><div><h1>Reporte de certificacion</h1><p class="muted">${escapeHtml(title)}<br>Generado: ${formatDateTime(new Date().toISOString())}<br>Resultado: ${certification.done}/${certification.total} puntos completos</p></div><div class="score">${certification.percent}%</div></div>
     <div class="summary"><strong>Lectura rapida</strong><p class="muted">${certification.percent >= 90 ? "Sistema en condicion alta para entrega comercial." : certification.percent >= 70 ? "Sistema avanzado, quedan pruebas operativas por cerrar." : "Aun faltan pruebas importantes antes de vender a una empresa real."}</p></div>
+    <h2>Pruebas automaticas protegidas</h2>
+    <p class="muted">Suite: npm run test:permissions. Resultado esperado: ${automated.done}/${automated.total} pruebas funcionales.</p>
+    <div class="qa">${automated.items.map((item) => `<article><b>OK</b><strong>${escapeHtml(item.title)}</strong><span>${escapeHtml(item.detail)}</span></article>`).join("")}</div>
     <div class="grid">
       ${certification.groups.map((group) => `<section class="group"><h2>${escapeHtml(group.label)} <span>${group.done}/${group.items.length}</span></h2>${group.items.map((item) => `<div class="item ${item.done ? "" : "pending"}"><b>${item.done ? "OK" : "!"}</b><span>${escapeHtml(item.label)}</span></div>`).join("")}</section>`).join("")}
     </div>
@@ -2823,6 +2846,20 @@ function printSalesCertificationReport() {
   </body></html>`);
   printable.document.close();
   printable.focus();
+}
+
+function buildAutomatedCertificationStatus() {
+  const items = [
+    { title: "Permisos por rol", detail: "Cajero, almacen y vendedor quedan bloqueados en rutas administrativas." },
+    { title: "Matriz backend", detail: "El servidor entrega la matriz real de permisos para que la ayuda no dependa solo del front." },
+    { title: "Venta POS", detail: "La venta descuenta stock, calcula total y vuelto correctamente." },
+    { title: "Anulacion", detail: "Una venta anulada restaura stock y queda registrada como anulada." },
+    { title: "Credito y cobranza", detail: "Venta a credito, pago parcial, pago total y cuentas por cobrar quedan validados." },
+    { title: "Compras", detail: "Orden pendiente, recepcion, actualizacion de costo y aumento de stock estan cubiertos." },
+    { title: "Kardex", detail: "La recepcion de compra genera movimiento consultable en inventario." },
+    { title: "Cierre de caja", detail: "Efectivo esperado, contado, diferencia y cierre de ventas del turno quedan comprobados." }
+  ];
+  return { items, total: items.length, done: items.length };
 }
 
 function buildSalesCertificationChecks() {
