@@ -4947,13 +4947,24 @@ body.app-ventas .daily-operation-track strong {
   line-height: 1.48;
 }
 
-.help-hero-panel > strong {
+.help-hero-actions {
+  display: grid;
+  justify-items: end;
+  gap: 10px;
+}
+
+.help-hero-actions > strong {
   max-width: 240px;
   border-radius: 16px;
   padding: 12px 14px;
   background: color-mix(in srgb, var(--accent) 10%, white);
   color: var(--accent-dark);
   text-align: right;
+}
+
+.help-hero-actions .primary-button {
+  min-height: 42px;
+  white-space: nowrap;
 }
 
 .help-guide-grid,
@@ -12450,7 +12461,12 @@ body.system-zow-site .site-footer {
     flex-direction: column;
   }
 
-  .help-hero-panel > strong {
+  .help-hero-actions {
+    justify-items: stretch;
+    width: 100%;
+  }
+
+  .help-hero-actions > strong {
     max-width: none;
     width: 100%;
     text-align: left;

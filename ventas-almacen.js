@@ -2691,7 +2691,10 @@ function renderHelp() {
         <h3>Manual rapido para ${escapeHtml(roleLabel(currentUser?.role || ""))}</h3>
         <span>Usa estas guias para entrenar usuarios, resolver dudas en mostrador y operar sin depender de soporte para tareas diarias.</span>
       </div>
-      <strong>${escapeHtml(storeSettings.storeName || storeSettings.companyName || currentUser.companyName || "Zow Ventas-Almacen")}</strong>
+      <div class="help-hero-actions">
+        <strong>${escapeHtml(storeSettings.storeName || storeSettings.companyName || currentUser.companyName || "Zow Ventas-Almacen")}</strong>
+        <button class="primary-button" type="button" id="printSalesManualBtn">Imprimir manual</button>
+      </div>
     </section>
     <section class="help-guide-grid">
       ${guides.map((guide) => `<article>
@@ -2726,6 +2729,49 @@ function renderHelp() {
       </div>
     </section>
   `;
+  document.querySelector("#printSalesManualBtn")?.addEventListener("click", printSalesCommercialManual);
+}
+
+function printSalesCommercialManual() {
+  const printable = window.open("", "_blank", "width=860,height=900");
+  if (!printable) return;
+  const title = storeSettings.storeName || storeSettings.companyName || currentUser.companyName || "Zow Ventas-Almacen";
+  const currency = storeSettings.currency || "BOB";
+  const roles = [
+    ["Encargado de sistema", "Configura empresa, usuarios, roles, cajas, moneda, comprobantes y reglas de venta."],
+    ["Cajero", "Abre caja, vende, cobra, imprime comprobantes, consulta historial y cierra turno."],
+    ["Almacen", "Registra productos, controla stock, compras, recepciones y Kardex."],
+    ["Supervisor", "Consulta reportes, historial, caja, inventario, ventas y alertas."],
+    ["Vendedor", "Vende, atiende clientes y revisa operaciones permitidas."]
+  ];
+  const sections = [
+    ["1. Configuracion inicial", ["Ingresar con el usuario encargado entregado por ZOW.", "Completar nombre legal, nombre comercial, moneda, NIT/CI, telefono y direccion.", "Definir cantidad de cajas y meta diaria de ventas.", "Crear usuarios por rol y probar el ingreso de cada uno.", "Registrar productos iniciales o importar inventario por CSV/Excel."]],
+    ["2. Venta diaria", ["Entrar a Venta POS.", "Abrir caja si el sistema lo solicita.", "Buscar producto por nombre, codigo o lector de barras.", "Agregar productos al carrito, revisar stock, margen y descuentos.", "Seleccionar cliente si la empresa lo exige.", "Cobrar por efectivo, tarjeta, transferencia, QR, mixto o credito.", "Imprimir o generar comprobante."]],
+    ["3. Caja", ["Abrir caja con monto inicial.", "Registrar ingresos o egresos manuales solo con rol autorizado.", "Al cerrar, contar efectivo real.", "Si hay diferencia, escribir observacion obligatoria.", "Imprimir cierre de caja para control interno."]],
+    ["4. Inventario y compras", ["Revisar alertas de stock bajo y productos mas vendidos.", "Generar compra sugerida.", "Enviar orden al proveedor por WhatsApp cuando corresponda.", "Registrar recepcion de compra.", "Consultar Kardex para ver entradas, salidas, ventas, ajustes y devoluciones."]],
+    ["5. Clientes y cobranza", ["Registrar clientes con CI/NIT, celular y limite de credito.", "Vender a credito si la tienda lo permite.", "Consultar saldo pendiente.", "Enviar mensaje de cobranza por WhatsApp.", "Registrar pago parcial o total y verificar el nuevo estado."]],
+    ["6. Seguridad y buenas practicas", ["Cada usuario debe usar su propia credencial.", "No compartir usuarios entre cajeros.", "Cerrar sesion al terminar el turno.", "Revisar permisos si una opcion no aparece.", "Verificar que los datos pertenecen a la empresa conectada antes de operar."]]
+  ];
+  printable.document.write(`<!doctype html><html><head><meta charset="UTF-8"><title>Manual ${escapeHtml(title)}</title><style>
+    *{box-sizing:border-box}body{font-family:Arial,sans-serif;margin:0;padding:28px;color:#10251f;background:#fff}
+    .toolbar{margin-bottom:16px}.toolbar button{border:0;border-radius:10px;padding:11px 18px;background:#0f172a;color:#fff;font-weight:900}
+    .head{display:flex;justify-content:space-between;gap:22px;border-bottom:3px solid #0f766e;padding-bottom:16px;margin-bottom:18px}
+    h1{margin:0;font-size:25px;text-transform:uppercase}h2{margin:20px 0 8px;color:#0f766e;font-size:17px}.muted{color:#5b6f69;font-size:12px;line-height:1.45}
+    .grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin:14px 0}.card{border:1px solid #d9ebe5;border-radius:12px;padding:12px;background:#f8fffc}
+    .card strong{display:block;color:#0f3d34}.card span{display:block;margin-top:5px;color:#53645f;font-size:12px;line-height:1.4}
+    section{break-inside:avoid;border:1px solid #d9ebe5;border-radius:14px;padding:14px;margin:12px 0}ol{margin:8px 0 0;padding-left:22px}li{margin:6px 0;line-height:1.38}
+    .box{border:1px dashed #94a3b8;border-radius:12px;padding:12px;margin-top:14px}.foot{margin-top:20px;text-align:center;color:#64748b;font-size:11px}
+    @media print{.toolbar{display:none}body{padding:18px}}
+  </style></head><body>
+    <div class="toolbar"><button onclick="print()">Imprimir / Guardar PDF</button></div>
+    <div class="head"><div><h1>Manual rapido de operacion</h1><p class="muted">${escapeHtml(title)}<br>Moneda configurada: ${escapeHtml(currency)}<br>Generado: ${formatDateTime(new Date().toISOString())}</p></div><strong>ZOW Ventas-Almacen</strong></div>
+    <h2>Roles del sistema</h2><div class="grid">${roles.map(([role, detail]) => `<div class="card"><strong>${escapeHtml(role)}</strong><span>${escapeHtml(detail)}</span></div>`).join("")}</div>
+    ${sections.map(([heading, steps]) => `<section><h2>${escapeHtml(heading)}</h2><ol>${steps.map((step) => `<li>${escapeHtml(step)}</li>`).join("")}</ol></section>`).join("")}
+    <div class="box"><strong>Credenciales de ejemplo</strong><p class="muted">La empresa debe recibir usuarios reales creados desde el panel del encargado. Cambiar contrasenas iniciales y evitar compartir accesos.</p></div>
+    <p class="foot">Sistema ZOW SaaS - Manual comercial para empresas</p>
+  </body></html>`);
+  printable.document.close();
+  printable.focus();
 }
 
 function buildSalesCertificationChecks() {
