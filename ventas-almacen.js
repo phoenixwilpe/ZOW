@@ -3219,6 +3219,7 @@ function renderVentasUsersPanel() {
         <button type="button" data-role-template="cashier"><span>Mostrador</span><strong>Cajero vendedor</strong><small>Venta, clientes, caja y rutas basicas.</small></button>
         <button type="button" data-role-template="warehouse"><span>Almacen</span><strong>Responsable stock</strong><small>Inventario, entradas, salidas y alertas.</small></button>
       </div>
+      ${renderUserRoleCoverage(operativeUsers)}
       ${renderRolePermissionsOverview()}
       <form class="admin-form" id="ventasUserForm">
         <div class="form-grid">
@@ -3282,18 +3283,71 @@ function bindVentasUsersPanel() {
 }
 
 function renderVentasUserRow(user) {
+  const roleScope = userRoleScope(user.role);
   return `<article class="admin-row">
     <div>
       <strong>${escapeHtml(user.name)}</strong>
       <span>${escapeHtml(user.username)} / ${roleLabel(user.role)}</span>
       <span>${escapeHtml(user.unitName || "Sin unidad")} / ${escapeHtml(user.position || "Sin cargo")} / ${user.cashRegisterNumber ? `Caja ${num(user.cashRegisterNumber)}` : "Sin caja fija"}</span>
+      <div class="user-scope-strip">${roleScope.modules.map((module) => `<small>${escapeHtml(module)}</small>`).join("")}</div>
     </div>
     <div class="admin-row-meta">
       <span class="${user.active ? "ok-text" : "danger-text"}">${user.active ? "Activo" : "Inactivo"}</span>
+      <span class="${roleScope.riskClass}">${escapeHtml(roleScope.riskLabel)}</span>
       <button class="ghost-button" type="button" data-edit-user="${user.id}">Editar</button>
       <button class="ghost-button" type="button" data-toggle-user="${user.id}">${user.active ? "Desactivar" : "Activar"}</button>
     </div>
   </article>`;
+}
+
+function renderUserRoleCoverage(operativeUsers) {
+  const activeUsers = operativeUsers.filter((user) => user.active);
+  const coverage = [
+    { label: "Cajeros", roles: ["cajero", "ventas_admin"], detail: "Pueden vender y manejar caja." },
+    { label: "Almacen", roles: ["almacen", "ventas_admin"], detail: "Controlan stock, compras y Kardex." },
+    { label: "Supervision", roles: ["supervisor", "ventas_admin"], detail: "Revisan reportes, anulaciones y auditoria." },
+    { label: "Clientes", roles: ["vendedor", "cajero", "ventas_admin"], detail: "Gestionan clientes o atencion comercial." }
+  ].map((item) => {
+    const count = activeUsers.filter((user) => item.roles.includes(user.role)).length;
+    return { ...item, count, className: count ? "is-ok" : "is-warning" };
+  });
+  return `<section class="user-role-coverage">
+    ${coverage.map((item) => `<article class="${item.className}">
+      <span>${escapeHtml(item.label)}</span>
+      <strong>${num(item.count)}</strong>
+      <small>${escapeHtml(item.detail)}</small>
+    </article>`).join("")}
+  </section>`;
+}
+
+function userRoleScope(role) {
+  const modules = accessibleViewsForRole(role).map(viewLabel).slice(0, 5);
+  const broadRoles = ["admin", "ventas_admin", "supervisor"];
+  return {
+    modules,
+    riskLabel: broadRoles.includes(role) ? "Acceso amplio" : "Acceso limitado",
+    riskClass: broadRoles.includes(role) ? "is-warning" : "is-ok"
+  };
+}
+
+function viewLabel(view) {
+  const labels = {
+    sell: "POS",
+    summary: "Resumen",
+    alerts: "Alertas",
+    finance: "Caja",
+    history: "Historial",
+    routes: "Rutas",
+    promotions: "Promos",
+    reports: "Reportes",
+    catalog: "Catalogo",
+    customers: "Clientes",
+    inventory: "Inventario",
+    purchases: "Compras",
+    users: "Usuarios",
+    settings: "Config."
+  };
+  return labels[view] || view;
 }
 
 function renderRolePermissionsOverview() {

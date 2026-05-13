@@ -3362,6 +3362,62 @@ body.app-correspondencia .metrics article:hover {
   margin: 0 0 16px;
 }
 
+.user-role-coverage {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.user-role-coverage article {
+  min-width: 0;
+  border: 1px solid color-mix(in srgb, var(--accent) 16%, var(--line));
+  border-radius: 14px;
+  padding: 12px;
+  background: linear-gradient(145deg, #ffffff, color-mix(in srgb, var(--accent-tint) 42%, white));
+  box-shadow: 0 12px 28px rgb(15 32 28 / 5%);
+}
+
+.user-role-coverage article.is-warning {
+  border-color: rgb(245 158 11 / 26%);
+  background: linear-gradient(145deg, #ffffff, #fffbeb);
+}
+
+.user-role-coverage span,
+.user-role-coverage small {
+  display: block;
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 850;
+}
+
+.user-role-coverage span {
+  text-transform: uppercase;
+}
+
+.user-role-coverage strong {
+  display: block;
+  margin: 4px 0;
+  color: var(--accent-dark);
+  font-size: clamp(1.2rem, 2.4vw, 1.65rem);
+}
+
+.user-scope-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 7px;
+}
+
+.user-scope-strip small {
+  border-radius: 999px;
+  padding: 4px 8px;
+  background: color-mix(in srgb, var(--accent) 9%, white);
+  color: var(--accent-dark);
+  font-size: 0.72rem;
+  font-weight: 900;
+}
+
 .role-permission-grid article,
 .permission-note {
   border: 1px solid color-mix(in srgb, var(--accent) 16%, var(--line));
@@ -11619,6 +11675,7 @@ body.system-zow-site .site-footer {
   .operation-model-grid,
   .role-template-grid,
   .role-permission-grid,
+  .user-role-coverage,
   .shift-command-grid,
   .shift-checklist,
   body.app-ventas .daily-operation-track,
@@ -11903,6 +11960,7 @@ body.system-zow-site .site-footer {
   .operation-model-grid,
   .role-template-grid,
   .role-permission-grid,
+  .user-role-coverage,
   .shift-command-grid,
   .shift-checklist,
   .inventory-decision-strip,
