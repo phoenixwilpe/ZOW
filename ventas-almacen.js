@@ -2720,6 +2720,16 @@ function renderHelp() {
         </article>`).join("")}
       </div>
     </section>
+    <section class="admin-panel">
+      <div class="admin-panel-head">
+        <div>
+          <p class="eyebrow">Permisos por rol</p>
+          <h3>Matriz para entregar credenciales sin confusiones</h3>
+          <span>Revisa que cada usuario tenga solo las opciones que necesita para operar. Es ideal para capacitar antes de pasar el sistema a produccion.</span>
+        </div>
+      </div>
+      ${renderRolePermissionsOverview()}
+    </section>
     <section class="admin-panel help-support-panel">
       <div class="admin-panel-head"><div><p class="eyebrow">Soporte</p><h3>Antes de pedir ayuda</h3></div></div>
       <div class="help-support-grid">
