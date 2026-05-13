@@ -3042,24 +3042,52 @@ function renderRoleConfigGuide() {
 }
 
 function renderSetupAssistant() {
-  const checks = [
-    { label: "Datos de empresa", done: Boolean((storeSettings.companyName || currentUser.companyName || "").trim() && (storeSettings.currency || "").trim()) },
-    { label: "Cajas configuradas", done: Number(storeSettings.cashRegisterCount || 0) >= 1 },
-    { label: "Usuarios creados", done: users.length > 1 },
-    { label: "Productos cargados", done: products.filter(isProductActive).length > 0 },
-    { label: "Clientes opcionales", done: customers.length > 0 || !storeSettings.requireCustomerForSale },
-    { label: "Caja de prueba", done: cashSession?.status === "abierta" || cashClosures.length > 0 || sales.length > 0 }
-  ];
+  const checks = buildSetupAssistantSteps();
   const completed = checks.filter((item) => item.done).length;
   const percent = Math.round((completed / checks.length) * 100);
+  const nextStep = checks.find((item) => !item.done) || checks[checks.length - 1];
   return `<section class="admin-panel setup-assistant-panel">
     <div class="admin-panel-head"><div><p class="eyebrow">Configuracion inicial</p><h3>Listo para operar al ${percent}%</h3></div><span>${completed}/${checks.length}</span></div>
     <div class="setup-progress"><span style="width:${percent}%"></span></div>
-    <div class="setup-check-grid">
-      ${checks.map((item) => `<article class="${item.done ? "is-done" : "is-pending"}"><strong>${item.done ? "Listo" : "Pendiente"}</strong><span>${escapeHtml(item.label)}</span></article>`).join("")}
+    <div class="setup-next-step ${nextStep.done ? "is-done" : "is-pending"}">
+      <div>
+        <span>${nextStep.done ? "Entrega lista" : "Siguiente paso recomendado"}</span>
+        <strong>${escapeHtml(nextStep.label)}</strong>
+        <small>${escapeHtml(nextStep.detail)}</small>
+      </div>
+      ${nextStep.view && canAccessView(nextStep.view) ? `<button class="primary-button" type="button" data-module-view="${nextStep.view}">${nextStep.done ? "Revisar" : "Continuar"}</button>` : ""}
     </div>
-    <p class="setup-hint">Recomendacion: completa estos puntos antes de entregar el acceso a cajeros o almacen.</p>
+    <div class="setup-check-grid">
+      ${checks.map((item, index) => `<article class="${item.done ? "is-done" : "is-pending"}">
+        <strong>${item.done ? "Listo" : `Paso ${index + 1}`}</strong>
+        <span>${escapeHtml(item.label)}</span>
+        <small>${escapeHtml(item.detail)}</small>
+        ${item.view && canAccessView(item.view) ? `<button class="ghost-button" type="button" data-module-view="${item.view}">${item.done ? "Ver" : "Completar"}</button>` : ""}
+      </article>`).join("")}
+    </div>
+    <p class="setup-hint">Recomendacion: completa estos puntos antes de entregar el acceso a cajeros o almacen. Para tiendas pequeñas, un operador integral puede cubrir venta, caja e inventario.</p>
   </section>`;
+}
+
+function buildSetupAssistantSteps() {
+  const hasCompanyData = Boolean((storeSettings.companyName || currentUser.companyName || "").trim() && (storeSettings.currency || "").trim());
+  const hasPrintData = Boolean(String(storeSettings.taxId || "").trim() && String(storeSettings.address || "").trim());
+  const hasCashRegisters = Number(storeSettings.cashRegisterCount || 0) >= 1;
+  const hasUsers = users.some((user) => user.active !== false && ["ventas_admin", "cajero", "almacen", "vendedor", "supervisor"].includes(user.role));
+  const hasProducts = products.filter(isProductActive).length > 0;
+  const hasSupplierOrPurchase = suppliers.length > 0 || purchases.length > 0;
+  const hasCustomerRuleReady = customers.length > 0 || !storeSettings.requireCustomerForSale;
+  const hasOperationTest = cashSession?.status === "abierta" || cashClosures.length > 0 || sales.length > 0;
+  return [
+    { label: "Datos de empresa", done: hasCompanyData, detail: hasCompanyData ? "Nombre y moneda listos para operar." : "Completa nombre legal/comercial y moneda.", view: "settings" },
+    { label: "Comprobante", done: hasPrintData, detail: hasPrintData ? "Datos fiscales y direccion listos para imprimir." : "Añade NIT/CI, direccion y nota de ticket.", view: "settings" },
+    { label: "Cajas y reglas", done: hasCashRegisters, detail: hasCashRegisters ? `${num(storeSettings.cashRegisterCount || 1)} caja(s) configurada(s).` : "Define cuantas cajas usara la tienda.", view: "settings" },
+    { label: "Usuarios operativos", done: hasUsers, detail: hasUsers ? "Ya existen roles comerciales activos." : "Crea cajero, almacen, supervisor o operador integral.", view: "users" },
+    { label: "Inventario inicial", done: hasProducts, detail: hasProducts ? `${num(products.filter(isProductActive).length)} producto(s) activo(s).` : "Carga productos o importa inventario inicial.", view: "inventory" },
+    { label: "Proveedor y reposicion", done: hasSupplierOrPurchase, detail: hasSupplierOrPurchase ? "Compras o proveedor ya estan configurados." : "Registra proveedor para reposicion y compras.", view: "purchases" },
+    { label: "Clientes y credito", done: hasCustomerRuleReady, detail: hasCustomerRuleReady ? "Reglas de cliente listas para vender." : "Registra clientes si exigirás cliente en cada venta.", view: "customers" },
+    { label: "Prueba de operacion", done: hasOperationTest, detail: hasOperationTest ? "Ya existe venta, caja o cierre de prueba." : "Abre caja, vende, cobra y cierra un turno de prueba.", view: "sell" }
+  ];
 }
 
 function applySettingsPreset(preset) {

@@ -3613,6 +3613,15 @@ body.app-correspondencia .metrics article:hover {
 }
 
 @media (max-width: 760px) {
+  .setup-next-step {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .setup-next-step .primary-button {
+    width: 100%;
+  }
+
   .sales-qa-head {
     align-items: flex-start;
     flex-direction: column;
@@ -4933,6 +4942,50 @@ body.app-ventas .daily-operation-track strong {
   overflow: hidden;
 }
 
+.setup-next-step {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  margin-top: 14px;
+  border: 1px solid color-mix(in srgb, var(--accent) 16%, var(--line));
+  border-radius: 14px;
+  padding: 13px;
+  background:
+    radial-gradient(circle at 92% 8%, color-mix(in srgb, var(--accent) 14%, transparent), transparent 34%),
+    linear-gradient(145deg, #ffffff, color-mix(in srgb, var(--accent-tint) 38%, white));
+}
+
+.setup-next-step.is-pending {
+  border-color: rgb(245 158 11 / 24%);
+  background:
+    radial-gradient(circle at 92% 8%, rgb(245 158 11 / 13%), transparent 34%),
+    linear-gradient(145deg, #ffffff, #fffbeb);
+}
+
+.setup-next-step span,
+.setup-next-step small,
+.setup-check-grid small {
+  display: block;
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 820;
+  line-height: 1.38;
+}
+
+.setup-next-step span {
+  font-weight: 950;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
+.setup-next-step strong {
+  display: block;
+  margin: 3px 0;
+  color: var(--accent-dark);
+  font-size: clamp(1rem, 1.8vw, 1.24rem);
+}
+
 .setup-progress {
   height: 10px;
   overflow: hidden;
@@ -4958,6 +5011,9 @@ body.app-ventas .daily-operation-track strong {
 }
 
 .setup-check-grid article {
+  display: grid;
+  align-content: start;
+  gap: 6px;
   border: 1px solid color-mix(in srgb, var(--accent) 14%, var(--line));
   border-radius: 8px;
   padding: 11px;
@@ -4985,7 +5041,13 @@ body.app-ventas .daily-operation-track strong {
 
 .setup-check-grid strong {
   color: var(--accent-dark);
-  margin-bottom: 3px;
+}
+
+.setup-check-grid .ghost-button {
+  justify-self: start;
+  min-height: 30px;
+  margin-top: 2px;
+  padding: 5px 9px;
 }
 
 .setup-hint {
