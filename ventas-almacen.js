@@ -606,6 +606,7 @@ function renderSummary() {
       <article><span>${incomeText}</span><strong>${money(summary.income || 0)}</strong></article>
     </section>
     ${renderSalesGoalPanel(todayIncome, todaySales.length)}
+    ${renderHourlySalesPanel(todaySales)}
     <section class="owner-dashboard-grid">
       <article><span>Hoy</span><strong>${money(todayIncome)}</strong><small>${todaySales.length} venta${todaySales.length === 1 ? "" : "s"}</small></article>
       <article><span>Caja</span><strong>${cashSession?.status === "abierta" ? `Caja ${num(cashSession.registerNumber)}` : "Sin abrir"}</strong><small>${cashSession?.status === "abierta" ? money(cashExpectedTotal()) : "Sin turno activo"}</small></article>
@@ -656,6 +657,38 @@ function renderSalesGoalPanel(todayIncome, saleCount = 0) {
       <div><span style="width:${Math.min(progress, 100)}%"></span></div>
       <strong>${num(progress)}%</strong>
       <small>${money(todayIncome)} de ${money(goal)} / ${num(saleCount)} venta${saleCount === 1 ? "" : "s"}</small>
+    </div>
+  </section>`;
+}
+
+function renderHourlySalesPanel(todaySales = []) {
+  if (!todaySales.length) return "";
+  const buckets = Array.from({ length: 24 }, (_, hour) => ({ hour, count: 0, total: 0 }));
+  todaySales.forEach((sale) => {
+    const date = new Date(sale.created_at || sale.createdAt || "");
+    if (Number.isNaN(date.getTime())) return;
+    const hour = date.getHours();
+    buckets[hour].count += 1;
+    buckets[hour].total += Number(sale.amount_paid || sale.cash_received || sale.total || 0);
+  });
+  const activeBuckets = buckets.filter((item) => item.count > 0);
+  const maxTotal = Math.max(...activeBuckets.map((item) => item.total), 1);
+  const peak = activeBuckets.slice().sort((a, b) => b.total - a.total)[0];
+  const visibleBuckets = activeBuckets.length ? activeBuckets : buckets.slice(8, 21);
+  return `<section class="hourly-sales-panel">
+    <div class="admin-panel-head">
+      <div><p class="eyebrow">Ritmo de ventas</p><h3>Movimiento por hora</h3></div>
+      <span>${peak ? `Mejor hora ${String(peak.hour).padStart(2, "0")}:00` : "Sin datos"}</span>
+    </div>
+    <div class="hourly-sales-grid">
+      ${visibleBuckets.map((item) => {
+        const percent = Math.max(Math.round(item.total / maxTotal * 100), item.count ? 8 : 0);
+        return `<article>
+          <div><span>${String(item.hour).padStart(2, "0")}:00</span><strong>${money(item.total)}</strong></div>
+          <div class="hourly-sales-bar"><span style="height:${percent}%"></span></div>
+          <small>${num(item.count)} ticket${item.count === 1 ? "" : "s"}</small>
+        </article>`;
+      }).join("")}
     </div>
   </section>`;
 }
