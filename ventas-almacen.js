@@ -86,6 +86,7 @@ let voidSaleDraft = { saleId: "" };
 let purchaseCart = [];
 let notificationsOpen = false;
 let activeSaleDraftRestored = false;
+let helpRolePreview = currentUser?.role || "cajero";
 
 const starterProducts = [
   { code: "AB-001", name: "Agua mineral 600 ml", category: "Bebidas", unit: "Botella", costPrice: 2.1, salePrice: 4, minStock: 24, stock: 96 },
@@ -2729,6 +2730,7 @@ function renderHelp() {
         </div>
       </div>
       ${renderRolePermissionsOverview()}
+      ${renderRoleAccessSimulator()}
     </section>
     <section class="admin-panel help-support-panel">
       <div class="admin-panel-head"><div><p class="eyebrow">Soporte</p><h3>Antes de pedir ayuda</h3></div></div>
@@ -2742,6 +2744,12 @@ function renderHelp() {
   `;
   document.querySelector("#printSalesManualBtn")?.addEventListener("click", printSalesCommercialManual);
   document.querySelector("#printCertificationBtn")?.addEventListener("click", printSalesCertificationReport);
+  document.querySelectorAll("[data-help-role]").forEach((button) => {
+    button.addEventListener("click", () => {
+      helpRolePreview = button.dataset.helpRole;
+      renderHelp();
+    });
+  });
 }
 
 function printSalesCommercialManual() {
@@ -3740,15 +3748,65 @@ function renderRolePermissionsOverview() {
   </section>`;
 }
 
+function renderRoleAccessSimulator() {
+  const roles = rolePermissionMatrix();
+  const selectedRole = roles.some((role) => role.key === helpRolePreview) ? helpRolePreview : currentUser?.role || "cajero";
+  const allowedViews = new Set(accessibleViewsForRole(selectedRole));
+  const moduleOrder = ["sell", "finance", "history", "customers", "inventory", "purchases", "alerts", "catalog", "promotions", "reports", "summary", "users", "settings", "help"];
+  const selectedRoleInfo = roles.find((role) => role.key === selectedRole);
+  return `<section class="role-access-simulator">
+    <div class="role-access-head">
+      <div>
+        <span>Simulador de acceso</span>
+        <strong>${escapeHtml(selectedRoleInfo?.label || roleLabel(selectedRole))}</strong>
+        <small>Asi se verian los modulos para este rol al iniciar sesion.</small>
+      </div>
+      <div class="role-access-tabs">
+        ${roles.map((role) => `<button class="${role.key === selectedRole ? "is-active" : ""}" type="button" data-help-role="${escapeHtml(role.key)}">${escapeHtml(role.shortLabel || role.label)}</button>`).join("")}
+      </div>
+    </div>
+    <div class="role-access-modules">
+      ${moduleOrder.map((view) => {
+        const allowed = allowedViews.has(view);
+        return `<article class="${allowed ? "is-allowed" : "is-blocked"}">
+          <b>${allowed ? "Permitido" : "Bloqueado"}</b>
+          <strong>${escapeHtml(viewLabel(view))}</strong>
+          <span>${escapeHtml(roleViewDescription(view))}</span>
+        </article>`;
+      }).join("")}
+    </div>
+  </section>`;
+}
+
 function rolePermissionMatrix() {
   return [
-    { label: "Encargado de sistema", context: "Configuracion", permissions: ["Usuarios y roles", "Datos de empresa", "Cajas, permisos y reglas"] },
-    { label: "Operador integral", context: "Empresa pequena", permissions: ["Ventas y caja", "Inventario y compras", "Reportes operativos"] },
-    { label: "Cajero", context: "Mostrador", permissions: ["Venta POS", "Abrir y cerrar su caja", "Historial y reimpresion"] },
-    { label: "Almacen", context: "Stock", permissions: ["Productos e inventario", "Compras y reposicion", "Kardex y alertas"] },
-    { label: "Supervisor", context: "Control", permissions: ["Reportes y auditoria", "Anular o devolver ventas", "Revision de caja"] },
-    { label: "Vendedor", context: "Atencion", permissions: ["Venta rapida", "Clientes", "Historial propio"] }
+    { key: "admin", shortLabel: "Sistema", label: "Encargado de sistema", context: "Configuracion", permissions: ["Usuarios y roles", "Datos de empresa", "Cajas, permisos y reglas"] },
+    { key: "ventas_admin", shortLabel: "Integral", label: "Operador integral", context: "Empresa pequena", permissions: ["Ventas y caja", "Inventario y compras", "Reportes operativos"] },
+    { key: "cajero", shortLabel: "Cajero", label: "Cajero", context: "Mostrador", permissions: ["Venta POS", "Abrir y cerrar su caja", "Historial y reimpresion"] },
+    { key: "almacen", shortLabel: "Almacen", label: "Almacen", context: "Stock", permissions: ["Productos e inventario", "Compras y reposicion", "Kardex y alertas"] },
+    { key: "supervisor", shortLabel: "Supervisor", label: "Supervisor", context: "Control", permissions: ["Reportes y auditoria", "Anular o devolver ventas", "Revision de caja"] },
+    { key: "vendedor", shortLabel: "Vendedor", label: "Vendedor", context: "Atencion", permissions: ["Venta rapida", "Clientes", "Historial propio"] }
   ];
+}
+
+function roleViewDescription(view) {
+  const descriptions = {
+    sell: "Venta rapida, carrito, cobro y comprobante.",
+    finance: "Apertura, cierre, ingresos y egresos de caja.",
+    history: "Consulta, reimpresion, anulaciones y detalles.",
+    customers: "Clientes, credito, saldos y pagos.",
+    inventory: "Stock, Kardex, vencimientos y ajustes.",
+    purchases: "Proveedores, compras y recepcion de mercaderia.",
+    alerts: "Riesgos de stock, reposicion y vencimiento.",
+    catalog: "Productos, categorias y datos comerciales.",
+    promotions: "Descuentos, combos y reglas de venta.",
+    reports: "Rentabilidad, auditoria y decisiones del negocio.",
+    summary: "Indicadores generales del dia.",
+    users: "Usuarios, credenciales y roles.",
+    settings: "Empresa, moneda, cajas y comprobante.",
+    help: "Manual, checklist y soporte interno."
+  };
+  return descriptions[view] || "Modulo operativo.";
 }
 
 function addToCart(productId, quantity = 1, options = {}) {

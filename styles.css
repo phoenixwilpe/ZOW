@@ -3478,6 +3478,158 @@ body.app-correspondencia .metrics article:hover {
   background: linear-gradient(135deg, var(--accent), var(--accent-2));
 }
 
+.role-access-simulator {
+  display: grid;
+  gap: 14px;
+  margin-top: 10px;
+  padding: 14px;
+  border: 1px solid color-mix(in srgb, var(--accent) 16%, var(--line));
+  border-radius: 16px;
+  background:
+    radial-gradient(circle at 12% 0%, color-mix(in srgb, var(--accent) 12%, transparent), transparent 32%),
+    linear-gradient(145deg, #ffffff, color-mix(in srgb, var(--accent-tint) 36%, white));
+  box-shadow: 0 18px 42px rgb(15 23 42 / 6%);
+}
+
+.role-access-head {
+  display: grid;
+  grid-template-columns: minmax(220px, 0.65fr) minmax(0, 1.35fr);
+  gap: 14px;
+  align-items: start;
+}
+
+.role-access-head span,
+.role-access-head small,
+.role-access-modules span {
+  color: var(--muted);
+}
+
+.role-access-head span {
+  display: block;
+  font-size: 0.72rem;
+  font-weight: 950;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.role-access-head strong {
+  display: block;
+  margin: 3px 0;
+  color: var(--accent-dark);
+  font-size: 1.08rem;
+}
+
+.role-access-head small {
+  line-height: 1.4;
+}
+
+.role-access-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.role-access-tabs button {
+  min-height: 38px;
+  border: 1px solid color-mix(in srgb, var(--accent) 20%, var(--line));
+  border-radius: 999px;
+  padding: 8px 12px;
+  background: rgba(255, 255, 255, 0.82);
+  color: var(--accent-dark);
+  font-weight: 950;
+  cursor: pointer;
+  transition: transform 0.18s ease, box-shadow 0.18s ease, background 0.18s ease;
+}
+
+.role-access-tabs button:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 10px 24px rgb(15 23 42 / 8%);
+}
+
+.role-access-tabs button.is-active {
+  border-color: transparent;
+  background: linear-gradient(135deg, var(--accent), var(--accent-2));
+  color: #fff;
+  box-shadow: 0 14px 28px color-mix(in srgb, var(--accent) 24%, transparent);
+}
+
+.role-access-modules {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.role-access-modules article {
+  min-width: 0;
+  display: grid;
+  gap: 5px;
+  border: 1px solid color-mix(in srgb, var(--accent) 14%, var(--line));
+  border-radius: 14px;
+  padding: 11px;
+  background: rgba(255, 255, 255, 0.86);
+}
+
+.role-access-modules b {
+  width: max-content;
+  border-radius: 999px;
+  padding: 4px 8px;
+  font-size: 0.68rem;
+  line-height: 1;
+}
+
+.role-access-modules strong {
+  color: var(--ink);
+}
+
+.role-access-modules span {
+  font-size: 0.78rem;
+  line-height: 1.34;
+}
+
+.role-access-modules article.is-allowed b {
+  background: color-mix(in srgb, var(--accent) 12%, white);
+  color: var(--accent-dark);
+}
+
+.role-access-modules article.is-blocked {
+  opacity: 0.72;
+  background: linear-gradient(145deg, #fff, #f8fafc);
+}
+
+.role-access-modules article.is-blocked b {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+@media (max-width: 1180px) {
+  .role-access-modules {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 760px) {
+  .role-access-head {
+    grid-template-columns: 1fr;
+  }
+
+  .role-access-tabs {
+    justify-content: flex-start;
+    overflow-x: auto;
+    flex-wrap: nowrap;
+    padding-bottom: 4px;
+    scrollbar-width: thin;
+  }
+
+  .role-access-tabs button {
+    flex: 0 0 auto;
+  }
+
+  .role-access-modules {
+    grid-template-columns: 1fr;
+  }
+}
+
 .permission-note {
   display: grid;
   gap: 6px;
