@@ -88,6 +88,64 @@ test("vendedor no puede gestionar inventario ni promociones", async () => {
   }, 403);
 });
 
+test("venta real descuenta stock y anulacion lo devuelve", async () => {
+  const token = await login("ventas.admin@zow.com", "TestVentasAdmin2026#");
+  const productCode = `FLOW-${Date.now()}`;
+  const productResponse = await request("/ventas/products", {
+    method: "POST",
+    token,
+    body: {
+      code: productCode,
+      name: "Producto flujo venta",
+      category: "Pruebas",
+      unit: "Unidad",
+      costPrice: 7,
+      salePrice: 12,
+      minStock: 2,
+      stock: 8
+    }
+  });
+  assert.equal(productResponse.status, 201, JSON.stringify(productResponse.body));
+  const product = productResponse.body.product;
+
+  const openCashResponse = await request("/ventas/cash/open", {
+    method: "POST",
+    token,
+    body: { registerNumber: 1, openingAmount: 100 }
+  });
+  assert.equal(openCashResponse.status, 201, JSON.stringify(openCashResponse.body));
+
+  const saleResponse = await request("/ventas/sales", {
+    method: "POST",
+    token,
+    body: {
+      customerName: "Cliente prueba",
+      items: [{ productId: product.id, quantity: 2, unitPrice: 12, discount: 0 }],
+      paymentMethod: "efectivo",
+      cashReceived: 30,
+      discount: 0,
+      note: "Prueba automatizada de flujo POS"
+    }
+  });
+  assert.equal(saleResponse.status, 201, JSON.stringify(saleResponse.body));
+  assert.equal(Number(saleResponse.body.sale.total), 24);
+  assert.equal(Number(saleResponse.body.sale.change_amount), 6);
+
+  let updatedProduct = await getProductByCode(productCode, token);
+  assert.equal(Number(updatedProduct.stock), 6);
+
+  const voidResponse = await request(`/ventas/sales/${saleResponse.body.sale.id}/void`, {
+    method: "POST",
+    token,
+    body: { reason: "Prueba automatizada de anulacion" }
+  });
+  assert.equal(voidResponse.status, 200, JSON.stringify(voidResponse.body));
+  assert.equal(voidResponse.body.sale.status, "anulada");
+
+  updatedProduct = await getProductByCode(productCode, token);
+  assert.equal(Number(updatedProduct.stock), 8);
+});
+
 async function login(username, password) {
   const response = await request("/auth/login", {
     method: "POST",
@@ -101,6 +159,14 @@ async function login(username, password) {
 async function expectStatus(pathname, options, expectedStatus) {
   const response = await request(pathname, options);
   assert.equal(response.status, expectedStatus, `${pathname} expected ${expectedStatus}, got ${response.status}: ${JSON.stringify(response.body)}`);
+}
+
+async function getProductByCode(code, token) {
+  const response = await request("/ventas/products", { token });
+  assert.equal(response.status, 200, JSON.stringify(response.body));
+  const product = response.body.products.find((item) => item.code === code);
+  assert.ok(product, `No se encontro producto ${code}`);
+  return product;
 }
 
 async function request(pathname, options = {}) {
