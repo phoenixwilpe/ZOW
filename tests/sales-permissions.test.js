@@ -146,6 +146,85 @@ test("venta real descuenta stock y anulacion lo devuelve", async () => {
   assert.equal(Number(updatedProduct.stock), 8);
 });
 
+test("venta a credito registra deuda y pagos parcial y total", async () => {
+  const token = await login("ventas.admin@zow.com", "TestVentasAdmin2026#");
+  const suffix = Date.now();
+  const productResponse = await request("/ventas/products", {
+    method: "POST",
+    token,
+    body: {
+      code: `CRED-${suffix}`,
+      name: "Producto credito prueba",
+      category: "Pruebas",
+      unit: "Unidad",
+      costPrice: 15,
+      salePrice: 25,
+      minStock: 1,
+      stock: 5
+    }
+  });
+  assert.equal(productResponse.status, 201, JSON.stringify(productResponse.body));
+
+  const customerResponse = await request("/ventas/customers", {
+    method: "POST",
+    token,
+    body: {
+      name: "Cliente credito prueba",
+      phone: "70000000",
+      ci: `CI-${suffix}`,
+      creditLimit: 200
+    }
+  });
+  assert.equal(customerResponse.status, 201, JSON.stringify(customerResponse.body));
+
+  const saleResponse = await request("/ventas/sales", {
+    method: "POST",
+    token,
+    body: {
+      customerId: customerResponse.body.customer.id,
+      items: [{ productId: productResponse.body.product.id, quantity: 2, unitPrice: 25, discount: 0 }],
+      paymentMethod: "credito",
+      cashReceived: 10,
+      discount: 0,
+      note: "Prueba automatizada de credito"
+    }
+  });
+  assert.equal(saleResponse.status, 201, JSON.stringify(saleResponse.body));
+  assert.equal(Number(saleResponse.body.sale.total), 50);
+  assert.equal(Number(saleResponse.body.sale.amount_paid), 10);
+  assert.equal(Number(saleResponse.body.sale.balance_due), 40);
+  assert.equal(saleResponse.body.sale.payment_status, "pendiente");
+
+  let receivable = await getReceivable(saleResponse.body.sale.id, token);
+  assert.equal(Number(receivable.balance_due), 40);
+
+  const partialPay = await request(`/ventas/sales/${saleResponse.body.sale.id}/pay`, {
+    method: "POST",
+    token,
+    body: { amount: 15, paymentMethod: "efectivo" }
+  });
+  assert.equal(partialPay.status, 200, JSON.stringify(partialPay.body));
+  assert.equal(Number(partialPay.body.sale.amount_paid), 25);
+  assert.equal(Number(partialPay.body.sale.balance_due), 25);
+  assert.equal(partialPay.body.sale.payment_status, "pendiente");
+
+  receivable = await getReceivable(saleResponse.body.sale.id, token);
+  assert.equal(Number(receivable.balance_due), 25);
+
+  const finalPay = await request(`/ventas/sales/${saleResponse.body.sale.id}/pay`, {
+    method: "POST",
+    token,
+    body: { amount: 25, paymentMethod: "qr" }
+  });
+  assert.equal(finalPay.status, 200, JSON.stringify(finalPay.body));
+  assert.equal(Number(finalPay.body.sale.balance_due), 0);
+  assert.equal(finalPay.body.sale.payment_status, "pagada");
+
+  const receivablesResponse = await request("/ventas/receivables", { token });
+  assert.equal(receivablesResponse.status, 200, JSON.stringify(receivablesResponse.body));
+  assert.equal(receivablesResponse.body.receivables.some((sale) => sale.id === saleResponse.body.sale.id), false);
+});
+
 async function login(username, password) {
   const response = await request("/auth/login", {
     method: "POST",
@@ -167,6 +246,14 @@ async function getProductByCode(code, token) {
   const product = response.body.products.find((item) => item.code === code);
   assert.ok(product, `No se encontro producto ${code}`);
   return product;
+}
+
+async function getReceivable(saleId, token) {
+  const response = await request("/ventas/receivables", { token });
+  assert.equal(response.status, 200, JSON.stringify(response.body));
+  const receivable = response.body.receivables.find((sale) => sale.id === saleId);
+  assert.ok(receivable, `No se encontro cuenta por cobrar ${saleId}`);
+  return receivable;
 }
 
 async function request(pathname, options = {}) {
