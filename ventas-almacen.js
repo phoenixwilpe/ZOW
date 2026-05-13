@@ -7,6 +7,7 @@ const SUSPENDED_SALES_KEY = "zowVentasAlmacen.suspendedSales";
 const LOCAL_SALE_META_KEY = "zowVentasAlmacen.saleMeta";
 const FAVORITE_PRODUCTS_KEY = "zowVentasAlmacen.favoriteProducts";
 const POS_FOCUS_KEY = "zowVentasAlmacen.posFocus";
+const ACTIVE_SALE_DRAFT_KEY = "zowVentasAlmacen.activeSaleDraft";
 
 /**
  * @typedef {{ id:string, code:string, barcode?:string, name:string, category:string, stock:number, sale_price:number, cost_price:number }} Product
@@ -82,6 +83,7 @@ let reportFilter = { from: "", to: "" };
 let voidSaleDraft = { saleId: "" };
 let purchaseCart = [];
 let notificationsOpen = false;
+let activeSaleDraftRestored = false;
 
 const starterProducts = [
   { code: "AB-001", name: "Agua mineral 600 ml", category: "Bebidas", unit: "Botella", costPrice: 2.1, salePrice: 4, minStock: 24, stock: 96 },
@@ -168,6 +170,7 @@ loginForm.addEventListener("submit", async (event) => {
 
 document.querySelector("#logoutBtn").addEventListener("click", () => {
   currentUser = null;
+  activeSaleDraftRestored = false;
   sessionStorage.removeItem(TOKEN_KEY);
   sessionStorage.removeItem(SESSION_KEY);
   renderLoggedOut();
@@ -386,6 +389,7 @@ async function render() {
     cashSession = normalizeCashSession(cash.activeSession);
     cashMovements = (cash.movements || []).map(normalizeCashMovement);
     cashClosures = (cashHistoryResponse.closures || []).map(normalizeCashClosure);
+    restoreActiveSaleDraft();
     renderLoggedIn();
   } catch (error) {
     renderLoggedOut();
@@ -847,6 +851,7 @@ function renderSell() {
         ${posNotice ? `<div class="pos-toast">${escapeHtml(posNotice)}</div>` : ""}
         ${lastSaleReceipt ? renderLastSaleReceipt() : ""}
         ${renderPosShiftPanel(isCashOpen, totals)}
+        ${activeSaleDraftInfo()}
         ${saleCart.length ? renderPosMiniCartPreview(totals, isCashOpen) : ""}
         <div class="pos-search-row">
           <label class="toolbar-search touch-search">Buscar o escanear<input id="productSearchInput" type="search" value="${escapeHtml(productSearch)}" placeholder="Codigo, barras o nombre del producto" enterkeyhint="search" autocomplete="off" /></label>
@@ -942,13 +947,16 @@ function renderSell() {
   document.querySelector("#saleCustomer")?.addEventListener("change", () => {
     saleCustomerId = value("#saleCustomer");
     ventasMessage = "";
+    persistActiveSaleDraft();
   });
   document.querySelector("#saleGlobalDiscount")?.addEventListener("input", (event) => {
     saleGlobalDiscount = Number(event.target.value || 0);
-    renderMain();
+    persistActiveSaleDraft();
   });
+  document.querySelector("#saleGlobalDiscount")?.addEventListener("change", renderMain);
   document.querySelector("#saleNote")?.addEventListener("input", (event) => {
     saleNote = event.target.value;
+    persistActiveSaleDraft();
   });
   document.querySelector("#clearSearchBtn")?.addEventListener("click", () => {
     productSearch = "";
@@ -3436,6 +3444,7 @@ function addToCart(productId, quantity = 1, options = {}) {
   if (existing) existing.quantity += requestedQuantity;
   else saleCart.push({ productId, name: product.name, quantity: requestedQuantity, salePrice: Number(product.sale_price || 0), discount: 0 });
   applyPromotionsToCart();
+  persistActiveSaleDraft();
   showPosFeedback(`${requestedQuantity} x ${product.name} agregado al carrito.${expiry.level === "warning" ? ` Atencion: ${expiry.label}.` : ""}`, product.id);
   posMobilePanel = "products";
   if (options.clearSearch || !isMobilePos()) productSearch = "";
@@ -3469,6 +3478,7 @@ function addComboToCart(comboId, options = {}) {
       comboName: combo.name
     });
   });
+  persistActiveSaleDraft();
   showPosFeedback(`Combo ${combo.name} agregado al carrito.`, combo.id);
   posMobilePanel = "products";
   if (options.clearSearch || !isMobilePos()) productSearch = "";
@@ -3490,6 +3500,7 @@ function showPosFeedback(message, targetId = "") {
 function removeFromCart(productId) {
   clearPosFeedback();
   saleCart = saleCart.filter((item) => item.productId !== productId);
+  persistActiveSaleDraft();
   renderMain();
 }
 
@@ -3510,6 +3521,7 @@ function updateCartQuantity(productId, delta) {
     })
     .filter((item) => item.quantity > 0);
   applyPromotionsToCart();
+  persistActiveSaleDraft();
   renderMain();
 }
 
@@ -3526,6 +3538,7 @@ function updateCartDiscount(productId, discount) {
     return renderMain();
   }
   saleCart = saleCart.map((item) => item.productId === productId ? { ...item, discount: Math.max(discount, 0) } : item);
+  persistActiveSaleDraft();
   renderMain();
 }
 
@@ -3612,6 +3625,78 @@ function parseProductSearch(rawValue) {
   return { term, quantity: Math.max(Math.floor(quantity || 1), 1) };
 }
 
+function activeSaleDraftInfo() {
+  if (!saleCart.length) return "";
+  const savedAt = activeSaleDraftSavedAt();
+  return `<div class="cloud-safe-note active-sale-draft-note">
+    <strong>Venta autoguardada</strong>
+    <span>${savedAt ? `Ultimo respaldo local: ${savedAt}.` : "El carrito se protege en este dispositivo hasta cobrar, suspender, cancelar o iniciar nueva venta."}</span>
+  </div>`;
+}
+
+function activeSaleDraftScope() {
+  return [
+    currentUser?.companyId || currentUser?.company_id || currentUser?.companyName || "empresa",
+    currentUser?.id || currentUser?.username || "usuario"
+  ].join(":");
+}
+
+function activeSaleDraftSavedAt() {
+  const drafts = loadJson(ACTIVE_SALE_DRAFT_KEY, {});
+  const draft = drafts[activeSaleDraftScope()];
+  return draft?.updatedAt ? formatDateTime(draft.updatedAt) : "";
+}
+
+function persistActiveSaleDraft() {
+  if (!currentUser) return;
+  const drafts = loadJson(ACTIVE_SALE_DRAFT_KEY, {});
+  const scope = activeSaleDraftScope();
+  if (!saleCart.length && !saleCustomerId && !Number(saleGlobalDiscount || 0) && !String(saleNote || "").trim()) {
+    delete drafts[scope];
+  } else {
+    drafts[scope] = {
+      items: saleCart,
+      customerId: saleCustomerId,
+      globalDiscount: saleGlobalDiscount,
+      note: saleNote,
+      updatedAt: new Date().toISOString()
+    };
+  }
+  persistJson(ACTIVE_SALE_DRAFT_KEY, drafts);
+}
+
+function clearActiveSaleDraft() {
+  if (!currentUser) return;
+  const drafts = loadJson(ACTIVE_SALE_DRAFT_KEY, {});
+  delete drafts[activeSaleDraftScope()];
+  persistJson(ACTIVE_SALE_DRAFT_KEY, drafts);
+}
+
+function restoreActiveSaleDraft() {
+  if (activeSaleDraftRestored || saleCart.length || !currentUser) return;
+  activeSaleDraftRestored = true;
+  const drafts = loadJson(ACTIVE_SALE_DRAFT_KEY, {});
+  const draft = drafts[activeSaleDraftScope()];
+  if (!draft?.items?.length) return;
+  const productIds = new Set(products.map((product) => product.id));
+  const validItems = draft.items.filter((item) => productIds.has(item.productId));
+  if (!validItems.length) {
+    clearActiveSaleDraft();
+    return;
+  }
+  saleCart = validItems.map((item) => ({
+    ...item,
+    quantity: Math.max(1, Number(item.quantity || 1)),
+    salePrice: Number(item.salePrice || 0),
+    discount: Number(item.discount || 0)
+  }));
+  saleCustomerId = draft.customerId || "";
+  saleGlobalDiscount = Number(draft.globalDiscount || 0);
+  saleNote = draft.note || "";
+  posMobilePanel = "cart";
+  ventasMessage = "Recupere una venta que estaba en curso en este dispositivo.";
+}
+
 function newSale() {
   saleCart = [];
   productSearch = "";
@@ -3621,6 +3706,7 @@ function newSale() {
   saleGlobalDiscount = 0;
   saleNote = "";
   posMobilePanel = "products";
+  clearActiveSaleDraft();
   renderMain();
 }
 
@@ -3633,6 +3719,7 @@ function cancelCurrentSale() {
   saleNote = "";
   ventasMessage = "Venta cancelada.";
   posMobilePanel = "products";
+  clearActiveSaleDraft();
   renderMain();
 }
 
@@ -3648,6 +3735,7 @@ async function suspendCurrentSale() {
     saleCustomerId = "";
     saleGlobalDiscount = 0;
     saleNote = "";
+    clearActiveSaleDraft();
     ventasMessage = "Venta suspendida y guardada en la nube.";
     await render();
   } catch (error) {
@@ -3659,6 +3747,7 @@ async function suspendCurrentSale() {
     saleCustomerId = "";
     saleGlobalDiscount = 0;
     saleNote = "";
+    clearActiveSaleDraft();
     ventasMessage = error.message || "Venta suspendida localmente. Revisa conexion para guardarla en la nube.";
     renderMain();
   }
@@ -3672,6 +3761,7 @@ async function recoverSuspendedSale() {
   saleGlobalDiscount = Number(recovered.globalDiscount || 0);
   saleNote = recovered.note || "";
   posMobilePanel = "cart";
+  persistActiveSaleDraft();
   if (recovered.id && !recovered.localOnly) {
     try {
       await apiRequest(`/ventas/suspended-sales/${recovered.id}`, { method: "DELETE" });
@@ -4023,6 +4113,7 @@ async function submitSale(event) {
   saleGlobalDiscount = 0;
   saleNote = "";
   posMobilePanel = "products";
+  clearActiveSaleDraft();
   ventasMessage = `Venta ${response.sale.code} registrada correctamente.`;
   paymentModal.close();
   await render();
