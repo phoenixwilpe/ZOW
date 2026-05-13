@@ -1168,7 +1168,7 @@ function renderFinance() {
             <strong>${money(0)}</strong>
             <small>Usa el conteo por billetes o escribe el total contado.</small>
           </div>
-          <button class="primary-button" type="submit" ${cashSession?.status === "abierta" ? "" : "disabled"}>Cerrar caja</button>
+          <button class="primary-button" type="submit" id="cashCloseSubmitBtn" ${cashSession?.status === "abierta" ? "" : "disabled"}>Cerrar caja</button>
         </form>
       </section>
     </section>
@@ -1433,11 +1433,15 @@ function formatShortDate(dateValue) {
 
 function bindCashCounting(expectedCash) {
   const countedInput = document.querySelector("#cashCountedAmount");
+  const noteInput = document.querySelector("#cashClosureNote");
+  const closeButton = document.querySelector("#cashCloseSubmitBtn");
   const denominationInputs = [...document.querySelectorAll("[data-cash-denomination]")];
   if (!countedInput) return;
   const updateDifference = () => {
     const counted = Number(countedInput.value || 0);
     const difference = counted - expectedCash;
+    const needsNote = Math.abs(difference) >= 0.01;
+    const hasNote = Boolean(String(noteInput?.value || "").trim());
     const card = document.querySelector("#cashDifferenceCard");
     if (!card) return;
     card.classList.toggle("is-ok", Math.abs(difference) < 0.01);
@@ -1446,7 +1450,11 @@ function bindCashCounting(expectedCash) {
     card.querySelector("strong").textContent = money(difference);
     card.querySelector("small").textContent = Math.abs(difference) < 0.01
       ? "Caja cuadrada. Puedes cerrar con seguridad."
-      : "Agrega una observacion antes de cerrar.";
+      : hasNote
+        ? "Diferencia documentada. Revisa antes de cerrar."
+        : "Agrega una observacion antes de cerrar.";
+    if (noteInput) noteInput.required = needsNote;
+    if (closeButton && cashSession?.status === "abierta") closeButton.disabled = needsNote && !hasNote;
   };
   const updateCountedFromDenominations = () => {
     const total = denominationInputs.reduce((sum, input) => sum + Number(input.dataset.cashDenomination || 0) * Number(input.value || 0), 0);
@@ -1454,6 +1462,7 @@ function bindCashCounting(expectedCash) {
     updateDifference();
   };
   countedInput.addEventListener("input", updateDifference);
+  noteInput?.addEventListener("input", updateDifference);
   denominationInputs.forEach((input) => input.addEventListener("input", updateCountedFromDenominations));
   updateDifference();
 }

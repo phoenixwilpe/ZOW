@@ -2273,6 +2273,9 @@ app.post("/api/ventas/cash/close", requireAuth, async (req, res) => {
   const differenceAmount = countedAmount - expectedAmount;
   const note = String(req.body.note || "").trim().slice(0, 500);
   if (countedAmount < 0) return res.status(400).json({ error: "El efectivo contado no puede ser negativo" });
+  if (Math.abs(differenceAmount) >= 0.01 && !note) {
+    return res.status(400).json({ error: "La observacion es obligatoria cuando existe diferencia de caja" });
+  }
   const code = await buildNextCashCode(req.user.company_id);
   await pg.tx(async (client) => {
     await client.run(
