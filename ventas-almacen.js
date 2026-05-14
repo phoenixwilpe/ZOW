@@ -2149,8 +2149,9 @@ function renderCatalog() {
   setCount(`${products.length} articulo${products.length === 1 ? "" : "s"}`);
   mainList().innerHTML = `
     <section class="admin-panel"><div class="admin-panel-head"><div><p class="eyebrow">Categorias</p><h3>Agrupacion de articulos</h3></div></div><div class="admin-list">${categories.map((c) => `<article class="admin-row"><strong>${escapeHtml(c.name)}</strong><span>${escapeHtml(c.description || "Sin descripcion")}</span></article>`).join("") || empty("Sin categorias")}</div></section>
-    <section class="admin-panel"><div class="admin-panel-head"><div><p class="eyebrow">Articulos</p><h3>Productos registrados</h3></div></div><div class="admin-list">${products.map(renderProductRow).join("") || empty("Sin productos")}</div></section>
+    <section class="admin-panel"><div class="admin-panel-head"><div><p class="eyebrow">Articulos</p><h3>Productos registrados</h3></div><button class="ghost-button" type="button" id="printPriceListBtn">Lista de precios</button></div><div class="admin-list">${products.map(renderProductRow).join("") || empty("Sin productos")}</div></section>
   `;
+  document.querySelector("#printPriceListBtn")?.addEventListener("click", printPriceList);
   bindProductLabelActions();
 }
 
@@ -3519,6 +3520,34 @@ function printProductLabelSheet(productId) {
   </style></head><body><div class="toolbar"><button onclick="print()">Imprimir etiquetas</button></div><div class="sheet">
     ${labels.map(() => `<article class="label"><div><div class="store">${escapeHtml(storeName)}</div><div class="name">${escapeHtml(product.name)}</div></div><div><div class="price">${money(product.sale_price)}</div><div class="meta"><span>${escapeHtml(product.category || "Sin categoria")}</span><span>${escapeHtml(product.unit || "Unidad")}</span></div><div class="barcode"></div><div class="code">${escapeHtml(code)}</div></div></article>`).join("")}
   </div></body></html>`);
+  printable.document.close();
+  printable.focus();
+}
+
+function printPriceList() {
+  const activeProducts = products
+    .filter(isProductActive)
+    .slice()
+    .sort((a, b) => String(a.category || "").localeCompare(String(b.category || "")) || String(a.name || "").localeCompare(String(b.name || "")));
+  const grouped = activeProducts.reduce((map, product) => {
+    const category = product.category || "Sin categoria";
+    if (!map.has(category)) map.set(category, []);
+    map.get(category).push(product);
+    return map;
+  }, new Map());
+  const storeName = storeSettings.storeName || storeSettings.companyName || currentUser.companyName || "ZOW Ventas-Almacen";
+  const printable = window.open("", "_blank", "width=900,height=920");
+  if (!printable) return;
+  printable.document.write(`<!doctype html><html><head><meta charset="UTF-8"><title>Lista de precios</title><style>
+    *{box-sizing:border-box}body{font-family:Arial,sans-serif;margin:0;padding:28px;color:#111;background:#fff}.toolbar{margin-bottom:16px}.toolbar button{border:0;border-radius:8px;padding:10px 16px;background:#0f172a;color:#fff;font-weight:800}
+    .head{display:flex;justify-content:space-between;gap:24px;border-bottom:3px solid #0f172a;padding-bottom:16px;margin-bottom:18px}h1{font-size:25px;margin:0;text-transform:uppercase}.muted{color:#555;font-size:12px;line-height:1.45}.badge{display:inline-block;border:1px solid #0f172a;border-radius:999px;padding:6px 10px;font-weight:800;font-size:12px}
+    h2{font-size:15px;margin:18px 0 8px;color:#0f766e;text-transform:uppercase}table{width:100%;border-collapse:collapse;break-inside:avoid}th{background:#f1f5f9;text-align:left;font-size:11px;text-transform:uppercase;color:#334155}th,td{border:1px solid #d1d5db;padding:8px;font-size:12px;vertical-align:top}td:last-child,th:last-child{text-align:right}.code{font-weight:800;color:#475569}.price{font-weight:950;color:#0f766e}.foot{margin-top:18px;text-align:center;color:#64748b;font-size:11px}
+    @media print{.toolbar{display:none}body{padding:16px}h2{break-after:avoid}}
+  </style></head><body><div class="toolbar"><button onclick="print()">Imprimir / Guardar PDF</button></div>
+    <div class="head"><div><h1>Lista de precios</h1><p class="muted">${escapeHtml(storeName)}<br>Actualizado: ${formatDateTime(new Date().toISOString())}</p></div><div><span class="badge">${num(activeProducts.length)} productos</span></div></div>
+    ${[...grouped.entries()].map(([category, list]) => `<section><h2>${escapeHtml(category)}</h2><table><thead><tr><th>Codigo</th><th>Producto</th><th>Unidad</th><th>Precio</th></tr></thead><tbody>${list.map((product) => `<tr><td class="code">${escapeHtml(product.code || "")}</td><td>${escapeHtml(product.name || "")}</td><td>${escapeHtml(product.unit || "Unidad")}</td><td class="price">${money(product.sale_price)}</td></tr>`).join("")}</tbody></table></section>`).join("") || `<p class="muted">Sin productos activos para imprimir.</p>`}
+    <p class="foot">SYSTEM ZOW SAAS - Lista comercial generada desde el inventario</p>
+  </body></html>`);
   printable.document.close();
   printable.focus();
 }
