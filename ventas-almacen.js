@@ -8,6 +8,7 @@ const LOCAL_SALE_META_KEY = "zowVentasAlmacen.saleMeta";
 const FAVORITE_PRODUCTS_KEY = "zowVentasAlmacen.favoriteProducts";
 const POS_FOCUS_KEY = "zowVentasAlmacen.posFocus";
 const ACTIVE_SALE_DRAFT_KEY = "zowVentasAlmacen.activeSaleDraft";
+const TRAINING_MODE_KEY = "zowVentasAlmacen.trainingMode";
 
 /**
  * @typedef {{ id:string, code:string, barcode?:string, name:string, category:string, stock:number, sale_price:number, cost_price:number }} Product
@@ -63,6 +64,7 @@ let selectedKardex = null;
 let localSaleMeta = loadJson(LOCAL_SALE_META_KEY, {});
 let favoriteProducts = loadJson(FAVORITE_PRODUCTS_KEY, []);
 let posFocusMode = localStorage.getItem(POS_FOCUS_KEY) === "1";
+let trainingMode = localStorage.getItem(TRAINING_MODE_KEY) === "1";
 let historyFilter = { status: "", method: "", date: "", q: "" };
 let storeSettings = {
   companyName: "",
@@ -476,6 +478,20 @@ function renderMain() {
       renderMain();
     });
   });
+  bindTrainingModeControls();
+}
+
+function bindTrainingModeControls() {
+  document.querySelectorAll("[data-training-toggle]").forEach((button) => {
+    button.addEventListener("click", () => {
+      trainingMode = !trainingMode;
+      localStorage.setItem(TRAINING_MODE_KEY, trainingMode ? "1" : "0");
+      ventasMessage = trainingMode
+        ? "Modo entrenamiento activado. Las ventas confirmadas se simularan sin tocar datos reales."
+        : "Modo entrenamiento desactivado. Las siguientes ventas usaran operacion real.";
+      renderMain();
+    });
+  });
 }
 
 function updateNotificationButton() {
@@ -607,6 +623,7 @@ function renderSummary() {
       </div>
       <strong>${executiveScore.score}/100</strong>
     </section>
+    ${renderTrainingBanner()}
     ${renderCommercialAlertsPanel()}
     <section class="setup-overview">
       <article><span>Clientes</span><strong>${customers.length}</strong></article>
@@ -677,6 +694,14 @@ function renderCommercialAlertsPanel() {
         ${canAccessView(alert.view) ? `<button class="ghost-button" type="button" data-commercial-alert-view="${alert.view}">Revisar</button>` : ""}
       </article>`).join("") || `<article class="commercial-alert-card is-ok"><div><strong>Sin alertas urgentes</strong><span>Stock, caja y cobranza no muestran avisos criticos ahora.</span></div></article>`}
     </div>
+  </section>`;
+}
+
+function renderTrainingBanner() {
+  if (!trainingMode) return "";
+  return `<section class="training-mode-banner">
+    <div><p class="eyebrow">Modo entrenamiento activo</p><strong>Las ventas que confirmes se simulan en este equipo.</strong><span>No se guardan en la nube, no descuentan stock real y no afectan caja.</span></div>
+    <button class="ghost-button" type="button" data-training-toggle>Desactivar</button>
   </section>`;
 }
 
@@ -893,6 +918,7 @@ function renderActivityTimelineItem(event) {
 }
 
 function buildSaleReadiness({ isCashOpen }) {
+  const cashReady = Boolean(isCashOpen || trainingMode);
   const totals = cartTotals();
   const discountPercent = totals.subtotal > 0 ? Number(totals.discount || 0) / totals.subtotal * 100 : 0;
   const estimatedProfit = cartEstimatedProfit();
@@ -912,7 +938,7 @@ function buildSaleReadiness({ isCashOpen }) {
   const hasDiscountWarning = discountPercent >= 15;
   const hasMarginWarning = saleCart.length > 0 && marginPercent < 8;
   const checks = [
-    { label: "Caja", done: Boolean(isCashOpen), detail: isCashOpen ? "Lista para cobrar." : "Abre caja antes de confirmar ventas.", level: isCashOpen ? "ok" : "danger" },
+    { label: "Caja", done: cashReady, detail: trainingMode ? "Entrenamiento activo: no usa caja real." : isCashOpen ? "Lista para cobrar." : "Abre caja antes de confirmar ventas.", level: cashReady ? "ok" : "danger" },
     { label: "Carrito", done: saleCart.length > 0, detail: saleCart.length ? `${num(saleCart.length)} item${saleCart.length === 1 ? "" : "s"} cargado${saleCart.length === 1 ? "" : "s"}.` : "Agrega productos.", level: saleCart.length ? "ok" : "danger" },
     { label: "Cliente", done: !storeSettings.requireCustomerForSale || Boolean(saleCustomerId), detail: storeSettings.requireCustomerForSale ? (saleCustomerId ? "Cliente seleccionado." : "Cliente obligatorio pendiente.") : "Cliente opcional.", level: storeSettings.requireCustomerForSale && !saleCustomerId ? "danger" : "ok" },
     { label: "Stock", done: !stockIssues.some((item) => item.level === "danger"), detail: stockIssues.length ? `${num(stockIssues.length)} alerta${stockIssues.length === 1 ? "" : "s"} de stock.` : "Stock suficiente.", level: stockIssues.some((item) => item.level === "danger") ? "danger" : stockIssues.length ? "warning" : "ok" },
@@ -999,12 +1025,14 @@ function renderSell() {
   const profit = cartEstimatedProfit();
   const categories = productCategories();
   const isCashOpen = cashSession?.status === "abierta";
+  const canCheckout = isCashOpen || trainingMode;
   const cashState = isCashOpen ? `Caja ${num(cashSession.registerNumber)} abierta / ${money(cashExpectedTotal())}` : "Caja sin abrir";
   const lowStockInCart = saleCart
     .map((item) => products.find((product) => product.id === item.productId))
     .filter((product) => product && Number(product.stock || 0) <= Number(product.min_stock || 0));
   const saleReadiness = buildSaleReadiness({ isCashOpen });
   mainList().innerHTML = `
+    ${renderTrainingBanner()}
     <section class="pos-shell touch-pos-shell pos-mode-${posMobilePanel}">
       <div class="pos-ambient-strip" aria-hidden="true">
         <span></span><span></span><span></span><span></span>
@@ -1016,7 +1044,7 @@ function renderSell() {
       <div class="mobile-pos-summary">
         <div><span>Carrito</span><strong>${num(saleCart.length)} item${saleCart.length === 1 ? "" : "s"} / ${money(totals.total)}</strong></div>
         <button class="ghost-button" type="button" data-pos-panel="${posMobilePanel === "cart" ? "products" : "cart"}">${posMobilePanel === "cart" ? "Agregar mas" : "Ver carrito"}</button>
-        <button class="primary-button" type="button" id="mobileCheckoutBtn" ${saleCart.length && isCashOpen ? "" : "disabled"}>Cobrar</button>
+        <button class="primary-button" type="button" id="mobileCheckoutBtn" ${saleCart.length && canCheckout ? "" : "disabled"}>${trainingMode ? "Simular" : "Cobrar"}</button>
       </div>
       ${posNotice ? `<div class="mobile-pos-toast">${escapeHtml(posNotice)}</div>` : ""}
       <section class="admin-panel pos-products touch-panel">
@@ -1106,13 +1134,13 @@ function renderSell() {
             <div class="pos-section-title"><strong>Acciones de venta</strong><span>Gestiona la operacion sin salir de caja</span></div>
             <div class="quick-action-row touch-sale-actions">
               <button class="ghost-button icon-text-button" type="button" id="newSaleBtn"><span class="ui-ico">+</span>Nueva</button>
-              <button class="ghost-button icon-text-button" type="button" id="quickCashBtn" ${saleCart.length && isCashOpen ? "" : "disabled"}><span class="ui-ico">$</span>Efectivo exacto</button>
+              <button class="ghost-button icon-text-button" type="button" id="quickCashBtn" ${saleCart.length && canCheckout ? "" : "disabled"}><span class="ui-ico">$</span>Efectivo exacto</button>
               <button class="ghost-button icon-text-button" type="button" id="suspendSaleBtn"><span class="ui-ico">||</span>Suspender</button>
               <button class="ghost-button icon-text-button" type="button" id="recoverSaleBtn"><span class="ui-ico">R</span>Recuperar (${suspendedSales.length})</button>
               <button class="ghost-button danger-action icon-text-button" type="button" id="cancelSaleBtn"><span class="ui-ico">x</span>Cancelar</button>
             </div>
           </div>
-          <button class="primary-button touch-charge-button icon-text-button" type="button" id="chargeSaleBtn" ${saleReadiness.canCharge ? "" : "disabled"}><span class="ui-ico">$</span>${isCashOpen ? `Cobrar ${money(totals.total)}` : "Abre caja para cobrar"}</button>
+          <button class="primary-button touch-charge-button icon-text-button" type="button" id="chargeSaleBtn" ${saleReadiness.canCharge ? "" : "disabled"}><span class="ui-ico">$</span>${trainingMode ? `Simular ${money(totals.total)}` : isCashOpen ? `Cobrar ${money(totals.total)}` : "Abre caja para cobrar"}</button>
         </form>
       </section>
     </section>
@@ -3210,6 +3238,18 @@ function renderHelp() {
         </article>`).join("")}
       </div>
     </section>
+    <section class="training-lab-panel">
+      <div>
+        <p class="eyebrow">Modo entrenamiento</p>
+        <h3>Practicar ventas sin tocar datos reales</h3>
+        <span>Activa este modo para capacitar cajeros o mostrar una demo. El cobro genera un ticket marcado como entrenamiento, pero no guarda venta, no descuenta stock y no afecta caja.</span>
+      </div>
+      <div class="training-lab-actions">
+        <strong>${trainingMode ? "Activo" : "Inactivo"}</strong>
+        <button class="primary-button" type="button" data-training-toggle>${trainingMode ? "Desactivar entrenamiento" : "Activar entrenamiento"}</button>
+        <button class="ghost-button" type="button" data-module-view="sell">Abrir venta POS</button>
+      </div>
+    </section>
     <section class="sales-certification-panel">
       <div class="sales-certification-head">
         <div>
@@ -4047,7 +4087,7 @@ function renderPosMiniCartPreview(totals, isCashOpen) {
       ${previewItems.map((item) => `<div><span>${num(item.quantity)}x ${escapeHtml(item.name)}</span><strong>${money(Math.max(item.quantity * item.salePrice - Number(item.discount || 0), 0))}</strong></div>`).join("")}
       ${hiddenCount ? `<small>+ ${num(hiddenCount)} producto${hiddenCount === 1 ? "" : "s"} mas en carrito</small>` : ""}
     </div>
-    <button class="primary-button icon-text-button" type="button" data-mini-checkout ${isCashOpen ? "" : "disabled"}><span class="ui-ico">$</span>Cobrar ahora</button>
+    <button class="primary-button icon-text-button" type="button" data-mini-checkout ${isCashOpen || trainingMode ? "" : "disabled"}><span class="ui-ico">$</span>${trainingMode ? "Simular ahora" : "Cobrar ahora"}</button>
   </aside>`;
 }
 
@@ -5145,6 +5185,7 @@ function updatePaymentLiveSummary(total) {
 
 async function submitSale(event) {
   event.preventDefault();
+  if (trainingMode) return submitTrainingSale();
   if (!cashSession || cashSession.status !== "abierta") {
     ventasMessage = "Abre caja antes de confirmar ventas.";
     paymentModal.close();
@@ -5189,6 +5230,53 @@ async function submitSale(event) {
   paymentModal.close();
   await render();
   printTicket(response.sale, response.items);
+}
+
+function submitTrainingSale() {
+  const totals = cartTotals();
+  const paidTotal = paymentDraftTotal();
+  if (paymentDraft.method !== "credito" && paidTotal < totals.total) return;
+  const customer = customers.find((item) => item.id === saleCustomerId);
+  const sale = {
+    id: `training-${Date.now()}`,
+    code: `DEMO-${new Date().toISOString().slice(11, 19).replaceAll(":", "")}`,
+    subtotal: totals.subtotal,
+    discount: totals.discount,
+    tax: totals.tax,
+    total: totals.total,
+    cash_received: paymentDraft.method === "credito" ? Number(paymentDraft.received || 0) : paymentDraft.method === "mixto" ? paidTotal : Number(paymentDraft.received || totals.total),
+    change_amount: paymentDraft.method === "mixto" ? paymentChangeAmount(totals.total) : Math.max(Number(paymentDraft.received || 0) - totals.total, 0),
+    payment_method: paymentDraft.method,
+    payment_detail: paymentDraft.method === "mixto" ? JSON.stringify(paymentDraft.split || {}) : "",
+    amount_paid: paymentDraft.method === "credito" ? Number(paymentDraft.received || 0) : paymentDraft.method === "mixto" ? paidTotal : Number(paymentDraft.received || totals.total),
+    balance_due: paymentDraft.method === "credito" ? Math.max(totals.total - Number(paymentDraft.received || 0), 0) : 0,
+    created_at: new Date().toISOString(),
+    customer_name: customer?.name || "Cliente entrenamiento",
+    seller_name: currentUser.name || currentUser.username || "Cajero entrenamiento",
+    register_number: "DEMO",
+    status: "entrenamiento",
+    note: `${saleNote.trim()} ${saleNote.trim() ? "/" : ""} Venta simulada sin guardar en la nube.`
+  };
+  const items = saleCart.map((item) => ({
+    product_name: item.name,
+    quantity: item.quantity,
+    unit_price: item.salePrice,
+    discount: storeSettings.allowDiscounts ? Number(item.discount || 0) : 0,
+    total: item.quantity * item.salePrice - Number(item.discount || 0)
+  }));
+  lastSaleReceipt = { sale, items };
+  saleCart = [];
+  productSearch = "";
+  productCategoryFilter = "";
+  saleCustomerId = "";
+  saleGlobalDiscount = 0;
+  saleNote = "";
+  posMobilePanel = "products";
+  clearActiveSaleDraft();
+  ventasMessage = `Venta de entrenamiento ${sale.code} simulada. No se guardo ni afecto stock real.`;
+  paymentModal.close();
+  renderMain();
+  printTicket(sale, items);
 }
 
 async function closeCash() {
@@ -5461,7 +5549,7 @@ function printTicket(sale, items) {
     .copy-note{margin:8px 0;border:1px dashed #999;border-radius:10px;padding:8px;text-align:center;color:#333;font-size:10px;font-weight:800;text-transform:uppercase}
     @media print{.toolbar{display:none}body{padding:0}.ticket-box,.meta-grid div{break-inside:avoid}}
   </style></head><body><div class="toolbar"><button onclick="window.print()">Imprimir comprobante</button></div>
-  <div class="brand"><b>${escapeHtml(title)}</b><span>Comprobante de venta</span><em class="stamp">${escapeHtml(sale.status === "anulada" ? "Anulado" : sale.code === "PREVENTA" ? "Preventa" : "Pagado")}</em></div>
+  <div class="brand"><b>${escapeHtml(title)}</b><span>Comprobante de venta</span><em class="stamp">${escapeHtml(sale.status === "entrenamiento" ? "Entrenamiento" : sale.status === "anulada" ? "Anulado" : sale.code === "PREVENTA" ? "Preventa" : "Pagado")}</em></div>
   <p class="business">${businessLines.map(escapeHtml).join("<br>") || "Datos de la tienda no configurados"}</p>
   <div class="meta-grid"><div><span>Comprobante</span><strong>${escapeHtml(sale.code)}</strong></div><div><span>Fecha y hora</span><strong>${formatDateTime(sale.created_at)}</strong></div><div><span>Caja</span><strong>${registerNumber ? `Caja ${num(registerNumber)}` : "Sin caja"}</strong></div><div><span>Cajero</span><strong>${escapeHtml(cashierName)}</strong></div><div><span>Cliente</span><strong>${escapeHtml(sale.customer_name || "Cliente sin registrar")}</strong></div><div><span>Items</span><strong>${num(itemCount)}</strong></div></div>
   <table><thead><tr><th>Detalle</th><th>Total</th></tr></thead><tbody>${items.map((item) => `<tr><td>${escapeHtml(item.product_name)}<br><span class="muted">${num(item.quantity)} x ${money(item.unit_price)}${Number(item.discount || 0) ? ` / Desc. ${money(item.discount)}` : ""}</span></td><td>${money(item.total)}</td></tr>`).join("")}</tbody></table>
@@ -5469,6 +5557,7 @@ function printTicket(sale, items) {
   ${renderTicketPaymentDetail(sale)}
   ${sale.note ? `<p class="muted"><strong>Obs.:</strong> ${escapeHtml(sale.note)}</p>` : ""}
   ${isCreditSale ? `<div class="copy-note">Venta con saldo pendiente. Conservar copia firmada.</div><div class="signature"><div>Firma cliente</div><div>Firma cajero</div></div>` : ""}
+  ${sale.status === "entrenamiento" ? `<div class="copy-note">Documento de entrenamiento. No tiene valor contable ni afecta inventario.</div>` : ""}
   <div class="verify"><div class="qr"></div><div><div class="barcode"></div><p class="muted">Codigo de control: ${escapeHtml(sale.code)}<br>Moneda: ${escapeHtml(storeSettings.currency || "BOB")}</p></div></div><p class="foot thanks">${escapeHtml(storeSettings.ticketNote || "Gracias por su compra")}</p><p class="foot">Sistema de venta y almacen ZOW SAAS</p></body></html>`);
   printable.document.close();
   printable.focus();

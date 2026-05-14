@@ -4749,6 +4749,57 @@ body.app-ventas .commercial-alert-card button {
   flex: 0 0 auto;
 }
 
+body.app-ventas .training-mode-banner,
+body.app-ventas .training-lab-panel {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  margin-bottom: 14px;
+  border: 1px solid rgb(14 165 233 / 24%);
+  border-radius: 22px;
+  padding: 16px;
+  background:
+    linear-gradient(135deg, rgb(240 249 255 / 94%), rgb(255 255 255 / 90%)),
+    radial-gradient(circle at 88% 18%, rgb(14 165 233 / 18%), transparent 34%);
+  box-shadow: 0 16px 38px rgb(14 165 233 / 8%);
+}
+
+body.app-ventas .training-mode-banner div,
+body.app-ventas .training-lab-panel > div:first-child {
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+}
+
+body.app-ventas .training-mode-banner strong,
+body.app-ventas .training-lab-panel h3 {
+  margin: 0;
+  color: #0f3f4a;
+}
+
+body.app-ventas .training-mode-banner span,
+body.app-ventas .training-lab-panel span {
+  color: var(--muted);
+  font-weight: 850;
+  line-height: 1.35;
+}
+
+body.app-ventas .training-lab-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+body.app-ventas .training-lab-actions > strong {
+  border-radius: 999px;
+  padding: 8px 12px;
+  background: rgb(14 165 233 / 12%);
+  color: #075985;
+}
+
 body.app-ventas .daily-operation-panel {
   display: grid;
   gap: 14px;
@@ -13053,12 +13104,17 @@ body.system-zow-site .site-footer {
   }
 
   body.app-ventas .commercial-alerts-head,
-  body.app-ventas .commercial-alert-card {
+  body.app-ventas .commercial-alert-card,
+  body.app-ventas .training-mode-banner,
+  body.app-ventas .training-lab-panel {
     align-items: stretch;
     flex-direction: column;
   }
 
-  body.app-ventas .commercial-alert-card button {
+  body.app-ventas .commercial-alert-card button,
+  body.app-ventas .training-mode-banner button,
+  body.app-ventas .training-lab-actions,
+  body.app-ventas .training-lab-actions button {
     width: 100%;
   }
 
