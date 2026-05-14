@@ -1790,6 +1790,7 @@ function renderReports() {
       <div class="admin-panel-head"><div><p class="eyebrow">Cobros</p><h3>Ventas por metodo de pago</h3></div></div>
       <div class="payment-breakdown-grid">${paymentBreakdown.map((item) => `<article><span>${escapeHtml(item.label)}</span><strong>${money(item.total)}</strong><small>${num(item.count)} venta${item.count === 1 ? "" : "s"}</small></article>`).join("")}</div>
     </section>
+    ${renderCategorySalesReport(profitRows)}
     <section class="admin-panel">
       <div class="admin-panel-head"><div><p class="eyebrow">Utilidad real</p><h3>Ganancia por producto</h3></div><span>Margen ${marginPercent.toFixed(1)}%</span></div>
       <div class="report-grid compact-report-grid">
@@ -1858,6 +1859,7 @@ function renderReports() {
   document.querySelector("#exportAuditCsv")?.addEventListener("click", exportAuditCsv);
   document.querySelector("#exportBackupJson")?.addEventListener("click", exportBackupJson);
   document.querySelector("#exportNoMovementCsv")?.addEventListener("click", () => exportNoMovementProductsCsv(profitRows));
+  document.querySelector("#exportCategorySalesCsv")?.addEventListener("click", () => exportCategorySalesCsv(profitRows));
   document.querySelector("#copyExecutiveBrief")?.addEventListener("click", copyExecutiveBrief);
   document.querySelector("#printExecutiveBrief")?.addEventListener("click", printExecutiveBrief);
   bindProductLabelActions();
@@ -2120,6 +2122,42 @@ function renderNoMovementProductsReport(profitRows = []) {
         <div class="admin-row-meta"><span>Valor ${money(value)}</span><span>Precio ${money(product.sale_price)}</span><span>Margen ${num(insight.marginPercent)}%</span><button class="ghost-button" type="button" data-print-product-label="${product.id}">Etiquetas</button></div>
       </article>`;
     }).join("") || empty("Todos los productos activos tuvieron movimiento en el periodo")}</div>
+  </section>`;
+}
+
+function buildCategorySalesRows(profitRows = []) {
+  const productMap = new Map(products.map((product) => [String(product.id), product]));
+  const categoryMap = new Map();
+  profitRows.forEach((row) => {
+    const product = productMap.get(String(row.productId || row.product_id || ""));
+    const category = product?.category || "Sin categoria";
+    const current = categoryMap.get(category) || { category, quantity: 0, netSales: 0, costTotal: 0, profit: 0, products: 0 };
+    current.quantity += Number(row.quantity || 0);
+    current.netSales += Number(row.netSales || row.net_sales || 0);
+    current.costTotal += Number(row.costTotal || row.cost_total || 0);
+    current.profit += Number(row.profit || 0);
+    current.products += 1;
+    categoryMap.set(category, current);
+  });
+  return [...categoryMap.values()].sort((a, b) => b.netSales - a.netSales);
+}
+
+function renderCategorySalesReport(profitRows = []) {
+  const rows = buildCategorySalesRows(profitRows);
+  const totalSales = rows.reduce((sum, row) => sum + Number(row.netSales || 0), 0);
+  const top = rows[0];
+  return `<section class="admin-panel category-sales-panel">
+    <div class="admin-panel-head">
+      <div><p class="eyebrow">Ventas por categoria</p><h3>Rubros que mueven el negocio</h3></div>
+      <div class="admin-head-actions"><span>${top ? escapeHtml(top.category) : "Sin ventas"}</span><button class="ghost-button" type="button" id="exportCategorySalesCsv" ${rows.length ? "" : "disabled"}>Exportar categorias</button></div>
+    </div>
+    <div class="payment-breakdown-grid">
+      ${rows.slice(0, 6).map((row) => {
+        const percent = totalSales > 0 ? Math.round((Number(row.netSales || 0) / totalSales) * 100) : 0;
+        const margin = Number(row.netSales || 0) ? (Number(row.profit || 0) / Number(row.netSales || 0)) * 100 : 0;
+        return `<article><span>${escapeHtml(row.category)}</span><strong>${money(row.netSales)}</strong><small>${num(row.quantity)} unidad${Number(row.quantity || 0) === 1 ? "" : "es"} / ${percent}% del periodo / Margen ${margin.toFixed(1)}%</small></article>`;
+      }).join("") || empty("Sin ventas por categoria en este periodo")}
+    </div>
   </section>`;
 }
 
@@ -6566,6 +6604,24 @@ function exportNoMovementProductsCsv(profitRows = []) {
       };
     });
   downloadCsv(`productos-sin-movimiento-${csvDateStamp()}.csv`, rows);
+}
+
+function exportCategorySalesCsv(profitRows = []) {
+  const rows = buildCategorySalesRows(profitRows).map((row) => {
+    const margin = Number(row.netSales || 0) ? (Number(row.profit || 0) / Number(row.netSales || 0)) * 100 : 0;
+    return {
+      categoria: row.category,
+      productos_vendidos: row.products,
+      unidades: Number(row.quantity || 0).toFixed(2),
+      venta_neta: Number(row.netSales || 0).toFixed(2),
+      costo_historico: Number(row.costTotal || 0).toFixed(2),
+      utilidad: Number(row.profit || 0).toFixed(2),
+      margen_porcentaje: margin.toFixed(2),
+      periodo_desde: reportFilter.from || "",
+      periodo_hasta: reportFilter.to || ""
+    };
+  });
+  downloadCsv(`ventas-por-categoria-${csvDateStamp()}.csv`, rows);
 }
 
 function exportInventoryRiskCsv() {
