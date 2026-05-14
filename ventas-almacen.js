@@ -3262,6 +3262,7 @@ function renderHelp() {
         <button class="ghost-button" type="button" id="printCommercialSummaryBtn">Resumen comercial</button>
       </div>
     </section>
+    ${renderCommercialReadinessPanel(certification, automated)}
     <section class="help-guide-grid">
       ${guides.map((guide) => `<article>
         <div><span>${escapeHtml(guide.context)}</span><strong>${escapeHtml(guide.title)}</strong></div>
@@ -3386,6 +3387,68 @@ function printSalesCommercialManual() {
   </body></html>`);
   printable.document.close();
   printable.focus();
+}
+
+function buildCommercialReadiness(certification, automated) {
+  const launchChecks = buildStoreLaunchChecks();
+  const setupSteps = buildSetupAssistantSteps();
+  const operativeUsers = users.filter((user) => ["ventas_admin", "cajero", "almacen", "vendedor", "supervisor"].includes(user.role));
+  const security = buildAccessSecurityChecks(operativeUsers);
+  const securityRisks = security.checks.filter((item) => ["danger", "warning"].includes(item.level)).length;
+  const launchDone = launchChecks.filter((item) => item.done).length;
+  const setupDone = setupSteps.filter((item) => item.done).length;
+  const score = Math.round((
+    certification.percent * 0.38 +
+    (automated.done / automated.total * 100) * 0.22 +
+    (launchDone / launchChecks.length * 100) * 0.22 +
+    (setupDone / setupSteps.length * 100) * 0.18
+  ) - Math.min(securityRisks * 4, 16));
+  const finalScore = Math.max(0, Math.min(100, score));
+  const pending = [
+    ...setupSteps.filter((item) => !item.done).map((item) => ({ ...item, area: "Configuracion" })),
+    ...launchChecks.filter((item) => !item.done).map((item) => ({ ...item, area: "Entrega" })),
+    ...security.checks.filter((item) => ["danger", "warning"].includes(item.level)).map((item) => ({ label: item.label, detail: item.detail, view: "users", area: "Seguridad", done: false }))
+  ].slice(0, 6);
+  return {
+    score: finalScore,
+    status: finalScore >= 90 ? "Listo para venta comercial" : finalScore >= 75 ? "Casi listo para presentar" : "Aun requiere ajustes",
+    tone: finalScore >= 90 ? "is-ready" : finalScore >= 75 ? "is-review" : "is-pending",
+    pending,
+    metrics: [
+      { label: "Certificacion", value: `${certification.percent}%`, detail: `${certification.done}/${certification.total} puntos` },
+      { label: "Pruebas", value: `${automated.done}/${automated.total}`, detail: "Flujos automaticos OK" },
+      { label: "Entrega", value: `${launchDone}/${launchChecks.length}`, detail: "Checklist de tienda" },
+      { label: "Seguridad", value: securityRisks ? num(securityRisks) : "OK", detail: securityRisks ? "Revisiones pendientes" : "Sin alertas fuertes" }
+    ]
+  };
+}
+
+function renderCommercialReadinessPanel(certification, automated) {
+  const readiness = buildCommercialReadiness(certification, automated);
+  return `<section class="commercial-readiness-panel ${readiness.tone}">
+    <div class="commercial-readiness-head">
+      <div>
+        <p class="eyebrow">Preparacion comercial</p>
+        <h3>${escapeHtml(readiness.status)}</h3>
+        <span>Evalua si el sistema esta listo para demostracion, entrega o venta a una empresa real.</span>
+      </div>
+      <strong>${readiness.score}%</strong>
+    </div>
+    <div class="commercial-readiness-metrics">
+      ${readiness.metrics.map((item) => `<article><span>${escapeHtml(item.label)}</span><strong>${escapeHtml(item.value)}</strong><small>${escapeHtml(item.detail)}</small></article>`).join("")}
+    </div>
+    <div class="commercial-readiness-next">
+      <div><strong>${readiness.pending.length ? "Pendientes para cerrar" : "Todo listo para presentar"}</strong><span>${readiness.pending.length ? "Atiende estos puntos antes de cobrar una implementacion." : "Puedes usar el resumen comercial, manual y modo entrenamiento para presentar el sistema."}</span></div>
+      <div class="commercial-readiness-list">
+        ${readiness.pending.map((item) => `<article>
+          <span>${escapeHtml(item.area || "Revision")}</span>
+          <strong>${escapeHtml(item.label)}</strong>
+          <small>${escapeHtml(item.detail || "Completar revision pendiente.")}</small>
+          ${item.view && canAccessView(item.view) ? `<button class="ghost-button" type="button" data-module-view="${item.view}">Abrir</button>` : ""}
+        </article>`).join("") || `<article class="is-done"><span>Venta comercial</span><strong>Preparado</strong><small>El sistema tiene material, pruebas y configuracion base para demostracion.</small></article>`}
+      </div>
+    </div>
+  </section>`;
 }
 
 function printSalesCertificationReport() {
