@@ -2537,6 +2537,9 @@ function renderPurchases() {
   document.querySelectorAll("[data-receive-purchase]").forEach((button) => {
     button.addEventListener("click", () => receivePurchaseOrder(button.dataset.receivePurchase));
   });
+  document.querySelectorAll("[data-print-purchase-reception]").forEach((button) => {
+    button.addEventListener("click", () => printPurchaseReceptionSheet(button.dataset.printPurchaseReception));
+  });
   document.querySelectorAll("[data-cancel-purchase]").forEach((button) => {
     button.addEventListener("click", () => cancelPurchaseOrder(button.dataset.cancelPurchase));
   });
@@ -2667,7 +2670,7 @@ function renderPurchaseRow(purchase) {
     <div><strong>${escapeHtml(purchase.code)}</strong><span>${escapeHtml(purchase.supplier_name || "Proveedor sin registrar")} / ${escapeHtml(purchase.invoice_number || "Sin factura")}</span><small>${formatDateTime(purchase.created_at)} / ${escapeHtml(purchase.created_by_name || "Usuario")}</small></div>
     <div><span>Total</span><strong>${money(purchase.total)}</strong></div>
     <div><span class="${statusClass}">${escapeHtml(purchaseStatusLabel(status))}</span></div>
-    ${status === "pendiente" && can("managePurchases") ? `<div class="purchase-history-actions"><button class="primary-button" type="button" data-receive-purchase="${purchase.id}">Recibir</button><button class="ghost-button danger-action" type="button" data-cancel-purchase="${purchase.id}">Cancelar</button></div>` : ""}
+    ${status === "pendiente" && can("managePurchases") ? `<div class="purchase-history-actions"><button class="ghost-button" type="button" data-print-purchase-reception="${purchase.id}">Hoja recepcion</button><button class="primary-button" type="button" data-receive-purchase="${purchase.id}">Recibir</button><button class="ghost-button danger-action" type="button" data-cancel-purchase="${purchase.id}">Cancelar</button></div>` : ""}
   </article>`;
 }
 
@@ -5539,6 +5542,35 @@ async function cancelPurchaseOrder(purchaseId) {
     await render();
   } catch (error) {
     ventasMessage = error.message || "No se pudo cancelar la orden.";
+    renderMain();
+  }
+}
+
+async function printPurchaseReceptionSheet(purchaseId) {
+  try {
+    const response = await apiRequest(`/ventas/purchases/${purchaseId}`);
+    const purchase = response.purchase;
+    const items = response.items || [];
+    const printable = window.open("", "_blank", "width=900,height=920");
+    if (!printable) return;
+    const totalUnits = items.reduce((sum, item) => sum + Number(item.quantity || 0), 0);
+    printable.document.write(`<!doctype html><html><head><meta charset="UTF-8"><title>Recepcion ${escapeHtml(purchase.code)}</title><style>
+      *{box-sizing:border-box}body{font-family:Arial,sans-serif;margin:0;padding:28px;color:#111;background:#fff}.toolbar{margin-bottom:16px}.toolbar button{border:0;border-radius:8px;padding:10px 16px;background:#0f172a;color:#fff;font-weight:800}
+      .head{display:flex;justify-content:space-between;gap:24px;border-bottom:3px solid #0f172a;padding-bottom:16px;margin-bottom:16px}h1{font-size:24px;margin:0;text-transform:uppercase}.muted{color:#555;font-size:12px;line-height:1.45}.badge{display:inline-block;border:1px solid #0f172a;border-radius:999px;padding:6px 10px;font-weight:800;font-size:12px}
+      .grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:14px 0}.box{border:1px solid #d1d5db;border-radius:10px;padding:12px}.box span{display:block;color:#555;font-size:11px;text-transform:uppercase}.box strong{display:block;margin-top:6px;font-size:16px}
+      table{width:100%;border-collapse:collapse;margin-top:14px}th{background:#f1f5f9;text-align:left;font-size:12px;text-transform:uppercase;color:#334155}th,td{border:1px solid #d1d5db;padding:9px;font-size:13px;vertical-align:top}td:last-child,th:last-child{text-align:center}.check{width:24px;height:24px;border:2px solid #111;margin:auto}.note{border:1px dashed #777;border-radius:12px;padding:12px;margin-top:14px;background:#fafafa;font-size:13px}.signs{display:grid;grid-template-columns:repeat(3,1fr);gap:18px;margin-top:54px}.sign{border-top:1px solid #111;text-align:center;padding-top:8px;font-size:12px;color:#333}.foot{margin-top:18px;text-align:center;color:#64748b;font-size:11px}
+      @media print{.toolbar{display:none}body{padding:18px}}
+    </style></head><body><div class="toolbar"><button onclick="print()">Imprimir / Guardar PDF</button></div>
+      <div class="head"><div><h1>Hoja de recepcion</h1><p class="muted">${escapeHtml(storeSettings.storeName || storeSettings.companyName || currentUser.companyName || "ZOW Ventas-Almacen")}<br>Generado: ${formatDateTime(new Date().toISOString())}</p></div><div><span class="badge">${escapeHtml(purchase.code)}</span></div></div>
+      <div class="grid"><div class="box"><span>Proveedor</span><strong>${escapeHtml(purchase.supplier_name || "Proveedor sin registrar")}</strong></div><div class="box"><span>Factura/nota</span><strong>${escapeHtml(purchase.invoice_number || "Sin factura")}</strong></div><div class="box"><span>Total orden</span><strong>${money(purchase.total)}</strong></div><div class="box"><span>Unidades</span><strong>${num(totalUnits)}</strong></div></div>
+      <table><thead><tr><th>Producto</th><th>Solicitado</th><th>Costo</th><th>Recibido fisico</th><th>Obs.</th><th>OK</th></tr></thead><tbody>${items.map((item) => `<tr><td>${escapeHtml(item.product_name)}</td><td>${num(item.quantity)}</td><td>${money(item.unit_cost)}</td><td></td><td></td><td><div class="check"></div></td></tr>`).join("")}</tbody></table>
+      <div class="note"><strong>Revision antes de recibir en sistema</strong><br>Verificar cantidades fisicas, estado del producto, vencimiento si corresponde, factura/nota y costo unitario. Recibir en sistema solo cuando la revision este conforme.</div>
+      <div class="signs"><div class="sign">Entregado por proveedor</div><div class="sign">Recibido por almacen</div><div class="sign">Autorizado</div></div><p class="foot">SYSTEM ZOW SAAS - Control de compras e inventario</p>
+    </body></html>`);
+    printable.document.close();
+    printable.focus();
+  } catch (error) {
+    ventasMessage = error.message || "No se pudo generar la hoja de recepcion.";
     renderMain();
   }
 }

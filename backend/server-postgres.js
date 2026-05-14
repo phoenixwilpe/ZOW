@@ -1925,6 +1925,22 @@ app.post("/api/ventas/purchases", requireAuth, async (req, res) => {
   }
 });
 
+app.get("/api/ventas/purchases/:id", requireAuth, async (req, res) => {
+  if (!(await requireSystemAccess("ventas_almacen", req, res))) return;
+  if (!requireVentasRole(req, res, "admin", "ventas_admin", "almacen", "supervisor")) return;
+  await ensureVentasSchema();
+  const purchase = await pg.get(
+    `SELECT purchase_orders.*, users.name AS created_by_name
+     FROM purchase_orders
+     LEFT JOIN users ON users.id = purchase_orders.created_by
+     WHERE purchase_orders.id = ? AND purchase_orders.company_id = ?`,
+    [req.params.id, req.user.company_id]
+  );
+  if (!purchase) return res.status(404).json({ error: "Orden de compra no encontrada" });
+  const items = await pg.all("SELECT * FROM purchase_order_items WHERE purchase_id = ? AND company_id = ? ORDER BY product_name", [purchase.id, req.user.company_id]);
+  res.json({ purchase, items });
+});
+
 app.patch("/api/ventas/purchases/:id/receive", requireAuth, async (req, res) => {
   if (!(await requireSystemAccess("ventas_almacen", req, res))) return;
   if (!requireVentasRole(req, res, "admin", "ventas_admin", "almacen")) return;

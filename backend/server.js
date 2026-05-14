@@ -2029,6 +2029,20 @@ app.post("/api/ventas/purchases", requireAuth, requireSystemAccess("ventas_almac
   });
 });
 
+app.get("/api/ventas/purchases/:id", requireAuth, requireSystemAccess("ventas_almacen"), requireVentasRole("admin", "ventas_admin", "almacen", "supervisor"), (req, res) => {
+  const purchase = db
+    .prepare(
+      `SELECT purchase_orders.*, users.name AS created_by_name
+       FROM purchase_orders
+       LEFT JOIN users ON users.id = purchase_orders.created_by
+       WHERE purchase_orders.id = ? AND purchase_orders.company_id = ?`
+    )
+    .get(req.params.id, req.user.company_id);
+  if (!purchase) return res.status(404).json({ error: "Orden de compra no encontrada" });
+  const items = db.prepare("SELECT * FROM purchase_order_items WHERE purchase_id = ? AND company_id = ? ORDER BY product_name").all(purchase.id, req.user.company_id);
+  res.json({ purchase, items });
+});
+
 app.patch("/api/ventas/purchases/:id/receive", requireAuth, requireSystemAccess("ventas_almacen"), requireVentasRole("admin", "ventas_admin", "almacen"), (req, res) => {
   const purchase = db.prepare("SELECT * FROM purchase_orders WHERE id = ? AND company_id = ?").get(req.params.id, req.user.company_id);
   if (!purchase) return res.status(404).json({ error: "Orden de compra no encontrada" });
