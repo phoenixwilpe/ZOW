@@ -1786,6 +1786,7 @@ function renderReports() {
     ${renderReportDecisionPanel({ businessHealth, confirmedSales, stockRisks, expiryRisks, pendingTotal, marginPercent, totalClosureDifference: cashClosures.reduce((sum, closure) => sum + Math.abs(Number(closure.differenceAmount || 0)), 0) })}
     ${renderInventoryValuationReport()}
     ${renderNoMovementProductsReport(profitRows)}
+    ${renderProductPerformanceReport(profitRows)}
     ${renderTopCustomersReport(confirmedSales)}
     <section class="admin-panel">
       <div class="admin-panel-head"><div><p class="eyebrow">Cobros</p><h3>Ventas por metodo de pago</h3></div></div>
@@ -1860,6 +1861,7 @@ function renderReports() {
   document.querySelector("#exportAuditCsv")?.addEventListener("click", exportAuditCsv);
   document.querySelector("#exportBackupJson")?.addEventListener("click", exportBackupJson);
   document.querySelector("#exportNoMovementCsv")?.addEventListener("click", () => exportNoMovementProductsCsv(profitRows));
+  document.querySelector("#exportProductPerformanceCsv")?.addEventListener("click", () => exportProductPerformanceCsv(profitRows));
   document.querySelector("#exportTopCustomersCsv")?.addEventListener("click", () => exportTopCustomersCsv(confirmedSales));
   document.querySelector("#exportCategorySalesCsv")?.addEventListener("click", () => exportCategorySalesCsv(profitRows));
   document.querySelector("#copyExecutiveBrief")?.addEventListener("click", copyExecutiveBrief);
@@ -2125,6 +2127,81 @@ function renderNoMovementProductsReport(profitRows = []) {
       </article>`;
     }).join("") || empty("Todos los productos activos tuvieron movimiento en el periodo")}</div>
   </section>`;
+}
+
+function buildProductPerformanceRows(profitRows = []) {
+  const productMap = new Map(products.map((product) => [String(product.id), product]));
+  return profitRows.map((row) => {
+    const product = productMap.get(String(row.productId || row.product_id || ""));
+    const quantity = Number(row.quantity || 0);
+    const netSales = Number(row.netSales || 0);
+    const profit = Number(row.profit || 0);
+    const margin = netSales ? (profit / netSales) * 100 : 0;
+    const stock = Number(product?.stock || 0);
+    const minStock = Number(product?.min_stock || 0);
+    const stockAfterDays = quantity > 0 ? Math.round(stock / Math.max(quantity, 1)) : 0;
+    let action = "Mantener seguimiento";
+    if (quantity > 0 && stock <= minStock) action = "Reponer pronto";
+    else if (margin < 10 && netSales > 0) action = "Revisar margen";
+    else if (quantity >= 10 && margin >= 20) action = "Destacar en venta";
+    return {
+      productId: row.productId || row.product_id || "",
+      productName: row.productName || product?.name || "Producto",
+      code: product?.code || "",
+      category: product?.category || "Sin categoria",
+      quantity,
+      netSales,
+      profit,
+      margin,
+      stock,
+      minStock,
+      stockAfterDays,
+      action
+    };
+  }).sort((a, b) => b.netSales - a.netSales);
+}
+
+function renderProductPerformanceReport(profitRows = []) {
+  const rows = buildProductPerformanceRows(profitRows);
+  const topProducts = rows.slice(0, 6);
+  const slowProducts = rows
+    .filter((row) => row.quantity > 0)
+    .slice()
+    .sort((a, b) => a.quantity - b.quantity || b.stock - a.stock)
+    .slice(0, 6);
+  const best = rows[0];
+  return `<section class="admin-panel product-performance-panel">
+    <div class="admin-panel-head">
+      <div><p class="eyebrow">Rendimiento de productos</p><h3>Mas vendidos y baja rotacion</h3></div>
+      <div class="admin-head-actions"><span>${best ? escapeHtml(best.productName) : "Sin ventas"}</span><button class="ghost-button" type="button" id="exportProductPerformanceCsv" ${rows.length ? "" : "disabled"}>Exportar rendimiento</button></div>
+    </div>
+    <div class="report-risk-columns">
+      <div>
+        <strong>Productos que mas venden</strong>
+        <div class="admin-list">${topProducts.map((row, index) => renderProductPerformanceRow(row, index + 1)).join("") || empty("Sin ventas confirmadas para calcular rendimiento")}</div>
+      </div>
+      <div>
+        <strong>Productos con menor salida</strong>
+        <div class="admin-list">${slowProducts.map((row, index) => renderProductPerformanceRow(row, index + 1)).join("") || empty("Sin productos de baja rotacion en ventas confirmadas")}</div>
+      </div>
+    </div>
+  </section>`;
+}
+
+function renderProductPerformanceRow(row, position) {
+  const actionClass = row.action === "Reponer pronto" ? "warn-text" : row.action === "Revisar margen" ? "danger-text" : "ok-text";
+  return `<article class="admin-row">
+    <div>
+      <strong>${position}. ${escapeHtml(row.productName)}</strong>
+      <span>${escapeHtml(row.code)} / ${escapeHtml(row.category)} / ${num(row.quantity)} unidad${row.quantity === 1 ? "" : "es"}</span>
+      <span>Stock actual ${num(row.stock)} / minimo ${num(row.minStock)}</span>
+    </div>
+    <div class="admin-row-meta">
+      <span>Venta ${money(row.netSales)}</span>
+      <span>Margen ${row.margin.toFixed(1)}%</span>
+      <span class="${actionClass}">${escapeHtml(row.action)}</span>
+    </div>
+  </article>`;
 }
 
 function buildCategorySalesRows(profitRows = []) {
@@ -6651,6 +6728,25 @@ function exportNoMovementProductsCsv(profitRows = []) {
       };
     });
   downloadCsv(`productos-sin-movimiento-${csvDateStamp()}.csv`, rows);
+}
+
+function exportProductPerformanceCsv(profitRows = []) {
+  const rows = buildProductPerformanceRows(profitRows).map((row, index) => ({
+    posicion: index + 1,
+    codigo: row.code,
+    producto: row.productName,
+    categoria: row.category,
+    unidades_vendidas: Number(row.quantity || 0).toFixed(2),
+    venta_neta: Number(row.netSales || 0).toFixed(2),
+    utilidad: Number(row.profit || 0).toFixed(2),
+    margen_porcentaje: Number(row.margin || 0).toFixed(2),
+    stock_actual: Number(row.stock || 0).toFixed(2),
+    stock_minimo: Number(row.minStock || 0).toFixed(2),
+    recomendacion: row.action,
+    periodo_desde: reportFilter.from || "",
+    periodo_hasta: reportFilter.to || ""
+  }));
+  downloadCsv(`rendimiento-productos-${csvDateStamp()}.csv`, rows);
 }
 
 function exportCategorySalesCsv(profitRows = []) {
