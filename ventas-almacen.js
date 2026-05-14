@@ -1785,6 +1785,7 @@ function renderReports() {
     ${renderExecutiveBriefPanel({ businessHealth, confirmedSales, voidedSales, totalIncome, totalSold, averageSale, pendingTotal, stockRisks, expiryRisks, paymentBreakdown })}
     ${renderReportDecisionPanel({ businessHealth, confirmedSales, stockRisks, expiryRisks, pendingTotal, marginPercent, totalClosureDifference: cashClosures.reduce((sum, closure) => sum + Math.abs(Number(closure.differenceAmount || 0)), 0) })}
     ${renderInventoryValuationReport()}
+    ${renderNoMovementProductsReport(profitRows)}
     <section class="admin-panel">
       <div class="admin-panel-head"><div><p class="eyebrow">Cobros</p><h3>Ventas por metodo de pago</h3></div></div>
       <div class="payment-breakdown-grid">${paymentBreakdown.map((item) => `<article><span>${escapeHtml(item.label)}</span><strong>${money(item.total)}</strong><small>${num(item.count)} venta${item.count === 1 ? "" : "s"}</small></article>`).join("")}</div>
@@ -1856,6 +1857,7 @@ function renderReports() {
   document.querySelector("#exportClosuresCsv")?.addEventListener("click", exportCashClosuresCsv);
   document.querySelector("#exportAuditCsv")?.addEventListener("click", exportAuditCsv);
   document.querySelector("#exportBackupJson")?.addEventListener("click", exportBackupJson);
+  document.querySelector("#exportNoMovementCsv")?.addEventListener("click", () => exportNoMovementProductsCsv(profitRows));
   document.querySelector("#copyExecutiveBrief")?.addEventListener("click", copyExecutiveBrief);
   document.querySelector("#printExecutiveBrief")?.addEventListener("click", printExecutiveBrief);
   bindProductLabelActions();
@@ -2089,6 +2091,35 @@ function renderInventoryValuationReport() {
         <div class="admin-row-meta"><span>Valor ${money(insight.stockValue)}</span><span>Venta ${money(insight.potentialRevenue)}</span><span>Margen ${num(insight.marginPercent)}%</span></div>
       </article>`;
     }).join("") || empty("Sin productos activos para valorizar")}</div>
+  </section>`;
+}
+
+function renderNoMovementProductsReport(profitRows = []) {
+  const soldProductIds = new Set(profitRows.map((row) => String(row.productId || row.product_id || "")));
+  const activeProducts = products.filter(isProductActive);
+  const noMovement = activeProducts
+    .filter((product) => !soldProductIds.has(String(product.id)))
+    .sort((a, b) => Number(b.stock || 0) * Number(b.cost_price || 0) - Number(a.stock || 0) * Number(a.cost_price || 0));
+  const detainedValue = noMovement.reduce((sum, product) => sum + Number(product.stock || 0) * Number(product.cost_price || 0), 0);
+  const periodText = reportFilter.from || reportFilter.to ? `${reportFilter.from || "inicio"} a ${reportFilter.to || "hoy"}` : "periodo actual";
+  return `<section class="admin-panel inventory-valuation-panel no-movement-panel">
+    <div class="admin-panel-head">
+      <div><p class="eyebrow">Rotacion</p><h3>Productos sin movimiento</h3></div>
+      <div class="admin-head-actions"><span>${money(detainedValue)}</span><button class="ghost-button" type="button" id="exportNoMovementCsv" ${noMovement.length ? "" : "disabled"}>Exportar sin movimiento</button></div>
+    </div>
+    <div class="report-grid compact-report-grid">
+      <article><span>Sin venta</span><strong>${num(noMovement.length)}</strong><small>${escapeHtml(periodText)}</small></article>
+      <article><span>Valor detenido</span><strong>${money(detainedValue)}</strong><small>Costo en stock sin rotacion</small></article>
+      <article><span>Activos vendidos</span><strong>${num(activeProducts.length - noMovement.length)}</strong><small>Productos con movimiento</small></article>
+    </div>
+    <div class="admin-list">${noMovement.slice(0, 10).map((product) => {
+      const insight = productInventoryInsight(product);
+      const value = Number(product.stock || 0) * Number(product.cost_price || 0);
+      return `<article class="admin-row">
+        <div><strong>${escapeHtml(product.name)}</strong><span>${escapeHtml(product.code)} / ${escapeHtml(product.category || "Sin categoria")} / Stock ${num(product.stock)}</span><span>Puede requerir exhibicion, promocion o ajuste de compra.</span></div>
+        <div class="admin-row-meta"><span>Valor ${money(value)}</span><span>Precio ${money(product.sale_price)}</span><span>Margen ${num(insight.marginPercent)}%</span><button class="ghost-button" type="button" data-print-product-label="${product.id}">Etiquetas</button></div>
+      </article>`;
+    }).join("") || empty("Todos los productos activos tuvieron movimiento en el periodo")}</div>
   </section>`;
 }
 
@@ -6512,6 +6543,31 @@ function exportInventoryCsv() {
   });
   downloadCsv(`inventario-${csvDateStamp()}.csv`, rows);
 }
+
+function exportNoMovementProductsCsv(profitRows = []) {
+  const soldProductIds = new Set(profitRows.map((row) => String(row.productId || row.product_id || "")));
+  const rows = products
+    .filter((product) => isProductActive(product) && !soldProductIds.has(String(product.id)))
+    .map((product) => {
+      const insight = productInventoryInsight(product);
+      return {
+        codigo: product.code,
+        codigo_barras: product.barcode || "",
+        producto: product.name,
+        categoria: product.category || "",
+        unidad: product.unit || "",
+        stock: Number(product.stock || 0).toFixed(2),
+        costo: Number(product.cost_price || 0).toFixed(2),
+        precio: Number(product.sale_price || 0).toFixed(2),
+        valor_detenido: Number(insight.stockValue || 0).toFixed(2),
+        margen_porcentaje: insight.marginPercent,
+        periodo_desde: reportFilter.from || "",
+        periodo_hasta: reportFilter.to || ""
+      };
+    });
+  downloadCsv(`productos-sin-movimiento-${csvDateStamp()}.csv`, rows);
+}
+
 function exportInventoryRiskCsv() {
   const riskProducts = uniqueProducts(products.filter((product) => {
     if (!isProductActive(product)) return false;
