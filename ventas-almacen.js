@@ -1923,6 +1923,7 @@ function renderReports() {
       <div class="admin-panel-head"><div><p class="eyebrow">Auditoria visible</p><h3>Ultimas acciones comerciales</h3></div><span>${auditEvents.length} evento${auditEvents.length === 1 ? "" : "s"}</span></div>
       <div class="admin-list compact-audit-list">${auditEvents.slice(0, 20).map(renderAuditEventRow).join("") || empty("Aun no hay eventos comerciales auditados")}</div>
     </section>
+    ${renderUserAuditPanel(auditEvents)}
   `;
   document.querySelector("#reportDateFrom")?.addEventListener("change", async (event) => { reportFilter.from = event.target.value; await render(); });
   document.querySelector("#reportDateTo")?.addEventListener("change", async (event) => { reportFilter.to = event.target.value; await render(); });
@@ -1933,6 +1934,7 @@ function renderReports() {
   document.querySelector("#exportProfitCsv")?.addEventListener("click", exportProfitCsv);
   document.querySelector("#exportClosuresCsv")?.addEventListener("click", exportCashClosuresCsv);
   document.querySelector("#exportAuditCsv")?.addEventListener("click", exportAuditCsv);
+  document.querySelector("#exportUserAuditCsv")?.addEventListener("click", exportUserAuditCsv);
   document.querySelector("#exportBackupJson")?.addEventListener("click", exportBackupJson);
   document.querySelector("#exportNoMovementCsv")?.addEventListener("click", () => exportNoMovementProductsCsv(profitRows));
   document.querySelector("#exportProductPerformanceCsv")?.addEventListener("click", () => exportProductPerformanceCsv(profitRows));
@@ -2385,6 +2387,51 @@ function renderAuditEventRow(event) {
     </div>
     <div class="admin-row-meta"><span>${escapeHtml(event.entity_type || "ventas")}</span></div>
   </article>`;
+}
+
+function buildUserAuditRows(events = []) {
+  const sensitiveActions = new Set(["sale_void", "sale_return", "cash_close", "cash_movement", "product_update", "stock_move", "product_import", "promotion_delete", "combo_delete"]);
+  const byUser = new Map();
+  events.forEach((event) => {
+    const user = event.actor_name || "Sistema";
+    const current = byUser.get(user) || { user, total: 0, sensitive: 0, sales: 0, cash: 0, inventory: 0, lastDate: "", actions: new Map() };
+    current.total += 1;
+    if (sensitiveActions.has(event.action)) current.sensitive += 1;
+    if (String(event.action || "").startsWith("sale_") || event.action === "credit_payment") current.sales += 1;
+    if (String(event.action || "").startsWith("cash_")) current.cash += 1;
+    if (["stock_move", "product_create", "product_update", "product_import", "purchase_create", "purchase_receive"].includes(event.action)) current.inventory += 1;
+    current.actions.set(event.action, (current.actions.get(event.action) || 0) + 1);
+    if (!current.lastDate || new Date(event.created_at || 0) > new Date(current.lastDate || 0)) current.lastDate = event.created_at || "";
+    byUser.set(user, current);
+  });
+  return [...byUser.values()].map((row) => {
+    const mainAction = [...row.actions.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] || "";
+    return { ...row, mainAction };
+  }).sort((a, b) => b.sensitive - a.sensitive || b.total - a.total);
+}
+
+function renderUserAuditPanel(events = []) {
+  const rows = buildUserAuditRows(events);
+  const top = rows[0];
+  return `<section class="admin-panel user-audit-panel">
+    <div class="admin-panel-head">
+      <div><p class="eyebrow">Auditoria por usuario</p><h3>Responsables y acciones sensibles</h3></div>
+      <div class="admin-head-actions"><span>${top ? escapeHtml(top.user) : "Sin eventos"}</span><button class="ghost-button" type="button" id="exportUserAuditCsv" ${rows.length ? "" : "disabled"}>Exportar por usuario</button></div>
+    </div>
+    <div class="user-audit-grid">
+      ${rows.slice(0, 8).map((row) => `<article class="${row.sensitive ? "has-sensitive" : ""}">
+        <div><strong>${escapeHtml(row.user)}</strong><span>Ultima accion: ${row.lastDate ? formatDateTime(row.lastDate) : "Sin fecha"}</span></div>
+        <div class="user-audit-metrics">
+          <span><b>${num(row.total)}</b> eventos</span>
+          <span><b>${num(row.sensitive)}</b> sensibles</span>
+          <span><b>${num(row.sales)}</b> ventas</span>
+          <span><b>${num(row.cash)}</b> caja</span>
+          <span><b>${num(row.inventory)}</b> inventario</span>
+        </div>
+        <small>Accion frecuente: ${escapeHtml(auditActionLabel(row.mainAction))}</small>
+      </article>`).join("") || empty("Aun no hay actividad auditada por usuario")}
+    </div>
+  </section>`;
 }
 
 function auditActionLabel(action) {
@@ -6778,6 +6825,20 @@ function exportAuditCsv() {
     ip: event.ip_address || ""
   }));
   downloadCsv(`auditoria-comercial-${csvDateStamp()}.csv`, rows);
+}
+
+function exportUserAuditCsv() {
+  const rows = buildUserAuditRows(auditEvents).map((row) => ({
+    usuario: row.user,
+    eventos: row.total,
+    acciones_sensibles: row.sensitive,
+    ventas_cobranza: row.sales,
+    caja: row.cash,
+    inventario_compras: row.inventory,
+    accion_frecuente: auditActionLabel(row.mainAction),
+    ultima_accion: row.lastDate ? formatDateTime(row.lastDate) : ""
+  }));
+  downloadCsv(`auditoria-por-usuario-${csvDateStamp()}.csv`, rows);
 }
 
 function profitReportQuery() {
