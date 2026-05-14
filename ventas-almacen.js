@@ -3259,6 +3259,7 @@ function renderHelp() {
         <strong>${escapeHtml(storeSettings.storeName || storeSettings.companyName || currentUser.companyName || "Zow Ventas-Almacen")}</strong>
         <button class="primary-button" type="button" id="printSalesManualBtn">Imprimir manual</button>
         <button class="ghost-button" type="button" id="printCertificationBtn">Reporte de certificacion</button>
+        <button class="ghost-button" type="button" id="printCommercialSummaryBtn">Resumen comercial</button>
       </div>
     </section>
     <section class="help-guide-grid">
@@ -3336,6 +3337,7 @@ function renderHelp() {
   `;
   document.querySelector("#printSalesManualBtn")?.addEventListener("click", printSalesCommercialManual);
   document.querySelector("#printCertificationBtn")?.addEventListener("click", printSalesCertificationReport);
+  document.querySelector("#printCommercialSummaryBtn")?.addEventListener("click", printSalesCommercialSummary);
   document.querySelectorAll("[data-help-role]").forEach((button) => {
     button.addEventListener("click", () => {
       helpRolePreview = button.dataset.helpRole;
@@ -3414,6 +3416,64 @@ function printSalesCertificationReport() {
       ${certification.groups.map((group) => `<section class="group"><h2>${escapeHtml(group.label)} <span>${group.done}/${group.items.length}</span></h2>${group.items.map((item) => `<div class="item ${item.done ? "" : "pending"}"><b>${item.done ? "OK" : "!"}</b><span>${escapeHtml(item.label)}</span></div>`).join("")}</section>`).join("")}
     </div>
     <p class="foot">ZOW Ventas-Almacen - Control interno de entrega</p>
+  </body></html>`);
+  printable.document.close();
+  printable.focus();
+}
+
+function printSalesCommercialSummary() {
+  const printable = window.open("", "_blank", "width=900,height=920");
+  if (!printable) return;
+  const title = storeSettings.storeName || storeSettings.companyName || currentUser.companyName || "Empresa cliente";
+  const certification = buildSalesCertificationChecks();
+  const launchChecks = buildStoreLaunchChecks();
+  const setupSteps = buildSetupAssistantSteps();
+  const activeProducts = products.filter(isProductActive);
+  const operativeUsers = users.filter((user) => ["ventas_admin", "cajero", "almacen", "vendedor", "supervisor"].includes(user.role));
+  const security = buildAccessSecurityChecks(operativeUsers);
+  const riskCount = security.checks.filter((item) => ["danger", "warning"].includes(item.level)).length;
+  const modules = [
+    ["Venta POS", "Caja tactil, busqueda por codigo/nombre, carrito, descuentos, cobro e impresion."],
+    ["Caja", "Apertura, ingresos, egresos, arqueo, cierre y diferencias con observacion."],
+    ["Inventario", "Stock, minimo, vencimientos, Kardex, ajustes y productos criticos."],
+    ["Compras", "Proveedor, orden de compra, recepcion y actualizacion automatica de stock."],
+    ["Clientes", "Registro, credito, cobranza, pagos parciales y mensajes por WhatsApp."],
+    ["Reportes", "Ventas, utilidad, categorias, clientes principales, auditoria y exportaciones CSV."],
+    ["Seguridad", "Roles separados, permisos por usuario, auditoria y control de accesos."],
+    ["Entrenamiento", "Modo demo para capacitar sin tocar ventas, caja ni stock real."]
+  ];
+  const benefits = [
+    "Reduce errores de caja y venta diaria.",
+    "Controla stock, compras y reposicion con datos visibles.",
+    "Permite trabajar con cajeros, almacen y supervisores con permisos separados.",
+    "Entrega reportes para tomar decisiones sin depender de hojas sueltas.",
+    "Mantiene historial y auditoria para revisar operaciones sensibles.",
+    "Se adapta a tiendas pequeñas con 1 o 2 personas y a equipos mas grandes."
+  ];
+  printable.document.write(`<!doctype html><html><head><meta charset="UTF-8"><title>Resumen comercial ${escapeHtml(title)}</title><style>
+    *{box-sizing:border-box}body{font-family:Arial,sans-serif;margin:0;padding:28px;color:#10251f;background:#fff}
+    .toolbar{margin-bottom:16px}.toolbar button{border:0;border-radius:10px;padding:11px 18px;background:#0f172a;color:#fff;font-weight:900}
+    .head{display:flex;justify-content:space-between;gap:22px;border-bottom:3px solid #0f766e;padding-bottom:16px;margin-bottom:18px}
+    h1{margin:0;font-size:26px;text-transform:uppercase}h2{margin:20px 0 10px;color:#0f766e;font-size:17px}.muted{color:#5b6f69;font-size:12px;line-height:1.45}
+    .score{font-size:42px;font-weight:900;color:#0f766e;text-align:right}.grid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}.metric{border:1px solid #d9ebe5;border-radius:14px;padding:13px;background:#f8fffc}
+    .metric span,.module span{display:block;color:#53645f;font-size:12px;line-height:1.38}.metric strong{display:block;margin-top:5px;color:#0f3d34;font-size:22px}.module{break-inside:avoid;border:1px solid #d9ebe5;border-radius:14px;padding:13px;background:#fff}.module strong{display:block;color:#0f3d34;margin-bottom:5px}
+    .list{border:1px solid #d9ebe5;border-radius:14px;padding:14px;background:#f8fffc}.list li{margin:7px 0;line-height:1.38}.checks{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}.check{display:grid;grid-template-columns:32px 1fr;gap:8px;border:1px solid #d9ebe5;border-radius:12px;padding:9px;background:#fff}.check b{display:grid;place-items:center;width:25px;height:25px;border-radius:999px;background:#dcfce7;color:#047857;font-size:10px}.check.pending{background:#fffbeb;border-color:#fde68a}.check.pending b{background:#fef3c7;color:#92400e}.check span{font-size:12px}
+    .box{border:1px dashed #94a3b8;border-radius:12px;padding:12px;margin:14px 0}.foot{margin-top:20px;text-align:center;color:#64748b;font-size:11px}
+    @media print{.toolbar{display:none}body{padding:18px}.module,.metric,.check{break-inside:avoid}}
+  </style></head><body>
+    <div class="toolbar"><button onclick="print()">Imprimir / Guardar PDF</button></div>
+    <div class="head"><div><h1>Resumen comercial</h1><p class="muted">ZOW Ventas-Almacen<br>${escapeHtml(title)}<br>Generado: ${formatDateTime(new Date().toISOString())}</p></div><div class="score">${certification.percent}%</div></div>
+    <div class="grid">
+      <div class="metric"><span>Estado de configuracion</span><strong>${setupSteps.filter((item) => item.done).length}/${setupSteps.length}</strong></div>
+      <div class="metric"><span>Productos activos</span><strong>${num(activeProducts.length)}</strong></div>
+      <div class="metric"><span>Usuarios operativos</span><strong>${num(operativeUsers.length)}</strong></div>
+      <div class="metric"><span>Alertas de seguridad</span><strong>${riskCount ? num(riskCount) : "OK"}</strong></div>
+    </div>
+    <h2>Modulos incluidos</h2><div class="grid">${modules.map(([name, detail]) => `<article class="module"><strong>${escapeHtml(name)}</strong><span>${escapeHtml(detail)}</span></article>`).join("")}</div>
+    <h2>Beneficios para la empresa</h2><div class="list"><ul>${benefits.map((benefit) => `<li>${escapeHtml(benefit)}</li>`).join("")}</ul></div>
+    <h2>Checklist de entrega</h2><div class="checks">${launchChecks.map((item) => `<article class="check ${item.done ? "" : "pending"}"><b>${item.done ? "OK" : "!"}</b><span>${escapeHtml(item.label)} - ${escapeHtml(item.detail)}</span></article>`).join("")}</div>
+    <div class="box"><strong>Propuesta de uso</strong><p class="muted">El sistema esta preparado para empresas con un punto de atencion, con control de venta, caja, inventario, compras, clientes, cobranza, reportes y auditoria. Puede operar con pocos usuarios o con roles separados segun el tamaño del negocio.</p></div>
+    <p class="foot">SYSTEM ZOW SAAS - Wilmar Peinado B. - ZOW Ventas-Almacen</p>
   </body></html>`);
   printable.document.close();
   printable.focus();
