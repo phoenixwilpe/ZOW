@@ -4658,6 +4658,97 @@ body.app-ventas .executive-action-plan button {
   flex: 0 0 auto;
 }
 
+body.app-ventas .commercial-alerts-panel {
+  display: grid;
+  gap: 12px;
+  margin-bottom: 14px;
+  border: 1px solid rgb(15 118 110 / 16%);
+  border-radius: 22px;
+  padding: 16px;
+  background:
+    linear-gradient(135deg, rgb(255 255 255 / 94%), rgb(236 253 245 / 78%)),
+    radial-gradient(circle at 92% 10%, rgb(245 158 11 / 14%), transparent 32%);
+  box-shadow: 0 18px 42px rgb(15 118 110 / 8%);
+}
+
+body.app-ventas .commercial-alerts-head,
+body.app-ventas .commercial-alert-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+body.app-ventas .commercial-alerts-head h3 {
+  margin: 2px 0 0;
+  color: var(--accent-dark);
+}
+
+body.app-ventas .commercial-alerts-head > span {
+  border-radius: 999px;
+  padding: 7px 12px;
+  background: rgb(255 255 255 / 78%);
+  color: var(--accent-dark);
+  font-weight: 950;
+}
+
+body.app-ventas .commercial-alerts-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  gap: 10px;
+}
+
+body.app-ventas .commercial-alert-card {
+  min-width: 0;
+  border: 1px solid rgb(15 118 110 / 14%);
+  border-radius: 16px;
+  padding: 12px;
+  background: rgb(255 255 255 / 86%);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 70%);
+}
+
+body.app-ventas .commercial-alert-card.is-danger {
+  border-color: rgb(220 38 38 / 25%);
+  background: linear-gradient(135deg, #fff, #fef2f2);
+}
+
+body.app-ventas .commercial-alert-card.is-warning {
+  border-color: rgb(245 158 11 / 30%);
+  background: linear-gradient(135deg, #fff, #fffbeb);
+}
+
+body.app-ventas .commercial-alert-card.is-info {
+  border-color: rgb(14 165 233 / 24%);
+  background: linear-gradient(135deg, #fff, #f0f9ff);
+}
+
+body.app-ventas .commercial-alert-card.is-ok {
+  border-color: rgb(16 185 129 / 22%);
+  background: linear-gradient(135deg, #fff, #ecfdf5);
+}
+
+body.app-ventas .commercial-alert-card div {
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+}
+
+body.app-ventas .commercial-alert-card strong {
+  color: #10251f;
+  line-height: 1.2;
+}
+
+body.app-ventas .commercial-alert-card span {
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-weight: 850;
+  line-height: 1.35;
+}
+
+body.app-ventas .commercial-alert-card button {
+  flex: 0 0 auto;
+}
+
 body.app-ventas .daily-operation-panel {
   display: grid;
   gap: 14px;
@@ -12951,6 +13042,7 @@ body.system-zow-site .site-footer {
   .settings-overview-grid,
   .store-launch-grid,
   .settings-preset-row,
+  body.app-ventas .commercial-alerts-grid,
   body.app-ventas .receipt-preview-shell {
     grid-template-columns: 1fr;
   }
@@ -12958,6 +13050,16 @@ body.system-zow-site .site-footer {
   .help-hero-panel {
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  body.app-ventas .commercial-alerts-head,
+  body.app-ventas .commercial-alert-card {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  body.app-ventas .commercial-alert-card button {
+    width: 100%;
   }
 
   .help-hero-actions {

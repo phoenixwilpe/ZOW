@@ -607,6 +607,7 @@ function renderSummary() {
       </div>
       <strong>${executiveScore.score}/100</strong>
     </section>
+    ${renderCommercialAlertsPanel()}
     <section class="setup-overview">
       <article><span>Clientes</span><strong>${customers.length}</strong></article>
       <article><span>${scopeText}</span><strong>${summary.sales || 0}</strong></article>
@@ -632,6 +633,51 @@ function renderSummary() {
       <div class="admin-list">${sales.slice(0, 6).map(renderSaleRow).join("") || empty("Sin ventas registradas")}</div>
     </section>
   `;
+  document.querySelectorAll("[data-commercial-alert-view]").forEach((button) => {
+    button.addEventListener("click", () => {
+      if (!canAccessView(button.dataset.commercialAlertView)) return;
+      activeView = button.dataset.commercialAlertView;
+      renderMain();
+    });
+  });
+}
+
+function buildCommercialAlerts() {
+  const notices = buildOperationalNotifications();
+  const overdueReceivables = receivables.filter((sale) => daysSince(sale.created_at) > 30);
+  const closureDifference = cashClosures.slice(0, 5).reduce((sum, closure) => sum + Math.abs(Number(closure.differenceAmount || 0)), 0);
+  const recentVoids = sales.filter((sale) => sale.status === "anulada").slice(0, 5);
+  if (overdueReceivables.length) {
+    const total = overdueReceivables.reduce((sum, sale) => sum + Number(sale.balance_due || 0), 0);
+    notices.push({ level: "danger", title: `${num(overdueReceivables.length)} deuda(s) vencida(s)`, detail: `Cartera mayor a 30 dias: ${money(total)}.`, view: "customers" });
+  }
+  if (closureDifference > 0) {
+    notices.push({ level: "warning", title: "Diferencias en cierres recientes", detail: `Diferencia acumulada revisable: ${money(closureDifference)}.`, view: "finance" });
+  }
+  if (recentVoids.length >= 3) {
+    notices.push({ level: "warning", title: "Anulaciones frecuentes", detail: `${num(recentVoids.length)} anulacion(es) recientes. Revisa motivos y comprobantes.`, view: "history" });
+  }
+  const weight = { danger: 1, warning: 2, info: 3, ok: 4 };
+  return notices.sort((a, b) => (weight[a.level] || 9) - (weight[b.level] || 9)).slice(0, 6);
+}
+
+function renderCommercialAlertsPanel() {
+  const alerts = buildCommercialAlerts();
+  const dangerCount = alerts.filter((alert) => alert.level === "danger").length;
+  const warningCount = alerts.filter((alert) => alert.level === "warning").length;
+  const title = dangerCount ? "Atencion inmediata" : warningCount ? "Revisiones recomendadas" : "Operacion controlada";
+  return `<section class="commercial-alerts-panel">
+    <div class="commercial-alerts-head">
+      <div><p class="eyebrow">Avisos comerciales</p><h3>${escapeHtml(title)}</h3></div>
+      <span>${num(alerts.length)} aviso${alerts.length === 1 ? "" : "s"}</span>
+    </div>
+    <div class="commercial-alerts-grid">
+      ${alerts.map((alert) => `<article class="commercial-alert-card is-${alert.level}">
+        <div><strong>${escapeHtml(alert.title)}</strong><span>${escapeHtml(alert.detail || "Revisa el modulo correspondiente.")}</span></div>
+        ${canAccessView(alert.view) ? `<button class="ghost-button" type="button" data-commercial-alert-view="${alert.view}">Revisar</button>` : ""}
+      </article>`).join("") || `<article class="commercial-alert-card is-ok"><div><strong>Sin alertas urgentes</strong><span>Stock, caja y cobranza no muestran avisos criticos ahora.</span></div></article>`}
+    </div>
+  </section>`;
 }
 
 function buildExecutiveScore({ todaySales, criticalProducts, debtTotal, cashOpen }) {
