@@ -4401,6 +4401,7 @@ function renderVentasUsersPanel() {
         <button type="button" data-role-template="cashier"><span>Mostrador</span><strong>Cajero vendedor</strong><small>Venta, clientes, caja y rutas basicas.</small></button>
         <button type="button" data-role-template="warehouse"><span>Almacen</span><strong>Responsable stock</strong><small>Inventario, entradas, salidas y alertas.</small></button>
       </div>
+      ${renderAccessSecurityPanel(operativeUsers)}
       ${renderUserRoleCoverage(operativeUsers)}
       ${renderRolePermissionsOverview()}
       <form class="admin-form" id="ventasUserForm">
@@ -4499,6 +4500,50 @@ function renderUserRoleCoverage(operativeUsers) {
       <strong>${num(item.count)}</strong>
       <small>${escapeHtml(item.detail)}</small>
     </article>`).join("")}
+  </section>`;
+}
+
+function buildAccessSecurityChecks(operativeUsers) {
+  const activeUsers = operativeUsers.filter((user) => user.active);
+  const inactiveUsers = operativeUsers.filter((user) => !user.active);
+  const broadAccessUsers = activeUsers.filter((user) => ["ventas_admin", "supervisor"].includes(user.role));
+  const noCashRegisterUsers = activeUsers.filter((user) => ["cajero", "ventas_admin"].includes(user.role) && !Number(user.cashRegisterNumber || 0));
+  const duplicateUsernames = [...new Set(activeUsers.map((user) => String(user.username || "").toLowerCase()).filter((username, index, list) => username && list.indexOf(username) !== index))];
+  const missingRoles = [
+    { label: "Cajero", missing: !activeUsers.some((user) => ["cajero", "ventas_admin"].includes(user.role)) },
+    { label: "Almacen", missing: !activeUsers.some((user) => ["almacen", "ventas_admin"].includes(user.role)) },
+    { label: "Supervisor", missing: activeUsers.length > 3 && !activeUsers.some((user) => ["supervisor", "ventas_admin"].includes(user.role)) }
+  ].filter((item) => item.missing);
+  const checks = [
+    { label: "Usuarios activos", value: num(activeUsers.length), detail: activeUsers.length ? "Hay credenciales listas para operar." : "Crea al menos un usuario operativo.", level: activeUsers.length ? "ok" : "danger" },
+    { label: "Acceso amplio", value: num(broadAccessUsers.length), detail: broadAccessUsers.length ? "Revisa que solo responsables tengan permisos amplios." : "Sin roles amplios activos.", level: broadAccessUsers.length > 2 ? "warning" : "ok" },
+    { label: "Inactivos", value: num(inactiveUsers.length), detail: inactiveUsers.length ? "Mantener inactivos ayuda a no borrar historial." : "No hay usuarios desactivados.", level: "info" },
+    { label: "Caja fija", value: num(noCashRegisterUsers.length), detail: noCashRegisterUsers.length ? "Conviene asignar caja fija si hay varias cajas." : "Usuarios de caja bien definidos.", level: noCashRegisterUsers.length ? "warning" : "ok" },
+    { label: "Duplicados", value: num(duplicateUsernames.length), detail: duplicateUsernames.length ? "Hay usuarios repetidos para revisar." : "Usuarios unicos.", level: duplicateUsernames.length ? "danger" : "ok" },
+    { label: "Roles clave", value: num(missingRoles.length), detail: missingRoles.length ? `Falta: ${missingRoles.map((item) => item.label).join(", ")}.` : "Cobertura minima completa.", level: missingRoles.length ? "warning" : "ok" }
+  ];
+  return { checks, broadAccessUsers, inactiveUsers, noCashRegisterUsers, duplicateUsernames, missingRoles };
+}
+
+function renderAccessSecurityPanel(operativeUsers) {
+  const security = buildAccessSecurityChecks(operativeUsers);
+  const riskCount = security.checks.filter((item) => ["danger", "warning"].includes(item.level)).length;
+  return `<section class="access-security-panel">
+    <div class="access-security-head">
+      <div><p class="eyebrow">Seguridad de accesos</p><h3>${riskCount ? "Revisiones recomendadas" : "Accesos saludables"}</h3><span>Control rapido para evitar permisos de mas, usuarios duplicados o cuentas sin responsable claro.</span></div>
+      <strong>${riskCount ? `${riskCount} alerta${riskCount === 1 ? "" : "s"}` : "OK"}</strong>
+    </div>
+    <div class="access-security-grid">
+      ${security.checks.map((item) => `<article class="is-${item.level}">
+        <span>${escapeHtml(item.label)}</span>
+        <strong>${escapeHtml(item.value)}</strong>
+        <small>${escapeHtml(item.detail)}</small>
+      </article>`).join("")}
+    </div>
+    <div class="access-security-tips">
+      <strong>Buenas practicas</strong>
+      <span>Entrega credenciales personales, desactiva usuarios que ya no trabajan y usa operador integral solo en tiendas pequeñas o responsables de confianza.</span>
+    </div>
   </section>`;
 }
 
