@@ -3598,8 +3598,31 @@ function renderSetupAssistant() {
         ${item.view && canAccessView(item.view) ? `<button class="ghost-button" type="button" data-module-view="${item.view}">${item.done ? "Ver" : "Completar"}</button>` : ""}
       </article>`).join("")}
     </div>
+    ${renderSetupStageTimeline(checks)}
     <p class="setup-hint">Recomendacion: completa estos puntos antes de entregar el acceso a cajeros o almacen. Para tiendas pequeñas, un operador integral puede cubrir venta, caja e inventario.</p>
   </section>`;
+}
+
+function renderSetupStageTimeline(checks) {
+  const stages = [
+    { label: "1. Identidad", detail: "Empresa, moneda y comprobante", items: ["Datos de empresa", "Comprobante", "Cajas y reglas"], view: "settings" },
+    { label: "2. Equipo", detail: "Usuarios y permisos de trabajo", items: ["Usuarios operativos"], view: "users" },
+    { label: "3. Operacion", detail: "Inventario, proveedor y clientes", items: ["Inventario inicial", "Proveedor y reposicion", "Clientes y credito"], view: "inventory" },
+    { label: "4. Prueba final", detail: "Venta, cobro, ticket y caja", items: ["Prueba de operacion"], view: "sell" }
+  ];
+  return `<div class="setup-stage-timeline">
+    ${stages.map((stage) => {
+      const stageChecks = checks.filter((item) => stage.items.includes(item.label));
+      const done = stageChecks.filter((item) => item.done).length;
+      const percent = stageChecks.length ? Math.round(done / stageChecks.length * 100) : 0;
+      return `<article class="${percent === 100 ? "is-done" : "is-pending"}">
+        <div><span>${escapeHtml(stage.label)}</span><strong>${percent}%</strong></div>
+        <small>${escapeHtml(stage.detail)}</small>
+        <em>${done}/${stageChecks.length} listo${done === 1 ? "" : "s"}</em>
+        ${stage.view && canAccessView(stage.view) ? `<button class="ghost-button" type="button" data-module-view="${stage.view}">${percent === 100 ? "Revisar" : "Configurar"}</button>` : ""}
+      </article>`;
+    }).join("")}
+  </div>`;
 }
 
 function buildSetupAssistantSteps() {
@@ -3618,7 +3641,7 @@ function buildSetupAssistantSteps() {
     { label: "Usuarios operativos", done: hasUsers, detail: hasUsers ? "Ya existen roles comerciales activos." : "Crea cajero, almacen, supervisor o operador integral.", owner: "Encargado", estimate: "10 min", view: "users" },
     { label: "Inventario inicial", done: hasProducts, detail: hasProducts ? `${num(products.filter(isProductActive).length)} producto(s) activo(s).` : "Carga productos o importa inventario inicial.", owner: "Almacen", estimate: "20-60 min", view: "inventory" },
     { label: "Proveedor y reposicion", done: hasSupplierOrPurchase, detail: hasSupplierOrPurchase ? "Compras o proveedor ya estan configurados." : "Registra proveedor para reposicion y compras.", owner: "Almacen", estimate: "10 min", view: "purchases" },
-    { label: "Clientes y credito", done: hasCustomerRuleReady, detail: hasCustomerRuleReady ? "Reglas de cliente listas para vender." : "Registra clientes si exigirás cliente en cada venta.", owner: "Ventas", estimate: "10 min", view: "customers" },
+    { label: "Clientes y credito", done: hasCustomerRuleReady, detail: hasCustomerRuleReady ? "Reglas de cliente listas para vender." : "Registra clientes si exigiras cliente en cada venta.", owner: "Ventas", estimate: "10 min", view: "customers" },
     { label: "Prueba de operacion", done: hasOperationTest, detail: hasOperationTest ? "Ya existe venta, caja o cierre de prueba." : "Abre caja, vende, cobra y cierra un turno de prueba.", owner: "Cajero", estimate: "12 min", view: "sell" }
   ];
 }
