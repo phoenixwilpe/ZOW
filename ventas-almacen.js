@@ -1786,6 +1786,7 @@ function renderReports() {
     ${renderReportDecisionPanel({ businessHealth, confirmedSales, stockRisks, expiryRisks, pendingTotal, marginPercent, totalClosureDifference: cashClosures.reduce((sum, closure) => sum + Math.abs(Number(closure.differenceAmount || 0)), 0) })}
     ${renderInventoryValuationReport()}
     ${renderNoMovementProductsReport(profitRows)}
+    ${renderTopCustomersReport(confirmedSales)}
     <section class="admin-panel">
       <div class="admin-panel-head"><div><p class="eyebrow">Cobros</p><h3>Ventas por metodo de pago</h3></div></div>
       <div class="payment-breakdown-grid">${paymentBreakdown.map((item) => `<article><span>${escapeHtml(item.label)}</span><strong>${money(item.total)}</strong><small>${num(item.count)} venta${item.count === 1 ? "" : "s"}</small></article>`).join("")}</div>
@@ -1859,6 +1860,7 @@ function renderReports() {
   document.querySelector("#exportAuditCsv")?.addEventListener("click", exportAuditCsv);
   document.querySelector("#exportBackupJson")?.addEventListener("click", exportBackupJson);
   document.querySelector("#exportNoMovementCsv")?.addEventListener("click", () => exportNoMovementProductsCsv(profitRows));
+  document.querySelector("#exportTopCustomersCsv")?.addEventListener("click", () => exportTopCustomersCsv(confirmedSales));
   document.querySelector("#exportCategorySalesCsv")?.addEventListener("click", () => exportCategorySalesCsv(profitRows));
   document.querySelector("#copyExecutiveBrief")?.addEventListener("click", copyExecutiveBrief);
   document.querySelector("#printExecutiveBrief")?.addEventListener("click", printExecutiveBrief);
@@ -2157,6 +2159,51 @@ function renderCategorySalesReport(profitRows = []) {
         const margin = Number(row.netSales || 0) ? (Number(row.profit || 0) / Number(row.netSales || 0)) * 100 : 0;
         return `<article><span>${escapeHtml(row.category)}</span><strong>${money(row.netSales)}</strong><small>${num(row.quantity)} unidad${Number(row.quantity || 0) === 1 ? "" : "es"} / ${percent}% del periodo / Margen ${margin.toFixed(1)}%</small></article>`;
       }).join("") || empty("Sin ventas por categoria en este periodo")}
+    </div>
+  </section>`;
+}
+
+function buildTopCustomerRows(sourceSales = []) {
+  const customerMap = new Map();
+  sourceSales.forEach((sale) => {
+    const name = String(sale.customer_name || "").trim() || "Cliente sin registrar";
+    const current = customerMap.get(name) || { name, count: 0, total: 0, paid: 0, balance: 0, lastDate: "", methods: new Map() };
+    current.count += 1;
+    current.total += Number(sale.total || 0);
+    current.paid += Number(sale.amount_paid || sale.cash_received || 0);
+    current.balance += Number(sale.balance_due || 0);
+    if (!current.lastDate || new Date(sale.created_at || 0) > new Date(current.lastDate || 0)) current.lastDate = sale.created_at || "";
+    const method = sale.payment_method || "efectivo";
+    current.methods.set(method, (current.methods.get(method) || 0) + 1);
+    customerMap.set(name, current);
+  });
+  return [...customerMap.values()].map((row) => {
+    const mainMethod = [...row.methods.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] || "efectivo";
+    return { ...row, average: row.count ? row.total / row.count : 0, mainMethod };
+  }).sort((a, b) => b.total - a.total);
+}
+
+function renderTopCustomersReport(sourceSales = []) {
+  const rows = buildTopCustomerRows(sourceSales);
+  const top = rows[0];
+  return `<section class="admin-panel top-customers-panel">
+    <div class="admin-panel-head">
+      <div><p class="eyebrow">Clientes principales</p><h3>Compradores del periodo</h3></div>
+      <div class="admin-head-actions"><span>${top ? escapeHtml(top.name) : "Sin ventas"}</span><button class="ghost-button" type="button" id="exportTopCustomersCsv" ${rows.length ? "" : "disabled"}>Exportar clientes top</button></div>
+    </div>
+    <div class="admin-list">
+      ${rows.slice(0, 8).map((row, index) => `<article class="admin-row">
+        <div>
+          <strong>${index + 1}. ${escapeHtml(row.name)}</strong>
+          <span>${num(row.count)} compra${row.count === 1 ? "" : "s"} / Ultima ${row.lastDate ? formatDateTime(row.lastDate) : "Sin fecha"}</span>
+          <span>Metodo frecuente: ${escapeHtml(paymentLabel(row.mainMethod))}</span>
+        </div>
+        <div class="admin-row-meta">
+          <span>Total ${money(row.total)}</span>
+          <span>Promedio ${money(row.average)}</span>
+          <span class="${row.balance > 0 ? "warn-text" : "ok-text"}">Saldo ${money(row.balance)}</span>
+        </div>
+      </article>`).join("") || empty("Sin clientes con ventas en este periodo")}
     </div>
   </section>`;
 }
@@ -6622,6 +6669,23 @@ function exportCategorySalesCsv(profitRows = []) {
     };
   });
   downloadCsv(`ventas-por-categoria-${csvDateStamp()}.csv`, rows);
+}
+
+function exportTopCustomersCsv(sourceSales = []) {
+  const rows = buildTopCustomerRows(sourceSales).map((row, index) => ({
+    posicion: index + 1,
+    cliente: row.name,
+    compras: row.count,
+    venta_total: Number(row.total || 0).toFixed(2),
+    pagado: Number(row.paid || 0).toFixed(2),
+    saldo: Number(row.balance || 0).toFixed(2),
+    ticket_promedio: Number(row.average || 0).toFixed(2),
+    metodo_frecuente: paymentLabel(row.mainMethod),
+    ultima_compra: row.lastDate ? formatDateTime(row.lastDate) : "",
+    periodo_desde: reportFilter.from || "",
+    periodo_hasta: reportFilter.to || ""
+  }));
+  downloadCsv(`clientes-principales-${csvDateStamp()}.csv`, rows);
 }
 
 function exportInventoryRiskCsv() {
