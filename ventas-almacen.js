@@ -1858,6 +1858,7 @@ function renderReports() {
   document.querySelector("#exportBackupJson")?.addEventListener("click", exportBackupJson);
   document.querySelector("#copyExecutiveBrief")?.addEventListener("click", copyExecutiveBrief);
   document.querySelector("#printExecutiveBrief")?.addEventListener("click", printExecutiveBrief);
+  bindProductLabelActions();
 }
 
 function renderExecutiveBriefPanel({ businessHealth, confirmedSales, voidedSales, totalIncome, totalSold, averageSale, pendingTotal, stockRisks, expiryRisks, paymentBreakdown }) {
@@ -2150,6 +2151,7 @@ function renderCatalog() {
     <section class="admin-panel"><div class="admin-panel-head"><div><p class="eyebrow">Categorias</p><h3>Agrupacion de articulos</h3></div></div><div class="admin-list">${categories.map((c) => `<article class="admin-row"><strong>${escapeHtml(c.name)}</strong><span>${escapeHtml(c.description || "Sin descripcion")}</span></article>`).join("") || empty("Sin categorias")}</div></section>
     <section class="admin-panel"><div class="admin-panel-head"><div><p class="eyebrow">Articulos</p><h3>Productos registrados</h3></div></div><div class="admin-list">${products.map(renderProductRow).join("") || empty("Sin productos")}</div></section>
   `;
+  bindProductLabelActions();
 }
 
 function renderCustomers() {
@@ -2756,6 +2758,7 @@ function renderInventory() {
   document.querySelectorAll("[data-edit-product]").forEach((button) => {
     button.addEventListener("click", () => openProductModal(button.dataset.editProduct));
   });
+  bindProductLabelActions();
   document.querySelectorAll("[data-product-status]").forEach((button) => {
     button.addEventListener("click", () => toggleProductStatus(button.dataset.productStatus));
   });
@@ -3439,7 +3442,7 @@ function applySettingsPreset(preset) {
 function renderProductRow(product) {
   const insight = productInventoryInsight(product);
   const expiry = expiryStatus(product);
-  return `<article class="admin-row"><div><strong>${escapeHtml(product.name)}</strong><span>${escapeHtml(product.code)} / ${escapeHtml(product.category || "Sin categoria")} / ${escapeHtml(product.unit)}</span><span>Stock ${num(product.stock)} / Minimo ${num(product.min_stock)} / Valor ${money(insight.stockValue)}</span></div><div class="admin-row-meta"><span>Costo ${money(product.cost_price)}</span><span>Venta ${money(product.sale_price)}</span><span>Margen ${num(insight.marginPercent)}%</span>${expiry.label ? `<span class="${expiry.className}">${escapeHtml(expiry.label)}</span>` : ""}<span class="${Number(product.stock || 0) <= Number(product.min_stock || 0) ? "danger-text" : "ok-text"}">${Number(product.stock || 0) <= Number(product.min_stock || 0) ? "Bajo minimo" : "Stock OK"}</span></div></article>`;
+  return `<article class="admin-row"><div><strong>${escapeHtml(product.name)}</strong><span>${escapeHtml(product.code)} / ${escapeHtml(product.category || "Sin categoria")} / ${escapeHtml(product.unit)}</span><span>Stock ${num(product.stock)} / Minimo ${num(product.min_stock)} / Valor ${money(insight.stockValue)}</span></div><div class="admin-row-meta"><span>Costo ${money(product.cost_price)}</span><span>Venta ${money(product.sale_price)}</span><span>Margen ${num(insight.marginPercent)}%</span>${expiry.label ? `<span class="${expiry.className}">${escapeHtml(expiry.label)}</span>` : ""}<span class="${Number(product.stock || 0) <= Number(product.min_stock || 0) ? "danger-text" : "ok-text"}">${Number(product.stock || 0) <= Number(product.min_stock || 0) ? "Bajo minimo" : "Stock OK"}</span><button class="ghost-button" type="button" data-print-product-label="${product.id}">Etiquetas</button></div></article>`;
 }
 
 function renderReorderRow(product) {
@@ -3482,6 +3485,7 @@ function renderInventoryProductRow(product) {
       <span class="${Number(product.stock || 0) <= Number(product.min_stock || 0) ? "danger-text" : "ok-text"}">${Number(product.stock || 0) <= Number(product.min_stock || 0) ? "Bajo minimo" : "Stock OK"}</span>
       <div class="mini-action-row">
         <button class="ghost-button" type="button" data-stock-history="${product.id}">Kardex</button>
+        <button class="ghost-button" type="button" data-print-product-label="${product.id}">Etiquetas</button>
         ${canManageProducts ? `<button class="ghost-button" type="button" data-edit-product="${product.id}">Editar</button>` : ""}
         ${canMoveStock ? `<button class="ghost-button" type="button" data-stock-move="${product.id}" data-type="entrada">Entrada</button><button class="ghost-button" type="button" data-stock-move="${product.id}" data-type="salida">Salida</button><button class="ghost-button" type="button" data-stock-move="${product.id}" data-type="ajuste">Ajuste</button>` : ""}
         ${can("manageFavorites") ? `<button class="ghost-button" type="button" data-toggle-favorite="${product.id}">${favoriteProducts.includes(product.id) ? "Quitar favorito" : "Favorito POS"}</button>` : ""}
@@ -3489,6 +3493,34 @@ function renderInventoryProductRow(product) {
       </div>
     </div>
   </article>`;
+}
+
+function bindProductLabelActions() {
+  document.querySelectorAll("[data-print-product-label]").forEach((button) => {
+    button.addEventListener("click", () => printProductLabelSheet(button.dataset.printProductLabel));
+  });
+}
+
+function printProductLabelSheet(productId) {
+  const product = products.find((item) => item.id === productId);
+  if (!product) return;
+  const countInput = window.prompt("Cantidad de etiquetas a imprimir", "12");
+  if (countInput === null) return;
+  const count = Math.min(Math.max(Math.floor(Number(countInput || 12)), 1), 80);
+  const storeName = storeSettings.storeName || storeSettings.companyName || currentUser.companyName || "ZOW Ventas-Almacen";
+  const code = product.barcode || product.code || product.id;
+  const labels = Array.from({ length: count }, () => product);
+  const printable = window.open("", "_blank", "width=920,height=900");
+  if (!printable) return;
+  printable.document.write(`<!doctype html><html><head><meta charset="UTF-8"><title>Etiquetas ${escapeHtml(product.code)}</title><style>
+    *{box-sizing:border-box}body{font-family:Arial,sans-serif;margin:0;padding:18px;color:#111;background:#fff}.toolbar{margin-bottom:14px}.toolbar button{border:0;border-radius:8px;padding:10px 16px;background:#0f172a;color:#fff;font-weight:800}
+    .sheet{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}.label{break-inside:avoid;border:1px dashed #777;border-radius:10px;padding:10px;min-height:124px;display:grid;align-content:space-between;background:#fff}.store{font-size:10px;text-transform:uppercase;color:#555;font-weight:900;letter-spacing:.08em}.name{font-size:15px;font-weight:900;line-height:1.1}.price{font-size:24px;font-weight:950;line-height:1;color:#0f766e}.meta{display:flex;justify-content:space-between;gap:8px;color:#555;font-size:10px}.barcode{height:28px;margin:5px 0;background:repeating-linear-gradient(90deg,#111 0 2px,transparent 2px 5px,#111 5px 6px,transparent 6px 10px)}.code{text-align:center;font-size:10px;font-weight:900;letter-spacing:.08em}
+    @media print{.toolbar{display:none}body{padding:8px}.sheet{gap:6px}.label{border-color:#111;border-radius:0}}
+  </style></head><body><div class="toolbar"><button onclick="print()">Imprimir etiquetas</button></div><div class="sheet">
+    ${labels.map(() => `<article class="label"><div><div class="store">${escapeHtml(storeName)}</div><div class="name">${escapeHtml(product.name)}</div></div><div><div class="price">${money(product.sale_price)}</div><div class="meta"><span>${escapeHtml(product.category || "Sin categoria")}</span><span>${escapeHtml(product.unit || "Unidad")}</span></div><div class="barcode"></div><div class="code">${escapeHtml(code)}</div></div></article>`).join("")}
+  </div></body></html>`);
+  printable.document.close();
+  printable.focus();
 }
 
 function renderKardexPanel() {
