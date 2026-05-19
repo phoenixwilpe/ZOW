@@ -2482,6 +2482,7 @@ app.post("/api/ventas/cash/close", requireAuth, requireSystemAccess("ventas_alma
   const closureId = randomUUID();
   const code = buildNextCashCode(req.user.company_id, now);
   const total = pendingSales.reduce((sum, sale) => sum + payableToCash(sale), 0);
+  const paymentSummary = buildCashClosurePaymentSummary(pendingSales);
   const movements = db.prepare("SELECT * FROM cash_movements WHERE company_id = ? AND session_id = ?").all(req.user.company_id, session.id);
   const movementTotal = movements.reduce((sum, item) => sum + (item.type === "ingreso" ? Number(item.amount || 0) : -Number(item.amount || 0)), 0);
   const openingAmount = Number(session.opening_amount || 0);
@@ -2498,10 +2499,10 @@ app.post("/api/ventas/cash/close", requireAuth, requireSystemAccess("ventas_alma
   db.prepare(
     `INSERT INTO cash_closures (
        id, company_id, code, register_number, opening_amount, total_sales, movement_total, expected_amount,
-       counted_amount, difference_amount, note, sale_count, created_by, created_at
+       counted_amount, difference_amount, note, payment_summary, sale_count, created_by, created_at
      )
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-  ).run(closureId, req.user.company_id, code, Number(session.register_number || 1), openingAmount, total, movementTotal, expectedAmount, countedAmount, differenceAmount, note, pendingSales.length, req.user.id, now);
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+  ).run(closureId, req.user.company_id, code, Number(session.register_number || 1), openingAmount, total, movementTotal, expectedAmount, countedAmount, differenceAmount, note, JSON.stringify(paymentSummary), pendingSales.length, req.user.id, now);
   db.prepare("UPDATE sales_orders SET cash_closed = 1 WHERE company_id = ? AND status = 'confirmada' AND cash_closed = 0 AND (cash_session_id = ? OR (cash_session_id = '' AND created_by = ?))").run(req.user.company_id, session.id, session.opened_by);
   db.prepare("UPDATE cash_sessions SET status = 'cerrada', closed_at = ? WHERE id = ? AND company_id = ?").run(now, session.id, req.user.company_id);
   db.exec("COMMIT");
@@ -2515,7 +2516,7 @@ app.post("/api/ventas/cash/close", requireAuth, requireSystemAccess("ventas_alma
     entityType: "cash_closure",
     entityId: closureId,
     description: `Cerro caja ${session.register_number || 1}. Esperado ${expectedAmount}, contado ${countedAmount}, diferencia ${differenceAmount}`,
-    metadata: { saleCount: pendingSales.length, total, movementTotal, openingAmount, note }
+    metadata: { saleCount: pendingSales.length, total, movementTotal, openingAmount, note, paymentSummary }
   });
   res.status(201).json({ closure: db.prepare("SELECT * FROM cash_closures WHERE id = ?").get(closureId) });
 });
@@ -2777,6 +2778,25 @@ function payableToCash(sale) {
   if (sale.payment_method === "efectivo") return Number(sale.total || 0);
   if (sale.payment_method === "credito") return Number(sale.amount_paid || 0);
   return 0;
+}
+
+function buildCashClosurePaymentSummary(sales = []) {
+  const summary = { efectivo: 0, tarjeta: 0, transferencia: 0, qr: 0, credito: 0 };
+  sales.forEach((sale) => {
+    const detail = parsePaymentDetail(sale.payment_detail);
+    if (Object.keys(detail).length) {
+      summary.efectivo += Math.max(Number(detail.efectivo || 0) - Number(sale.change_amount || 0), 0);
+      summary.tarjeta += Number(detail.tarjeta || 0);
+      summary.transferencia += Number(detail.transferencia || 0);
+      summary.qr += Number(detail.qr || 0);
+      return;
+    }
+    const method = sale.payment_method || "efectivo";
+    if (method === "efectivo") summary.efectivo += Number(sale.total || 0);
+    else if (method === "credito") summary.credito += Number(sale.amount_paid || 0);
+    else if (Object.prototype.hasOwnProperty.call(summary, method)) summary[method] += Number(sale.amount_paid || sale.total || 0);
+  });
+  return Object.fromEntries(Object.entries(summary).filter(([, amount]) => Number(amount || 0) > 0));
 }
 
 function parsePaymentDetail(value) {

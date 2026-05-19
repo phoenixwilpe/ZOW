@@ -2375,6 +2375,7 @@ app.post("/api/ventas/cash/close", requireAuth, async (req, res) => {
   );
   const closureId = randomUUID();
   const total = pendingSales.reduce((sum, sale) => sum + payableToCash(sale), 0);
+  const paymentSummary = buildCashClosurePaymentSummary(pendingSales);
   const movements = await pg.all("SELECT * FROM cash_movements WHERE company_id = ? AND session_id = ?", [req.user.company_id, session.id]);
   const movementTotal = movements.reduce((sum, item) => sum + (item.type === "ingreso" ? Number(item.amount || 0) : -Number(item.amount || 0)), 0);
   const openingAmount = Number(session.opening_amount || 0);
@@ -2391,10 +2392,10 @@ app.post("/api/ventas/cash/close", requireAuth, async (req, res) => {
     await client.run(
       `INSERT INTO cash_closures (
          id, company_id, code, register_number, opening_amount, total_sales, movement_total, expected_amount,
-         counted_amount, difference_amount, note, sale_count, created_by, created_at
+         counted_amount, difference_amount, note, payment_summary, sale_count, created_by, created_at
        )
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, now())`,
-      [closureId, req.user.company_id, code, Number(session.register_number || 1), openingAmount, total, movementTotal, expectedAmount, countedAmount, differenceAmount, note, pendingSales.length, req.user.id]
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, now())`,
+      [closureId, req.user.company_id, code, Number(session.register_number || 1), openingAmount, total, movementTotal, expectedAmount, countedAmount, differenceAmount, note, JSON.stringify(paymentSummary), pendingSales.length, req.user.id]
     );
     await client.run(
       "UPDATE sales_orders SET cash_closed = true WHERE company_id = ? AND status = 'confirmada' AND cash_closed = false AND (cash_session_id = ? OR (cash_session_id = '' AND created_by = ?))",
@@ -2408,7 +2409,7 @@ app.post("/api/ventas/cash/close", requireAuth, async (req, res) => {
     entityType: "cash_closure",
     entityId: closureId,
     description: `Cerro caja ${session.register_number || 1}. Esperado ${expectedAmount}, contado ${countedAmount}, diferencia ${differenceAmount}`,
-    metadata: { saleCount: pendingSales.length, total, movementTotal, openingAmount, note }
+    metadata: { saleCount: pendingSales.length, total, movementTotal, openingAmount, note, paymentSummary }
   });
   res.status(201).json({ closure: await pg.get("SELECT * FROM cash_closures WHERE id = ?", [closureId]) });
 });
@@ -2969,6 +2970,25 @@ function payableToCash(sale) {
   if (sale.payment_method === "efectivo") return Number(sale.total || 0);
   if (sale.payment_method === "credito") return Number(sale.amount_paid || 0);
   return 0;
+}
+
+function buildCashClosurePaymentSummary(sales = []) {
+  const summary = { efectivo: 0, tarjeta: 0, transferencia: 0, qr: 0, credito: 0 };
+  sales.forEach((sale) => {
+    const detail = parsePaymentDetail(sale.payment_detail);
+    if (Object.keys(detail).length) {
+      summary.efectivo += Math.max(Number(detail.efectivo || 0) - Number(sale.change_amount || 0), 0);
+      summary.tarjeta += Number(detail.tarjeta || 0);
+      summary.transferencia += Number(detail.transferencia || 0);
+      summary.qr += Number(detail.qr || 0);
+      return;
+    }
+    const method = sale.payment_method || "efectivo";
+    if (method === "efectivo") summary.efectivo += Number(sale.total || 0);
+    else if (method === "credito") summary.credito += Number(sale.amount_paid || 0);
+    else if (Object.prototype.hasOwnProperty.call(summary, method)) summary[method] += Number(sale.amount_paid || sale.total || 0);
+  });
+  return Object.fromEntries(Object.entries(summary).filter(([, amount]) => Number(amount || 0) > 0));
 }
 
 function parsePaymentDetail(value) {
@@ -3536,6 +3556,7 @@ async function ensureVentasSchema() {
           counted_amount numeric not null default 0,
           difference_amount numeric not null default 0,
           note text not null default '',
+          payment_summary text not null default '{}',
           sale_count integer not null default 0,
           created_by text not null references users(id),
           created_at timestamptz not null default now(),
@@ -3606,6 +3627,7 @@ async function ensureVentasSchema() {
       await pg.run("ALTER TABLE cash_closures ADD COLUMN IF NOT EXISTS counted_amount numeric not null default 0");
       await pg.run("ALTER TABLE cash_closures ADD COLUMN IF NOT EXISTS difference_amount numeric not null default 0");
       await pg.run("ALTER TABLE cash_closures ADD COLUMN IF NOT EXISTS note text not null default ''");
+      await pg.run("ALTER TABLE cash_closures ADD COLUMN IF NOT EXISTS payment_summary text not null default '{}'");
       await pg.run("ALTER TABLE sales_orders ADD COLUMN IF NOT EXISTS payment_method text not null default 'efectivo'");
       await pg.run("ALTER TABLE sales_orders ADD COLUMN IF NOT EXISTS payment_detail text not null default ''");
       await pg.run("ALTER TABLE sales_orders ADD COLUMN IF NOT EXISTS amount_paid numeric not null default 0");

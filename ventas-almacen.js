@@ -5662,20 +5662,23 @@ function printCashClosure(closureId) {
   const differenceClass = difference === 0 ? "ok" : Math.abs(difference) <= 1 ? "warn" : "danger";
   const manualIncome = Math.max(Number(closure.movementTotal || 0), 0);
   const manualExpense = Math.max(-Number(closure.movementTotal || 0), 0);
+  const paymentRows = Object.entries(closure.paymentSummary || {}).filter(([, amount]) => Number(amount || 0) > 0);
+  const statusLabel = difference === 0 ? "Cuadrado" : Math.abs(difference) <= 1 ? "Diferencia menor" : "Requiere revision";
   printable.document.write(`<!doctype html><html><head><meta charset="UTF-8"><title>Cierre ${escapeHtml(closure.code)}</title><style>
     *{box-sizing:border-box}body{font-family:Arial,sans-serif;margin:0;padding:28px;color:#111;background:#fff}
     .toolbar{margin-bottom:16px}.toolbar button{border:0;border-radius:10px;padding:11px 18px;background:#0f172a;color:#fff;font-weight:900}
-    .head{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:20px;align-items:start;border-bottom:3px solid #111;padding-bottom:16px;margin-bottom:18px}
+    .head{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:20px;align-items:start;border:2px solid #111;border-radius:18px;padding:18px;margin-bottom:18px}
     h1{font-size:24px;margin:0;text-transform:uppercase;letter-spacing:.04em}.muted{color:#555;font-size:12px;line-height:1.45}.badge{display:inline-block;border:1px solid #111;border-radius:999px;padding:7px 12px;font-weight:900;font-size:12px;text-transform:uppercase}
     .grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:16px 0}.card{border:1px solid #ddd;border-radius:12px;padding:12px;min-height:82px}.card span{display:block;color:#555;font-size:11px;text-transform:uppercase;font-weight:800}.card strong{display:block;margin-top:8px;font-size:18px}.card.ok strong{color:#15803d}.card.warn strong{color:#b45309}.card.danger strong{color:#b91c1c}
     .box{border:1px solid #111;border-radius:14px;padding:14px;margin:14px 0}.row{display:flex;justify-content:space-between;gap:14px;padding:8px 0;border-bottom:1px dashed #aaa}.row:last-child{border-bottom:0}.row span{color:#555}.row strong{text-align:right}.total{font-size:18px;font-weight:900;border-top:2px solid #111;margin-top:4px;padding-top:10px}.diff.ok strong{color:#15803d}.diff.warn strong{color:#b45309}.diff.danger strong{color:#b91c1c}
+    .section-title{margin:18px 0 8px;font-size:13px;text-transform:uppercase;letter-spacing:.08em}.pay-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}.pay-grid article{border:1px solid #ddd;border-radius:12px;padding:10px}.pay-grid span{display:block;color:#555;font-size:10px;text-transform:uppercase;font-weight:800}.pay-grid strong{display:block;margin-top:5px;font-size:15px}
     .note{border:1px dashed #777;border-radius:12px;padding:12px;margin-top:14px;background:#fafafa;font-size:13px}.signatures{display:grid;grid-template-columns:1fr 1fr;gap:34px;margin-top:54px}.sign{border-top:1px solid #111;text-align:center;padding-top:9px;font-size:12px;color:#444}
     .foot{margin-top:22px;text-align:center;color:#555;font-size:12px}.status{margin-top:8px;font-size:13px;font-weight:900}
     @media print{.toolbar{display:none}body{padding:0}.card,.box{break-inside:avoid}}
   </style></head><body><div class="toolbar"><button onclick="window.print()">Imprimir cierre de caja</button></div>
   <section class="head">
-    <div><h1>${escapeHtml(title)}</h1><p class="muted">${businessLines.map(escapeHtml).join("<br>") || "Datos de la tienda no configurados"}</p></div>
-    <div><span class="badge">${escapeHtml(closure.code)}</span><p class="muted"><strong>Caja:</strong> ${num(closure.registerNumber)}<br><strong>Fecha:</strong> ${formatDateTime(closure.createdAt)}</p></div>
+    <div><h1>${escapeHtml(title)}</h1><p class="muted">${businessLines.map(escapeHtml).join("<br>") || "Datos de la tienda no configurados"}</p><p class="status ${differenceClass}">Arqueo: ${escapeHtml(statusLabel)}</p></div>
+    <div><span class="badge">${escapeHtml(closure.code)}</span><p class="muted"><strong>Caja:</strong> ${num(closure.registerNumber)}<br><strong>Fecha:</strong> ${formatDateTime(closure.createdAt)}<br><strong>Moneda:</strong> ${escapeHtml(storeSettings.currency || "BOB")}</p></div>
   </section>
   <section class="grid">
     <article class="card"><span>Apertura</span><strong>${money(closure.openingAmount)}</strong></article>
@@ -5693,8 +5696,12 @@ function printCashClosure(closureId) {
     <div class="row diff ${differenceClass}"><span>Diferencia final</span><strong>${money(difference)}</strong></div>
     <div class="row"><span>Ventas incluidas</span><strong>${num(closure.saleCount)}</strong></div>
   </section>
+  <h2 class="section-title">Resumen por metodo de pago</h2>
+  <section class="pay-grid">
+    ${paymentRows.length ? paymentRows.map(([method, amount]) => `<article><span>${escapeHtml(paymentLabel(method))}</span><strong>${money(amount)}</strong></article>`).join("") : `<article><span>Detalle no disponible</span><strong>${money(closure.totalSales)}</strong></article>`}
+  </section>
   <section class="box">
-    <div class="row"><span>Estado de arqueo</span><strong>${difference === 0 ? "Cuadrado" : Math.abs(difference) <= 1 ? "Diferencia menor" : "Requiere revision"}</strong></div>
+    <div class="row"><span>Estado de arqueo</span><strong>${escapeHtml(statusLabel)}</strong></div>
     <div class="row"><span>Generado por</span><strong>${escapeHtml(currentUser.name || currentUser.username || "Usuario")}</strong></div>
     <div class="row"><span>Moneda</span><strong>${escapeHtml(storeSettings.currency || "BOB")}</strong></div>
   </section>
@@ -7407,6 +7414,7 @@ function normalizeCashClosure(closure) {
     expectedAmount: Number(closure.expected_amount ?? closure.expectedAmount ?? 0),
     countedAmount: Number(closure.counted_amount ?? closure.countedAmount ?? 0),
     differenceAmount: Number(closure.difference_amount ?? closure.differenceAmount ?? 0),
+    paymentSummary: parsePaymentDetail(closure.payment_summary || closure.paymentSummary),
     saleCount: Number(closure.sale_count ?? closure.saleCount ?? 0),
     createdAt: closure.created_at || closure.createdAt || "",
     note: closure.note || ""
