@@ -2618,6 +2618,103 @@ body.app-correspondencia .metrics article:hover {
   gap: 9px;
 }
 
+.cashier-collection-panel,
+.supervisor-portfolio-panel {
+  display: grid;
+  grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr);
+  gap: 12px;
+  align-items: stretch;
+  margin-bottom: 14px;
+  border: 1px solid color-mix(in srgb, var(--accent) 17%, var(--line));
+  border-radius: 16px;
+  padding: 14px;
+  background:
+    radial-gradient(circle at 94% 10%, color-mix(in srgb, var(--accent) 13%, transparent), transparent 30%),
+    linear-gradient(145deg, rgb(255 255 255 / 94%), color-mix(in srgb, var(--accent-tint) 42%, white));
+  box-shadow: 0 18px 40px rgb(15 32 28 / 7%);
+}
+
+.cashier-collection-panel h3,
+.supervisor-portfolio-panel h3 {
+  margin: 0 0 5px;
+  color: var(--accent-dark);
+  font-size: clamp(1.12rem, 1.8vw, 1.45rem);
+}
+
+.cashier-collection-panel span,
+.supervisor-portfolio-panel span,
+.cashier-collection-grid small,
+.supervisor-portfolio-grid small {
+  display: block;
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 850;
+  line-height: 1.35;
+}
+
+.cashier-collection-grid,
+.supervisor-portfolio-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 9px;
+}
+
+.supervisor-portfolio-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.cashier-collection-grid article,
+.supervisor-portfolio-grid article {
+  min-width: 0;
+  border: 1px solid rgb(15 118 110 / 11%);
+  border-radius: 14px;
+  padding: 11px;
+  background: rgb(255 255 255 / 76%);
+}
+
+.cashier-collection-grid strong,
+.supervisor-portfolio-grid strong {
+  display: block;
+  margin: 5px 0 3px;
+  color: var(--accent-dark);
+  font-size: clamp(1rem, 1.6vw, 1.2rem);
+  overflow-wrap: anywhere;
+}
+
+.cashier-collection-grid article.is-warning,
+.supervisor-portfolio-grid article.is-warning {
+  border-color: rgb(245 158 11 / 25%);
+  background: rgb(255 251 235 / 82%);
+}
+
+.supervisor-portfolio-grid article.is-danger {
+  border-color: rgb(220 38 38 / 23%);
+  background: rgb(254 242 242 / 82%);
+}
+
+.cashier-collection-grid article.is-ok,
+.supervisor-portfolio-grid article.is-ok {
+  border-color: rgb(16 185 129 / 18%);
+}
+
+.customer-command-card.is-seller {
+  background:
+    linear-gradient(135deg, rgb(255 255 255 / 94%), rgb(255 251 235 / 78%)),
+    radial-gradient(circle at 92% 14%, rgb(245 158 11 / 20%), transparent 34%);
+}
+
+.customer-command-card.is-cashier {
+  background:
+    linear-gradient(135deg, rgb(255 255 255 / 94%), rgb(236 253 245 / 78%)),
+    radial-gradient(circle at 92% 14%, rgb(16 185 129 / 18%), transparent 34%);
+}
+
+.customer-command-card.is-supervisor {
+  background:
+    linear-gradient(135deg, rgb(255 255 255 / 94%), rgb(240 249 255 / 78%)),
+    radial-gradient(circle at 92% 14%, rgb(14 165 233 / 16%), transparent 34%);
+}
+
 .customer-health-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -14163,6 +14260,10 @@ body.system-zow-site .site-footer {
   .product-suggestion-grid,
   .combo-builder-grid,
   .cash-health-grid,
+  .cashier-collection-panel,
+  .cashier-collection-grid,
+  .supervisor-portfolio-panel,
+  .supervisor-portfolio-grid,
   .debt-aging-grid,
   .collection-plan-grid,
   .customer-workspace-grid,

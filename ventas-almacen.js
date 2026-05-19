@@ -2544,14 +2544,19 @@ function renderCustomers() {
   const collectionPlan = buildCollectionPlan();
   const followUpList = buildReceivableFollowUpList().slice(0, 6);
   const customerHealth = buildCustomerPortfolioHealth(riskCustomers);
+  const profile = customerRoleProfile();
+  const showControlBlocks = ["admin", "ventas_admin", "supervisor"].includes(currentUser?.role);
+  const showCollectionBlocks = ["admin", "ventas_admin", "cajero", "supervisor"].includes(currentUser?.role);
   setCount(`${customers.length} cliente${customers.length === 1 ? "" : "s"}`);
   mainList().innerHTML = `
     ${currentUser?.role === "vendedor" ? renderSellerAttentionPanel({ totalDebt, followUpList }) : ""}
-    <section class="customer-command-card">
+    ${currentUser?.role === "cajero" ? renderCashierCollectionPanel({ totalDebt, oldestDebt, followUpList }) : ""}
+    ${currentUser?.role === "supervisor" ? renderSupervisorPortfolioPanel({ totalDebt, riskCustomers, oldestDebt }) : ""}
+    <section class="customer-command-card ${profile.className}">
       <div>
-        <p class="eyebrow">Cartera comercial</p>
-        <h3>Clientes, creditos y cobros bajo control</h3>
-        <span>Prioriza clientes con saldo vencido, revisa limite usado y registra pagos sin salir del modulo.</span>
+        <p class="eyebrow">${escapeHtml(profile.eyebrow)}</p>
+        <h3>${escapeHtml(profile.title)}</h3>
+        <span>${escapeHtml(profile.detail)}</span>
       </div>
       <div class="customer-command-actions">
         <button class="primary-button" type="button" id="quickNewCustomer">Nuevo cliente</button>
@@ -2565,19 +2570,19 @@ function renderCustomers() {
       <article class="${totalDebt ? "is-warning" : "is-ok"}"><span>Cartera pendiente</span><strong>${money(totalDebt)}</strong><small>${num(receivables.length)} venta${receivables.length === 1 ? "" : "s"} al credito</small></article>
       <article class="${customerHealth.oldestDays > 30 ? "is-danger" : customerHealth.oldestDays > 15 ? "is-warning" : "is-ok"}"><span>Mayor antiguedad</span><strong>${num(customerHealth.oldestDays)} dias</strong><small>${oldestDebt ? escapeHtml(oldestDebt.customer_name || "Cliente sin registrar") : "Sin deuda"}</small></article>
     </section>
-    <section class="setup-overview">
+    ${showControlBlocks ? `<section class="setup-overview">
       <article><span>Clientes</span><strong>${customers.length}</strong></article>
       <article><span>Cuentas por cobrar</span><strong>${receivables.length}</strong></article>
       <article><span>Saldo pendiente</span><strong>${money(totalDebt)}</strong></article>
       <article><span>Mas antigua</span><strong>${oldestDebt ? formatDateTime(oldestDebt.created_at) : "Sin deuda"}</strong></article>
-    </section>
-    <section class="debt-aging-grid">
+    </section>` : ""}
+    ${showControlBlocks ? `<section class="debt-aging-grid">
       ${debtAging.map((bucket) => `<article class="${bucket.className}"><span>${escapeHtml(bucket.label)}</span><strong>${money(bucket.total)}</strong><small>${bucket.count} venta${bucket.count === 1 ? "" : "s"} pendiente${bucket.count === 1 ? "" : "s"}</small></article>`).join("")}
-    </section>
-    <section class="collection-plan-grid">
+    </section>` : ""}
+    ${showCollectionBlocks ? `<section class="collection-plan-grid">
       ${collectionPlan.map((item) => `<article class="${item.className}"><span>${escapeHtml(item.label)}</span><strong>${money(item.total)}</strong><small>${item.detail}</small></article>`).join("")}
-    </section>
-    <section class="customer-workspace-grid">
+    </section>` : ""}
+    ${showCollectionBlocks ? `<section class="customer-workspace-grid">
       <article class="admin-panel">
         <div class="admin-panel-head"><div><p class="eyebrow">Riesgo comercial</p><h3>Clientes que requieren seguimiento</h3></div></div>
         <div class="admin-list">${riskCustomers.map(renderCustomerRiskRow).join("") || empty("Sin clientes con riesgo de credito")}</div>
@@ -2586,11 +2591,11 @@ function renderCustomers() {
         <div class="admin-panel-head"><div><p class="eyebrow">Plan de cobro</p><h3>Acciones recomendadas</h3></div><button class="ghost-button" type="button" id="exportReceivablesCsv">Exportar cartera CSV</button></div>
         <div class="admin-list">${followUpList.map(renderReceivableFollowUpRow).join("") || empty("Sin acciones de cobro pendientes")}</div>
       </article>
-    </section>
-    <section class="admin-panel">
+    </section>` : ""}
+    ${showCollectionBlocks ? `<section class="admin-panel">
       <div class="admin-panel-head"><div><p class="eyebrow">Cuentas por cobrar</p><h3>Ventas al credito</h3></div></div>
       <div class="admin-list">${receivables.map(renderReceivableRow).join("") || empty("Sin saldos pendientes", "Las ventas a credito apareceran aqui para seguimiento y registro de pagos.")}</div>
-    </section>
+    </section>` : ""}
     <section class="admin-panel">
       <div class="admin-panel-head"><div><p class="eyebrow">Directorio</p><h3>Clientes registrados</h3></div><button class="ghost-button" type="button" id="exportCustomersFromCustomersCsv">Exportar clientes CSV</button></div>
       <div class="admin-list customer-directory-list">${customers.map(renderCustomerDirectoryRow).join("") || empty("Sin clientes registrados", "Crea clientes para ventas a credito, historial comercial y mensajes de cobranza.")}</div>
@@ -2619,6 +2624,74 @@ function renderCustomers() {
   document.querySelector("#exportCustomersCommandCsv")?.addEventListener("click", exportCustomersCsv);
   document.querySelector("#exportReceivablesCsv")?.addEventListener("click", exportReceivablesCsv);
   document.querySelector("#exportCustomersFromCustomersCsv")?.addEventListener("click", exportCustomersCsv);
+}
+
+function customerRoleProfile() {
+  const role = currentUser?.role;
+  if (role === "vendedor") {
+    return {
+      eyebrow: "Atencion comercial",
+      title: "Clientes y seguimiento",
+      detail: "Registra clientes, consulta estados y prepara mensajes. Los cobros se derivan a caja.",
+      className: "is-seller"
+    };
+  }
+  if (role === "cajero") {
+    return {
+      eyebrow: "Caja",
+      title: "Cobros y clientes del mostrador",
+      detail: "Registra pagos autorizados, actualiza datos basicos y mantiene la cartera del turno al dia.",
+      className: "is-cashier"
+    };
+  }
+  if (role === "supervisor") {
+    return {
+      eyebrow: "Supervision",
+      title: "Riesgo, credito y cobranza",
+      detail: "Revisa clientes observados, antiguedad de deuda y acciones pendientes sin operar caja.",
+      className: "is-supervisor"
+    };
+  }
+  return {
+    eyebrow: "Cartera comercial",
+    title: "Clientes, creditos y cobros bajo control",
+    detail: "Prioriza clientes con saldo vencido, revisa limite usado y registra pagos sin salir del modulo.",
+    className: "is-admin"
+  };
+}
+
+function renderCashierCollectionPanel({ totalDebt, oldestDebt, followUpList }) {
+  const payable = receivables.filter((sale) => Number(sale.balance_due || 0) > 0);
+  return `<section class="cashier-collection-panel">
+    <div>
+      <p class="eyebrow">Cobranza en caja</p>
+      <h3>Registrar pagos sin perder el turno</h3>
+      <span>Usa este bloque para cobrar saldos pendientes y dejar el historial del cliente actualizado.</span>
+    </div>
+    <div class="cashier-collection-grid">
+      <article><span>Saldos por cobrar</span><strong>${num(payable.length)}</strong><small>${money(totalDebt)}</small></article>
+      <article><span>Mayor antiguedad</span><strong>${oldestDebt ? `${num(daysSince(oldestDebt.created_at))} dias` : "Sin deuda"}</strong><small>${oldestDebt ? escapeHtml(oldestDebt.customer_name || "Cliente") : "Cartera limpia"}</small></article>
+      <article><span>Siguiente cliente</span><strong>${escapeHtml(followUpList[0]?.name || "Sin pendiente")}</strong><small>${followUpList[0] ? money(followUpList[0].debt) : "No requiere cobro"}</small></article>
+    </div>
+  </section>`;
+}
+
+function renderSupervisorPortfolioPanel({ totalDebt, riskCustomers, oldestDebt }) {
+  const blocked = customers.filter((customer) => customer.status === "bloqueado").length;
+  const observed = customers.filter((customer) => customer.status === "observado").length;
+  return `<section class="supervisor-portfolio-panel">
+    <div>
+      <p class="eyebrow">Control de cartera</p>
+      <h3>Clientes que merecen decision</h3>
+      <span>Separa problemas reales de seguimiento normal: deuda antigua, clientes observados y riesgo de credito.</span>
+    </div>
+    <div class="supervisor-portfolio-grid">
+      <article class="${riskCustomers.length ? "is-warning" : "is-ok"}"><span>Riesgo</span><strong>${num(riskCustomers.length)}</strong><small>Clientes priorizados</small></article>
+      <article class="${totalDebt ? "is-warning" : "is-ok"}"><span>Exposicion</span><strong>${money(totalDebt)}</strong><small>Saldo total pendiente</small></article>
+      <article class="${blocked || observed ? "is-danger" : "is-ok"}"><span>Estado cliente</span><strong>${num(blocked + observed)}</strong><small>${num(blocked)} bloqueado(s), ${num(observed)} observado(s)</small></article>
+      <article class="${oldestDebt && daysSince(oldestDebt.created_at) > 30 ? "is-danger" : "is-ok"}"><span>Antiguedad</span><strong>${oldestDebt ? `${num(daysSince(oldestDebt.created_at))} dias` : "0 dias"}</strong><small>${oldestDebt ? escapeHtml(oldestDebt.customer_name || "Cliente") : "Sin deuda"}</small></article>
+    </div>
+  </section>`;
 }
 
 function renderCustomerDirectoryRow(customer) {
