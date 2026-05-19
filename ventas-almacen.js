@@ -5835,6 +5835,14 @@ function printTicket(sale, items) {
   const printable = window.open("", "_blank", "width=460,height=760");
   if (!printable) return;
   const title = storeSettings.storeName || storeSettings.companyName || currentUser.companyName || "Zow Ventas-Almacen";
+  const ticketType = sale.status === "entrenamiento"
+    ? "Comprobante de entrenamiento"
+    : sale.status === "anulada"
+      ? "Comprobante anulado"
+      : sale.code === "PREVENTA"
+        ? "Precomprobante de venta"
+        : "Comprobante de venta";
+  const ticketStatus = sale.status === "entrenamiento" ? "Entrenamiento" : sale.status === "anulada" ? "Anulado" : sale.code === "PREVENTA" ? "Preventa" : "Pagado";
   const businessLines = [
     storeSettings.taxId ? `NIT/CI: ${storeSettings.taxId}` : "",
     storeSettings.address || "",
@@ -5847,28 +5855,29 @@ function printTicket(sale, items) {
   const changeAmount = Number(sale.change_amount || 0);
   const isCreditSale = Number(sale.balance_due || 0) > 0;
   printable.document.write(`<!doctype html><html><head><meta charset="UTF-8"><title>Ticket ${escapeHtml(sale.code)}</title><style>
-    *{box-sizing:border-box}body{font-family:Arial,sans-serif;margin:0;padding:14px;max-width:390px;color:#111;background:#fff}
+    @page{size:80mm auto;margin:4mm}*{box-sizing:border-box}body{font-family:Arial,sans-serif;margin:0 auto;padding:10px;max-width:80mm;color:#111;background:#fff}
     .toolbar{margin-bottom:12px}.toolbar button{width:100%;border:0;border-radius:10px;padding:11px;background:#0f172a;color:#fff;font-weight:900}
-    .brand{padding:14px 10px 12px;text-align:center;border-bottom:2px solid #111}.brand b{display:block;font-size:19px;text-transform:uppercase;letter-spacing:.06em}.brand span{display:block;margin-top:4px;font-size:10px;color:#555;text-transform:uppercase;letter-spacing:.12em}
+    .brand{padding:12px 8px 10px;text-align:center;border:2px solid #111;border-radius:14px}.brand b{display:block;font-size:18px;text-transform:uppercase;letter-spacing:.04em}.brand span{display:block;margin-top:4px;font-size:10px;color:#555;text-transform:uppercase;letter-spacing:.11em}
     .business{margin:8px 0 12px;text-align:center;color:#555;font-size:11px;line-height:1.35}.stamp{display:inline-block;margin-top:7px;border:1px solid #111;border-radius:999px;padding:5px 10px;color:#111;font-size:10px;font-weight:900;text-transform:uppercase}
     .ticket-box{border:1px solid #111;border-radius:12px;padding:9px;margin:10px 0}.row{display:flex;justify-content:space-between;gap:10px;padding:5px 0;border-bottom:1px dashed #aaa}.row:last-child{border-bottom:0}.row span{color:#555}.row strong{text-align:right}
     .meta-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:10px 0}.meta-grid div{border:1px solid #ddd;border-radius:10px;padding:8px}.meta-grid span{display:block;color:#555;font-size:10px}.meta-grid strong{display:block;margin-top:3px;font-size:12px}
-    table{width:100%;border-collapse:collapse;margin-top:8px}th{font-size:10px;text-align:left;border-bottom:2px solid #111;padding:6px 0;text-transform:uppercase}th:last-child,td:last-child{text-align:right}td{padding:8px 0;border-bottom:1px dashed #bbb;font-size:12px;vertical-align:top}td:last-child{font-weight:800}.muted{color:#555;font-size:10px;line-height:1.35}
-    .total{margin-top:4px;padding-top:8px;border-top:2px solid #111;font-weight:900;font-size:18px}.payment{background:#f7f7f7}.barcode{height:36px;margin:10px 20px;background:repeating-linear-gradient(90deg,#111 0 2px,transparent 2px 5px,#111 5px 6px,transparent 6px 10px)}
+    table{width:100%;border-collapse:collapse;margin-top:8px}th{font-size:10px;text-align:left;border-bottom:2px solid #111;padding:6px 0;text-transform:uppercase}th:last-child,td:last-child{text-align:right}td{padding:8px 0;border-bottom:1px dashed #bbb;font-size:12px;vertical-align:top}td:last-child{font-weight:800}.muted{color:#555;font-size:10px;line-height:1.35}.code{display:inline-block;margin-top:2px;color:#111;font-size:9px;font-weight:800;text-transform:uppercase}
+    .total{margin-top:4px;padding-top:8px;border-top:2px solid #111;font-weight:900;font-size:18px}.payment{background:#f7f7f7}.barcode{height:30px;margin:8px 20px;background:repeating-linear-gradient(90deg,#111 0 2px,transparent 2px 5px,#111 5px 6px,transparent 6px 10px)}
     .verify{display:grid;grid-template-columns:58px 1fr;gap:10px;align-items:center;margin:12px 0}.qr{width:58px;height:58px;background:linear-gradient(90deg,#111 50%,transparent 0),linear-gradient(#111 50%,transparent 0);background-size:14px 14px;border:7px solid #fff;box-shadow:0 0 0 1px #111}.foot{margin-top:10px;text-align:center;font-size:11px;color:#555}.thanks{color:#111;font-weight:900}
     .signature{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-top:34px}.signature div{border-top:1px solid #111;text-align:center;padding-top:7px;color:#555;font-size:10px}
     .copy-note{margin:8px 0;border:1px dashed #999;border-radius:10px;padding:8px;text-align:center;color:#333;font-size:10px;font-weight:800;text-transform:uppercase}
-    @media print{.toolbar{display:none}body{padding:0}.ticket-box,.meta-grid div{break-inside:avoid}}
+    @media print{.toolbar{display:none}body{padding:0;max-width:none}.ticket-box,.meta-grid div,tr{break-inside:avoid}}
   </style></head><body><div class="toolbar"><button onclick="window.print()">Imprimir comprobante</button></div>
-  <div class="brand"><b>${escapeHtml(title)}</b><span>Comprobante de venta</span><em class="stamp">${escapeHtml(sale.status === "entrenamiento" ? "Entrenamiento" : sale.status === "anulada" ? "Anulado" : sale.code === "PREVENTA" ? "Preventa" : "Pagado")}</em></div>
+  <div class="brand"><b>${escapeHtml(title)}</b><span>${escapeHtml(ticketType)}</span><em class="stamp">${escapeHtml(ticketStatus)}</em></div>
   <p class="business">${businessLines.map(escapeHtml).join("<br>") || "Datos de la tienda no configurados"}</p>
   <div class="meta-grid"><div><span>Comprobante</span><strong>${escapeHtml(sale.code)}</strong></div><div><span>Fecha y hora</span><strong>${formatDateTime(sale.created_at)}</strong></div><div><span>Caja</span><strong>${registerNumber ? `Caja ${num(registerNumber)}` : "Sin caja"}</strong></div><div><span>Cajero</span><strong>${escapeHtml(cashierName)}</strong></div><div><span>Cliente</span><strong>${escapeHtml(sale.customer_name || "Cliente sin registrar")}</strong></div><div><span>Items</span><strong>${num(itemCount)}</strong></div></div>
-  <table><thead><tr><th>Detalle</th><th>Total</th></tr></thead><tbody>${items.map((item) => `<tr><td>${escapeHtml(item.product_name)}<br><span class="muted">${num(item.quantity)} x ${money(item.unit_price)}${Number(item.discount || 0) ? ` / Desc. ${money(item.discount)}` : ""}</span></td><td>${money(item.total)}</td></tr>`).join("")}</tbody></table>
+  <table><thead><tr><th>Detalle</th><th>Total</th></tr></thead><tbody>${items.map((item) => `<tr><td>${escapeHtml(item.product_name)}${item.product_code ? `<br><span class="code">Cod. ${escapeHtml(item.product_code)}</span>` : ""}<br><span class="muted">${num(item.quantity)} x ${money(item.unit_price)}${Number(item.discount || 0) ? ` / Desc. ${money(item.discount)}` : ""}</span></td><td>${money(item.total)}</td></tr>`).join("")}</tbody></table>
   <div class="ticket-box"><div class="row"><span>Subtotal</span><strong>${money(sale.subtotal)}</strong></div><div class="row"><span>Descuento</span><strong>${money(sale.discount)}</strong></div><div class="row"><span>Impuesto</span><strong>${money(sale.tax || 0)}</strong></div><div class="row total"><span>Total</span><strong>${money(sale.total)}</strong></div><div class="row payment"><span>Metodo</span><strong>${escapeHtml(paymentLabel(sale.payment_method || paymentDraft.method || "efectivo"))}</strong></div><div class="row"><span>Pagado</span><strong>${money(paidAmount)}</strong></div><div class="row"><span>Cambio</span><strong>${money(changeAmount)}</strong></div>${Number(sale.balance_due || 0) > 0 ? `<div class="row"><span>Saldo</span><strong>${money(sale.balance_due)}</strong></div>` : ""}</div>
   ${renderTicketPaymentDetail(sale)}
   ${sale.note ? `<p class="muted"><strong>Obs.:</strong> ${escapeHtml(sale.note)}</p>` : ""}
   ${isCreditSale ? `<div class="copy-note">Venta con saldo pendiente. Conservar copia firmada.</div><div class="signature"><div>Firma cliente</div><div>Firma cajero</div></div>` : ""}
   ${sale.status === "entrenamiento" ? `<div class="copy-note">Documento de entrenamiento. No tiene valor contable ni afecta inventario.</div>` : ""}
+  ${sale.code === "PREVENTA" ? `<div class="copy-note">Precomprobante informativo. Confirmar pago para emitir comprobante final.</div>` : ""}
   <div class="verify"><div class="qr"></div><div><div class="barcode"></div><p class="muted">Codigo de control: ${escapeHtml(sale.code)}<br>Moneda: ${escapeHtml(storeSettings.currency || "BOB")}</p></div></div><p class="foot thanks">${escapeHtml(storeSettings.ticketNote || "Gracias por su compra")}</p><p class="foot">Sistema de venta y almacen ZOW SAAS</p></body></html>`);
   printable.document.close();
   printable.focus();
@@ -5884,7 +5893,7 @@ function printDraftTicket() {
     tax: totals.tax,
     total: totals.total,
     cash_received: paymentDraft.method === "mixto" ? paidTotal : Number(paymentDraft.received || totals.total),
-    change_amount: paymentDraft.method === "mixto" ? Math.max(Number(paymentDraft.split?.efectivo || 0) - totals.total, 0) : Math.max(Number(paymentDraft.received || 0) - totals.total, 0),
+    change_amount: paymentChangeAmount(totals.total),
     payment_method: paymentDraft.method,
     payment_detail: paymentDraft.method === "mixto" ? JSON.stringify(paymentDraft.split || {}) : "",
     amount_paid: paymentDraft.method === "credito" ? Number(paymentDraft.received || 0) : paymentDraft.method === "mixto" ? paidTotal : Number(paymentDraft.received || totals.total),
@@ -5892,7 +5901,10 @@ function printDraftTicket() {
     created_at: new Date().toISOString(),
     note: saleNote.trim()
   };
-  const items = saleCart.map((item) => ({ product_name: item.name, quantity: item.quantity, unit_price: item.salePrice, total: item.quantity * item.salePrice - Number(item.discount || 0) }));
+  const items = saleCart.map((item) => {
+    const product = products.find((entry) => entry.id === item.productId);
+    return { product_name: item.name, product_code: product?.code || "", quantity: item.quantity, unit_price: item.salePrice, discount: Number(item.discount || 0), total: item.quantity * item.salePrice - Number(item.discount || 0) };
+  });
   printTicket(sale, items);
 }
 
