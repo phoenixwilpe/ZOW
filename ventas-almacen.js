@@ -3227,9 +3227,21 @@ function renderPurchases() {
   const purchaseTotal = purchaseCart.reduce((sum, item) => sum + item.quantity * item.unitCost, 0);
   const pendingPurchases = purchases.filter((purchase) => (purchase.status || "confirmada") === "pendiente");
   const confirmedPurchases = purchases.filter((purchase) => ["confirmada", "recibida"].includes(purchase.status || "confirmada"));
+  const canManagePurchaseFlow = can("managePurchases");
+  const profile = purchaseRoleProfile({ purchaseTotal, pendingPurchases, confirmedPurchases, reorderAlerts, reorderValue, highPriority });
   setCount(`${purchases.length} compra${purchases.length === 1 ? "" : "s"}`);
   mainList().innerHTML = `
     ${ventasMessage ? `<div class="cloud-safe-note"><strong>${escapeHtml(ventasMessage)}</strong><span>La compra afecta solo el inventario de esta empresa.</span></div>` : ""}
+    <section class="purchase-role-panel ${profile.className}">
+      <div>
+        <p class="eyebrow">${escapeHtml(profile.eyebrow)}</p>
+        <h3>${escapeHtml(profile.title)}</h3>
+        <span>${escapeHtml(profile.detail)}</span>
+      </div>
+      <div class="purchase-role-cards">
+        ${profile.cards.map((card) => `<article><span>${escapeHtml(card.label)}</span><strong>${escapeHtml(card.value)}</strong><small>${escapeHtml(card.detail)}</small></article>`).join("")}
+      </div>
+    </section>
     <section class="purchase-kpi-grid">
       <article><span>Orden actual</span><strong>${money(purchaseTotal)}</strong><small>${num(purchaseCart.length)} linea${purchaseCart.length === 1 ? "" : "s"} cargada${purchaseCart.length === 1 ? "" : "s"}</small></article>
       <article><span>Pendientes</span><strong>${num(pendingPurchases.length)}</strong><small>Ordenes por recibir</small></article>
@@ -3242,14 +3254,14 @@ function renderPurchases() {
         <h3>Compra sugerida por inventario minimo</h3>
         <span>${num(reorderAlerts.length)} producto${reorderAlerts.length === 1 ? "" : "s"} en alerta / ${num(highPriority.length)} prioridad alta / inversion aprox. ${money(reorderValue)}</span>
       </div>
-      <button class="primary-button" type="button" id="prepareSuggestedPurchaseFromPurchases" ${reorderAlerts.length ? "" : "disabled"}>Cargar compra sugerida</button>
+      ${canManagePurchaseFlow ? `<button class="primary-button" type="button" id="prepareSuggestedPurchaseFromPurchases" ${reorderAlerts.length ? "" : "disabled"}>Cargar compra sugerida</button>` : `<button class="ghost-button" type="button" data-module-view="inventory">Revisar inventario</button>`}
     </section>
     <section class="purchase-workflow-strip">
       <article class="is-active"><span>1</span><strong>Proveedor</strong><small>Registra o selecciona</small></article>
       <article class="${purchaseCart.length ? "is-active" : ""}"><span>2</span><strong>Detalle</strong><small>Productos y costos</small></article>
       <article class="${purchaseCart.length ? "is-active" : ""}"><span>3</span><strong>Recepcion</strong><small>Suma stock o deja pendiente</small></article>
     </section>
-    <section class="cashier-grid purchase-entry-grid">
+    ${canManagePurchaseFlow ? `<section class="cashier-grid purchase-entry-grid">
       <section class="admin-panel purchase-card-panel">
         <div class="admin-panel-head"><div><p class="eyebrow">Proveedor</p><h3>Registrar proveedor</h3></div></div>
         <form class="admin-form" id="supplierForm">
@@ -3280,8 +3292,8 @@ function renderPurchases() {
           </div>
         </form>
       </section>
-    </section>
-    <section class="admin-panel purchase-detail-panel">
+    </section>` : renderPurchaseReviewOnlyPanel({ pendingPurchases, confirmedPurchases, reorderAlerts })}
+    ${canManagePurchaseFlow ? `<section class="admin-panel purchase-detail-panel">
       <div class="admin-panel-head">
         <div><p class="eyebrow">Detalle</p><h3>Productos de la compra</h3></div>
         <div class="admin-head-actions">
@@ -3293,7 +3305,7 @@ function renderPurchases() {
         </div>
       </div>
       <div class="admin-list">${purchaseCart.map(renderPurchaseCartRow).join("") || empty("Agrega productos a la compra", "Selecciona articulos del inventario o usa la compra sugerida desde alertas de stock.")}</div>
-    </section>
+    </section>` : ""}
     <section class="admin-panel purchase-history-panel">
       <div class="admin-panel-head"><div><p class="eyebrow">Historial</p><h3>Compras recientes</h3></div><span>${money(purchases.reduce((sum, purchase) => sum + Number(purchase.total || 0), 0))}</span></div>
       <div class="purchase-history-list">${purchases.slice(0, 12).map(renderPurchaseRow).join("") || empty("Sin compras registradas", "Cada compra recibida actualizara stock, costo y kardex del producto.")}</div>
@@ -3327,6 +3339,64 @@ function renderPurchases() {
   });
   document.querySelector("#purchaseProduct")?.addEventListener("change", updatePurchaseCostFromProduct);
   updatePurchaseCostFromProduct();
+}
+
+function purchaseRoleProfile({ purchaseTotal, pendingPurchases, confirmedPurchases, reorderAlerts, reorderValue, highPriority }) {
+  if (currentUser?.role === "almacen") {
+    return {
+      className: "is-warehouse",
+      eyebrow: "Compras de almacen",
+      title: "Reposicion y recepcion de mercaderia",
+      detail: "Prepara pedidos, registra proveedor, deja orden pendiente o recibe mercaderia para sumar stock y Kardex.",
+      cards: [
+        { label: "Pendientes", value: num(pendingPurchases.length), detail: "Ordenes por recibir" },
+        { label: "Reposicion", value: num(reorderAlerts.length), detail: `${num(highPriority.length)} prioridad alta` },
+        { label: "Orden actual", value: money(purchaseTotal), detail: "Lineas preparadas" }
+      ]
+    };
+  }
+  if (currentUser?.role === "supervisor") {
+    return {
+      className: "is-supervisor",
+      eyebrow: "Revision de compras",
+      title: "Control de proveedores y recepciones",
+      detail: "Revisa compras pendientes, montos recibidos y productos bajo minimo sin registrar ni recibir mercaderia.",
+      cards: [
+        { label: "Pendientes", value: num(pendingPurchases.length), detail: "Esperan recepcion" },
+        { label: "Recibidas", value: num(confirmedPurchases.length), detail: "Compras con movimiento" },
+        { label: "Reposicion", value: money(reorderValue), detail: "Compra sugerida estimada" }
+      ]
+    };
+  }
+  return {
+    className: "is-admin",
+    eyebrow: "Compras",
+    title: "Proveedores, ordenes y control de costos",
+    detail: "Gestiona compras, recepciones, proveedores y actualizacion de costo/stock.",
+    cards: [
+      { label: "Orden actual", value: money(purchaseTotal), detail: "Carrito de compra" },
+      { label: "Pendientes", value: num(pendingPurchases.length), detail: "Por recibir" },
+      { label: "Reposicion", value: money(reorderValue), detail: `${num(reorderAlerts.length)} productos` }
+    ]
+  };
+}
+
+function renderPurchaseReviewOnlyPanel({ pendingPurchases, confirmedPurchases, reorderAlerts }) {
+  const latestPending = pendingPurchases.slice(0, 4);
+  return `<section class="purchase-review-panel">
+    <div class="admin-panel-head">
+      <div><p class="eyebrow">Solo revision</p><h3>Compras para control</h3></div>
+      <span>${num(pendingPurchases.length)} pendiente${pendingPurchases.length === 1 ? "" : "s"}</span>
+    </div>
+    <div class="purchase-review-grid">
+      <article><span>Por recibir</span><strong>${num(pendingPurchases.length)}</strong><small>Ordenes pendientes</small></article>
+      <article><span>Recibidas</span><strong>${num(confirmedPurchases.length)}</strong><small>Historial confirmado</small></article>
+      <article><span>Bajo minimo</span><strong>${num(reorderAlerts.length)}</strong><small>Revisar con almacen</small></article>
+    </div>
+    <div class="purchase-review-list">
+      ${latestPending.length ? latestPending.map((purchase) => `<article><strong>${escapeHtml(purchase.code)}</strong><span>${escapeHtml(purchase.supplier_name || "Proveedor sin registrar")} / ${money(purchase.total)} / ${formatDateTime(purchase.created_at)}</span></article>`).join("") : `<article><strong>Sin recepciones pendientes</strong><span>No hay ordenes abiertas para revisar.</span></article>`}
+    </div>
+  </section>`;
 }
 
 function buildDebtAging(sourceReceivables) {

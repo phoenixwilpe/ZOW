@@ -125,6 +125,22 @@ test("supervisor revisa caja pero no abre ni cierra turnos", async () => {
   }, 403);
 });
 
+test("supervisor consulta compras pero no registra ni recibe mercaderia", async () => {
+  const token = await login("director@zow.com", "TestSupervisor2026#");
+  await expectStatus("/ventas/purchases", { token }, 200);
+  await expectStatus("/ventas/suppliers", {
+    method: "POST",
+    token,
+    body: { name: "Proveedor bloqueado" }
+  }, 403);
+  await expectStatus("/ventas/purchases", {
+    method: "POST",
+    token,
+    body: { supplierName: "Proveedor bloqueado", items: [{ productId: "no-real", quantity: 1, unitCost: 1 }] }
+  }, 403);
+  await expectStatus("/ventas/purchases/no-real/receive", { method: "PATCH", token }, 403);
+});
+
 test("venta real descuenta stock y anulacion lo devuelve", async () => {
   const token = await login("ventas.admin@zow.com", "TestVentasAdmin2026#");
   const productCode = `FLOW-${Date.now()}`;
