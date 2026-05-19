@@ -2783,6 +2783,71 @@ body.app-correspondencia .metrics article:hover {
   border-radius: 12px;
 }
 
+.inventory-role-panel {
+  display: grid;
+  grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+  gap: 12px;
+  align-items: stretch;
+  margin-bottom: 14px;
+  border: 1px solid rgb(15 118 110 / 13%);
+  border-radius: 18px;
+  padding: 14px;
+  background:
+    radial-gradient(circle at 92% 10%, rgb(16 185 129 / 13%), transparent 30%),
+    linear-gradient(145deg, rgb(255 255 255 / 95%), rgb(236 253 245 / 74%));
+  box-shadow: 0 18px 40px rgb(8 30 26 / 7%);
+}
+
+.inventory-role-panel.is-warehouse {
+  background:
+    radial-gradient(circle at 92% 10%, rgb(14 165 233 / 14%), transparent 30%),
+    linear-gradient(145deg, rgb(255 255 255 / 95%), rgb(240 249 255 / 72%));
+}
+
+.inventory-role-panel.is-supervisor {
+  background:
+    radial-gradient(circle at 92% 10%, rgb(245 158 11 / 14%), transparent 30%),
+    linear-gradient(145deg, rgb(255 255 255 / 95%), rgb(255 251 235 / 72%));
+}
+
+.inventory-role-panel h3 {
+  margin: 0 0 6px;
+  color: #10251f;
+  font-size: clamp(1.15rem, 2vw, 1.56rem);
+}
+
+.inventory-role-panel > div > span,
+.inventory-role-cards span,
+.inventory-role-cards small {
+  display: block;
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 880;
+  line-height: 1.35;
+}
+
+.inventory-role-cards {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 9px;
+}
+
+.inventory-role-cards article {
+  min-width: 0;
+  border: 1px solid rgb(15 118 110 / 10%);
+  border-radius: 15px;
+  padding: 12px;
+  background: rgb(255 255 255 / 74%);
+}
+
+.inventory-role-cards strong {
+  display: block;
+  margin: 5px 0 4px;
+  overflow-wrap: anywhere;
+  color: #10251f;
+  font-size: clamp(1rem, 1.8vw, 1.22rem);
+}
+
 .cashier-collection-panel,
 .supervisor-portfolio-panel {
   display: grid;
@@ -14408,6 +14473,8 @@ body.system-zow-site .site-footer {
   .catalog-role-panel,
   .catalog-role-cards,
   .catalog-toolbar-panel,
+  .inventory-role-panel,
+  .inventory-role-cards,
   body.app-ventas .commercial-alerts-grid,
   body.app-ventas .receipt-preview-shell {
     grid-template-columns: 1fr;

@@ -3493,8 +3493,19 @@ function renderInventory() {
     });
   const riskProducts = uniqueProducts([...reorderProducts, ...expiringProducts, ...overstockProducts, ...marginRiskProducts]);
   const warehouseMode = isWarehouseMode();
+  const profile = inventoryRoleProfile({ activeCount, outOfStock, lowStock, expiringSoon, expired, inventoryValue, reorderProducts });
   setCount(`${products.length} producto${products.length === 1 ? "" : "s"}`);
   mainList().innerHTML = `
+    <section class="inventory-role-panel ${profile.className}">
+      <div>
+        <p class="eyebrow">${escapeHtml(profile.eyebrow)}</p>
+        <h3>${escapeHtml(profile.title)}</h3>
+        <span>${escapeHtml(profile.detail)}</span>
+      </div>
+      <div class="inventory-role-cards">
+        ${profile.cards.map((card) => `<article><span>${escapeHtml(card.label)}</span><strong>${escapeHtml(card.value)}</strong><small>${escapeHtml(card.detail)}</small></article>`).join("")}
+      </div>
+    </section>
     <section class="inventory-health-grid">
       <article><span>Activos</span><strong>${num(activeCount)}</strong></article>
       <article><span>Sin stock</span><strong class="${outOfStock ? "danger-text" : "ok-text"}">${num(outOfStock)}</strong></article>
@@ -3524,7 +3535,7 @@ function renderInventory() {
         ${["admin", "ventas_admin", "almacen"].includes(currentUser?.role) ? `<button class="ghost-button" type="button" id="loadStarterProducts">Cargar productos de prueba</button>` : ""}
       </div>
       ${ventasMessage ? `<div class="cloud-safe-note"><strong>${escapeHtml(ventasMessage)}</strong><span>La accion se ejecuto sobre los datos de esta empresa.</span></div>` : ""}
-      <label class="toolbar-search">Buscar producto<input id="productSearchInput" type="search" value="${escapeHtml(productSearch)}" placeholder="Codigo, nombre o categoria" /></label>
+      <label class="toolbar-search">Buscar producto<input id="productSearchInput" type="search" autocomplete="off" value="${escapeHtml(productSearch)}" placeholder="Codigo, nombre o categoria" /></label>
       <div class="admin-list">${inventoryProducts.map(renderInventoryProductRow).join("") || empty("Sin productos con esa busqueda", "Busca por codigo, nombre, categoria o limpia el texto para revisar todo el inventario.")}</div>
     </section>
     ${selectedKardex ? renderKardexPanel() : ""}
@@ -3554,6 +3565,46 @@ function renderInventory() {
     renderMain();
   });
   document.querySelector("#exportKardexCsv")?.addEventListener("click", exportSelectedKardexCsv);
+}
+
+function inventoryRoleProfile({ activeCount, outOfStock, lowStock, expiringSoon, expired, inventoryValue, reorderProducts }) {
+  if (currentUser?.role === "almacen") {
+    return {
+      className: "is-warehouse",
+      eyebrow: "Almacen",
+      title: "Tareas de stock y reposicion",
+      detail: "Prioriza agotados, bajo minimo, vencimientos y movimientos de inventario sin ruido financiero.",
+      cards: [
+        { label: "Por reponer", value: num(reorderProducts.length), detail: "Productos bajo minimo o agotados" },
+        { label: "Sin stock", value: num(outOfStock), detail: "Atender antes de vender" },
+        { label: "Vencimiento", value: num(expired + expiringSoon), detail: "Revisar fechas y lotes" }
+      ]
+    };
+  }
+  if (currentUser?.role === "supervisor") {
+    return {
+      className: "is-supervisor",
+      eyebrow: "Control de inventario",
+      title: "Riesgos de stock para decision",
+      detail: "Revisa productos criticos, sobrestock y vencimientos para pedir correcciones al area responsable.",
+      cards: [
+        { label: "Activos", value: num(activeCount), detail: "Productos habilitados" },
+        { label: "Alertas", value: num(outOfStock + lowStock + expired + expiringSoon), detail: "Riesgos visibles" },
+        { label: "Valor", value: money(inventoryValue), detail: "Capital estimado" }
+      ]
+    };
+  }
+  return {
+    className: "is-admin",
+    eyebrow: "Inventario",
+    title: "Stock, valor y decisiones de reposicion",
+    detail: "Controla productos, compras sugeridas, Kardex, stock minimo, vencimientos y valor del almacen.",
+    cards: [
+      { label: "Activos", value: num(activeCount), detail: "Productos operativos" },
+      { label: "Bajo minimo", value: num(lowStock), detail: "Requieren compra" },
+      { label: "Valor almacen", value: money(inventoryValue), detail: "Costo estimado" }
+    ]
+  };
 }
 
 function renderWarehouseActionStrip({ reorderProducts, expiringProducts, outOfStock, lowStock }) {
@@ -4539,6 +4590,7 @@ function renderInventoryProductRow(product) {
   const active = isProductActive(product);
   const insight = productInventoryInsight(product);
   const expiry = expiryStatus(product);
+  const warehouseMode = isWarehouseMode();
   return `<article class="admin-row inventory-row">
     <div>
       <strong>${escapeHtml(product.name)}</strong>
@@ -4548,8 +4600,7 @@ function renderInventoryProductRow(product) {
     <div class="admin-row-meta">
       <span>Costo ${money(product.cost_price)}</span>
       <span>Venta ${money(product.sale_price)}</span>
-      <span>Valor ${money(insight.stockValue)}</span>
-      <span>Margen ${num(insight.marginPercent)}%</span>
+      ${warehouseMode ? "" : `<span>Valor ${money(insight.stockValue)}</span><span>Margen ${num(insight.marginPercent)}%</span>`}
       ${expiry.label ? `<span class="${expiry.className}">${escapeHtml(expiry.label)}</span>` : ""}
       <span class="${active ? "ok-text" : "danger-text"}">${active ? "Activo" : "Inactivo"}</span>
       <span class="${Number(product.stock || 0) <= Number(product.min_stock || 0) ? "danger-text" : "ok-text"}">${Number(product.stock || 0) <= Number(product.min_stock || 0) ? "Bajo minimo" : "Stock OK"}</span>
