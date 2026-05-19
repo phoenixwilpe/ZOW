@@ -3256,9 +3256,9 @@ function renderUsers() {
 
 function renderSettings() {
   setCount("Tienda");
+  const isSystemAdmin = currentUser?.role === "admin";
   mainList().innerHTML = `
-    ${renderSetupAssistant()}
-    ${renderStoreLaunchChecklist()}
+    ${isSystemAdmin ? renderAdminConfigConsole() : `${renderSetupAssistant()}${renderStoreLaunchChecklist()}`}
     ${renderStoreSettingsOverview()}
     <section class="admin-panel settings-command-panel">
       <div class="admin-panel-head"><div><p class="eyebrow">Empresa</p><h3>Datos para ventas e impresion</h3></div></div>
@@ -3288,7 +3288,7 @@ function renderSettings() {
       </form>
     </section>
     ${renderReceiptPreview()}
-    ${renderRoleConfigGuide()}
+    ${isSystemAdmin ? "" : renderRoleConfigGuide()}
   `;
   document.querySelector("#storeSettingsForm")?.addEventListener("submit", saveStoreSettings);
   document.querySelector("#copySetupPlanBtn")?.addEventListener("click", copySetupImplementationSummary);
@@ -3296,6 +3296,42 @@ function renderSettings() {
   document.querySelectorAll("[data-settings-preset]").forEach((button) => {
     button.addEventListener("click", () => applySettingsPreset(button.dataset.settingsPreset));
   });
+}
+
+function renderAdminConfigConsole() {
+  const checks = buildStoreLaunchChecks();
+  const pending = checks.filter((item) => !item.done);
+  const activeUsers = users.filter((user) => user.active).length;
+  const activeProducts = products.filter(isProductActive).length;
+  const cashBoxes = Number(storeSettings.cashRegisterCount || 1);
+  const readyPercent = Math.round(((checks.length - pending.length) / checks.length) * 100);
+  const pendingPreview = pending.slice(0, 3);
+  return `<section class="admin-config-console">
+    <div class="admin-config-main">
+      <p class="eyebrow">Encargado de sistema</p>
+      <h3>Centro de configuracion de la tienda</h3>
+      <span>Ordena empresa, usuarios, cajas, productos y reglas sin mezclarlo con la operacion diaria de caja.</span>
+      <div class="admin-config-actions">
+        <button class="primary-button" type="button" data-module-view="users">Usuarios y roles</button>
+        <button class="ghost-button" type="button" data-module-view="catalog">Catalogo</button>
+        <button class="ghost-button" type="button" data-module-view="inventory">Inventario</button>
+        <button class="ghost-button" type="button" data-module-view="help">Manual</button>
+      </div>
+    </div>
+    <div class="admin-config-score">
+      <strong>${readyPercent}%</strong>
+      <span>preparacion</span>
+    </div>
+    <div class="admin-config-kpis">
+      <article><span>Usuarios activos</span><strong>${num(activeUsers)}</strong><small>Credenciales habilitadas</small></article>
+      <article><span>Cajas</span><strong>${num(cashBoxes)}</strong><small>Puntos de cobro configurados</small></article>
+      <article><span>Productos</span><strong>${num(activeProducts)}</strong><small>Disponibles para vender</small></article>
+    </div>
+    <div class="admin-config-pending">
+      <strong>${pending.length ? "Pendiente para entregar" : "Configuracion base lista"}</strong>
+      ${pending.length ? pendingPreview.map((item) => `<button type="button" data-module-view="${item.view || "settings"}"><b>!</b><span>${escapeHtml(item.label)}</span></button>`).join("") : `<p>Ya puedes hacer pruebas reales con caja, venta, comprobante e inventario.</p>`}
+    </div>
+  </section>`;
 }
 
 function renderHelp() {
@@ -7535,7 +7571,11 @@ function comboAvailableStock(combo) {
   }));
 }
 function canAccessView(view) { return accessibleViewsForRole(currentUser?.role).includes(view); }
-function defaultViewForRole() { return accessibleViewsForRole(currentUser?.role)[0] || "summary"; }
+function defaultViewForRole() {
+  if (currentUser?.role === "admin") return "settings";
+  if (currentUser?.role === "almacen") return "inventory";
+  return accessibleViewsForRole(currentUser?.role)[0] || "summary";
+}
 function canSeeProfit() { return ["admin", "ventas_admin", "supervisor"].includes(currentUser?.role); }
 function isSimpleCashierMode() { return ["cajero", "vendedor"].includes(currentUser?.role); }
 function isWarehouseMode() { return currentUser?.role === "almacen"; }
