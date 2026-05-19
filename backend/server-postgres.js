@@ -96,8 +96,8 @@ const VENTAS_ROLE_ACCESS = {
     label: "Vendedor",
     shortLabel: "Vendedor",
     context: "Atencion",
-    views: ["sell", "customers", "history", "help"],
-    permissions: ["Venta rapida", "Clientes", "Historial propio"]
+    views: ["customers", "catalog", "history", "help"],
+    permissions: ["Clientes", "Catalogo y precios", "Historial propio"]
   },
   funcionario: {
     label: "Funcionario",
@@ -1270,7 +1270,7 @@ app.get("/api/ventas/suspended-sales", requireAuth, async (req, res) => {
 
 app.post("/api/ventas/suspended-sales", requireAuth, async (req, res) => {
   if (!(await requireSystemAccess("ventas_almacen", req, res))) return;
-  if (!requireVentasRole(req, res, "admin", "ventas_admin", "cajero", "vendedor")) return;
+  if (!requireVentasRole(req, res, "admin", "ventas_admin", "cajero")) return;
   await ensureVentasSchema();
   const items = Array.isArray(req.body.items) ? req.body.items : [];
   if (!items.length) return res.status(400).json({ error: "Agrega productos antes de suspender la venta" });
@@ -1757,7 +1757,7 @@ app.get("/api/ventas/customers", requireAuth, async (req, res) => {
 
 app.post("/api/ventas/customers", requireAuth, async (req, res) => {
   if (!(await requireSystemAccess("ventas_almacen", req, res))) return;
-  if (!requireVentasRole(req, res, "admin", "ventas_admin", "cajero", "vendedor")) return;
+  if (!requireVentasRole(req, res, "admin", "ventas_admin", "cajero")) return;
   await ensureVentasSchema();
   const customer = {
     id: randomUUID(),
@@ -1780,7 +1780,7 @@ app.post("/api/ventas/customers", requireAuth, async (req, res) => {
 
 app.patch("/api/ventas/customers/:id", requireAuth, async (req, res) => {
   if (!(await requireSystemAccess("ventas_almacen", req, res))) return;
-  if (!requireVentasRole(req, res, "admin", "ventas_admin", "cajero", "vendedor")) return;
+  if (!requireVentasRole(req, res, "admin", "ventas_admin", "cajero")) return;
   await ensureVentasSchema();
   const existing = await pg.get("SELECT * FROM sales_customers WHERE id = ? AND company_id = ?", [req.params.id, req.user.company_id]);
   if (!existing) return res.status(404).json({ error: "Cliente no encontrado" });
@@ -2047,7 +2047,7 @@ app.post("/api/ventas/sales/:id/void", requireAuth, async (req, res) => {
 
 app.post("/api/ventas/sales/:id/pay", requireAuth, async (req, res) => {
   if (!(await requireSystemAccess("ventas_almacen", req, res))) return;
-  if (!requireVentasRole(req, res, "admin", "ventas_admin", "cajero", "vendedor")) return;
+  if (!requireVentasRole(req, res, "admin", "ventas_admin", "cajero")) return;
   await ensureVentasSchema();
   const sale = await pg.get("SELECT * FROM sales_orders WHERE id = ? AND company_id = ?", [req.params.id, req.user.company_id]);
   if (!sale) return res.status(404).json({ error: "Venta no encontrada" });
@@ -2174,7 +2174,7 @@ app.post("/api/ventas/sales/:id/returns", requireAuth, async (req, res) => {
 
 app.post("/api/ventas/sales", requireAuth, async (req, res) => {
   if (!(await requireSystemAccess("ventas_almacen", req, res))) return;
-  if (!requireVentasRole(req, res, "admin", "ventas_admin", "cajero", "vendedor")) return;
+  if (!requireVentasRole(req, res, "admin", "ventas_admin", "cajero")) return;
   await ensureVentasSchema();
   const items = Array.isArray(req.body.items) ? req.body.items : [];
   if (!items.length) return res.status(400).json({ error: "Agrega al menos un producto a la venta" });

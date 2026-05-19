@@ -80,6 +80,10 @@ test("almacen no puede vender ni mover caja, pero si consultar compras", async (
 
 test("vendedor no puede gestionar inventario ni promociones", async () => {
   const token = await login("vendedor@zow.com", "TestVendedor2026#");
+  const permissionsResponse = await request("/ventas/permissions", { token });
+  assert.equal(permissionsResponse.status, 200);
+  assert.equal(permissionsResponse.body.views.includes("sell"), false);
+  assert.ok(permissionsResponse.body.views.includes("customers"));
   await expectStatus("/ventas/products", {
     method: "POST",
     token,
@@ -89,6 +93,16 @@ test("vendedor no puede gestionar inventario ni promociones", async () => {
     method: "POST",
     token,
     body: { name: "Promo bloqueada", scopeType: "global", discountType: "percent", discountValue: 5 }
+  }, 403);
+  await expectStatus("/ventas/sales", {
+    method: "POST",
+    token,
+    body: { items: [{ productId: "no-real", quantity: 1 }], paymentMethod: "efectivo" }
+  }, 403);
+  await expectStatus("/ventas/sales/no-real/pay", {
+    method: "POST",
+    token,
+    body: { amount: 10, paymentMethod: "efectivo" }
   }, 403);
 });
 

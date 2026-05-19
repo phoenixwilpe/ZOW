@@ -81,8 +81,8 @@ const VENTAS_ROLE_ACCESS = {
     label: "Vendedor",
     shortLabel: "Vendedor",
     context: "Atencion",
-    views: ["sell", "customers", "history", "help"],
-    permissions: ["Venta rapida", "Clientes", "Historial propio"]
+    views: ["customers", "catalog", "history", "help"],
+    permissions: ["Clientes", "Catalogo y precios", "Historial propio"]
   },
   funcionario: {
     label: "Funcionario",
@@ -1441,7 +1441,7 @@ app.get("/api/ventas/suspended-sales", requireAuth, requireSystemAccess("ventas_
   res.json({ sales: rows.map(mapSuspendedSale) });
 });
 
-app.post("/api/ventas/suspended-sales", requireAuth, requireSystemAccess("ventas_almacen"), requireVentasRole("admin", "ventas_admin", "cajero", "vendedor"), (req, res) => {
+app.post("/api/ventas/suspended-sales", requireAuth, requireSystemAccess("ventas_almacen"), requireVentasRole("admin", "ventas_admin", "cajero"), (req, res) => {
   const items = Array.isArray(req.body.items) ? req.body.items : [];
   if (!items.length) return res.status(400).json({ error: "Agrega productos antes de suspender la venta" });
   const suspendedId = randomUUID();
@@ -2142,7 +2142,7 @@ app.post("/api/ventas/sales/:id/void", requireAuth, requireSystemAccess("ventas_
   });
 });
 
-app.post("/api/ventas/sales/:id/pay", requireAuth, requireSystemAccess("ventas_almacen"), requireVentasRole("admin", "ventas_admin", "cajero", "vendedor"), (req, res) => {
+app.post("/api/ventas/sales/:id/pay", requireAuth, requireSystemAccess("ventas_almacen"), requireVentasRole("admin", "ventas_admin", "cajero"), (req, res) => {
   const sale = db.prepare("SELECT * FROM sales_orders WHERE id = ? AND company_id = ?").get(req.params.id, req.user.company_id);
   if (!sale) return res.status(404).json({ error: "Venta no encontrada" });
   if (ventasOwnOnly(req.user.role) && sale.created_by !== req.user.id) return res.status(403).json({ error: "Permiso insuficiente" });
@@ -2261,7 +2261,7 @@ app.post("/api/ventas/sales/:id/returns", requireAuth, requireSystemAccess("vent
   });
 });
 
-app.post("/api/ventas/sales", requireAuth, requireSystemAccess("ventas_almacen"), requireVentasRole("admin", "ventas_admin", "cajero", "vendedor"), (req, res) => {
+app.post("/api/ventas/sales", requireAuth, requireSystemAccess("ventas_almacen"), requireVentasRole("admin", "ventas_admin", "cajero"), (req, res) => {
   const items = Array.isArray(req.body.items) ? req.body.items : [];
   if (!items.length) return res.status(400).json({ error: "Agrega al menos un producto a la venta" });
 

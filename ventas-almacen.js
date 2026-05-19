@@ -2546,6 +2546,7 @@ function renderCustomers() {
   const customerHealth = buildCustomerPortfolioHealth(riskCustomers);
   setCount(`${customers.length} cliente${customers.length === 1 ? "" : "s"}`);
   mainList().innerHTML = `
+    ${currentUser?.role === "vendedor" ? renderSellerAttentionPanel({ totalDebt, followUpList }) : ""}
     <section class="customer-command-card">
       <div>
         <p class="eyebrow">Cartera comercial</p>
@@ -2614,6 +2615,7 @@ function renderCustomers() {
     button.addEventListener("click", () => printCustomerStatement(button.dataset.printCustomerStatement));
   });
   document.querySelector("#quickNewCustomer")?.addEventListener("click", () => openCustomerModal());
+  document.querySelector("#sellerNewCustomer")?.addEventListener("click", () => openCustomerModal());
   document.querySelector("#exportCustomersCommandCsv")?.addEventListener("click", exportCustomersCsv);
   document.querySelector("#exportReceivablesCsv")?.addEventListener("click", exportReceivablesCsv);
   document.querySelector("#exportCustomersFromCustomersCsv")?.addEventListener("click", exportCustomersCsv);
@@ -2640,10 +2642,40 @@ function renderCustomerDirectoryRow(customer) {
       <span>Credito ${money(creditLimit)}</span>
       <span class="${usageClass}">Usado ${usage}%</span>
       <span>Debe ${money(debt)}</span>
-      ${debt > 0 ? `<button class="primary-button" type="button" data-pay-customer="${escapeHtml(customer.name)}">Cobrar</button><button class="ghost-button" type="button" data-copy-customer-statement="${escapeHtml(customer.name)}">Copiar estado</button><button class="ghost-button" type="button" data-print-customer-statement="${escapeHtml(customer.name)}">Imprimir estado</button>` : ""}
+      ${debt > 0 ? `${canCollectPayments() ? `<button class="primary-button" type="button" data-pay-customer="${escapeHtml(customer.name)}">Cobrar</button>` : ""}<button class="ghost-button" type="button" data-copy-customer-statement="${escapeHtml(customer.name)}">Copiar estado</button><button class="ghost-button" type="button" data-print-customer-statement="${escapeHtml(customer.name)}">Imprimir estado</button>` : ""}
       <button class="ghost-button" type="button" data-edit-customer="${customer.id}">Editar</button>
     </div>
   </article>`;
+}
+
+function renderSellerAttentionPanel({ totalDebt, followUpList }) {
+  const activeCustomers = customers.filter((customer) => (customer.status || "activo") === "activo").length;
+  const activeProducts = products.filter(isProductActive).length;
+  const recentOwnSales = sales.filter((sale) => sale.created_by === currentUser?.id).slice(0, 3);
+  return `<section class="seller-attention-panel">
+    <div class="seller-attention-head">
+      <div>
+        <p class="eyebrow">Vendedor</p>
+        <h3>Atencion comercial sin caja</h3>
+        <span>Consulta precios, registra clientes y prepara seguimiento. Los cobros quedan para cajero u operador autorizado.</span>
+      </div>
+      <div class="seller-attention-actions">
+        <button class="primary-button" type="button" id="sellerNewCustomer">Nuevo cliente</button>
+        <button class="ghost-button" type="button" data-module-view="catalog">Ver catalogo</button>
+        <button class="ghost-button" type="button" data-module-view="history">Mi historial</button>
+      </div>
+    </div>
+    <div class="seller-attention-grid">
+      <article><span>Clientes activos</span><strong>${num(activeCustomers)}</strong><small>Directorio disponible</small></article>
+      <article><span>Productos visibles</span><strong>${num(activeProducts)}</strong><small>Catalogo y precios</small></article>
+      <article class="${totalDebt ? "is-warning" : "is-ok"}"><span>Cartera pendiente</span><strong>${money(totalDebt)}</strong><small>Para seguimiento, no cobro</small></article>
+      <article><span>Prioridad</span><strong>${num(followUpList.length)}</strong><small>Clientes para contactar</small></article>
+    </div>
+    <div class="seller-attention-lists">
+      <article><strong>Seguimiento sugerido</strong>${followUpList.slice(0, 3).map((item) => `<span>${escapeHtml(item.name)} / ${money(item.debt)} / ${escapeHtml(item.priority)}</span>`).join("") || `<span>Sin seguimiento pendiente.</span>`}</article>
+      <article><strong>Mis ventas recientes</strong>${recentOwnSales.map((sale) => `<span>${escapeHtml(sale.code)} / ${money(sale.total)} / ${formatShortDate(sale.created_at)}</span>`).join("") || `<span>Sin ventas recientes registradas a tu usuario.</span>`}</article>
+    </div>
+  </section>`;
 }
 
 async function copyCustomerStatement(customerName) {
@@ -2717,7 +2749,7 @@ function renderReceivableRow(sale) {
       <div class="receivable-progress"><i style="width:${paidPercent}%"></i></div>
       ${contactActions}
     </div>
-    <div class="admin-row-meta"><span class="warn-text">Debe ${money(sale.balance_due)}</span><button class="primary-button" type="button" data-pay-receivable="${sale.id}">Registrar pago</button></div>
+    <div class="admin-row-meta"><span class="warn-text">Debe ${money(sale.balance_due)}</span>${canCollectPayments() ? `<button class="primary-button" type="button" data-pay-receivable="${sale.id}">Registrar pago</button>` : `<span>Pago en caja</span>`}</div>
   </article>`;
 }
 
@@ -2802,7 +2834,7 @@ function renderCustomerRiskRow(item) {
     <div class="admin-row-meta">
       <span class="${levelClass}">Riesgo ${item.level}</span>
       <span>${item.recommendation}</span>
-      <button class="ghost-button" type="button" data-pay-customer="${escapeHtml(item.name)}">Cobrar</button>
+      ${canCollectPayments() ? `<button class="ghost-button" type="button" data-pay-customer="${escapeHtml(item.name)}">Cobrar</button>` : ""}
     </div>
   </article>`;
 }
@@ -3827,10 +3859,11 @@ function buildSalesCertificationChecks() {
 
 function helpGuidesForRole(role) {
   const allGuides = [
-    { roles: ["admin", "ventas_admin", "cajero", "vendedor"], context: "POS", title: "Realizar una venta", view: "sell", steps: ["Abrir caja si el sistema lo solicita.", "Buscar producto por nombre, codigo o lector.", "Agregar productos al carrito y revisar validaciones.", "Seleccionar cliente si la tienda lo exige.", "Cobrar e imprimir o generar comprobante."] },
+    { roles: ["admin", "ventas_admin", "cajero"], context: "POS", title: "Realizar una venta", view: "sell", steps: ["Abrir caja si el sistema lo solicita.", "Buscar producto por nombre, codigo o lector.", "Agregar productos al carrito y revisar validaciones.", "Seleccionar cliente si la tienda lo exige.", "Cobrar e imprimir o generar comprobante."] },
     { roles: ["admin", "ventas_admin", "cajero", "supervisor"], context: "Caja", title: "Cerrar turno", view: "finance", steps: ["Entrar a Finanzas.", "Contar efectivo real en caja.", "Comparar esperado contra contado.", "Registrar observacion si hay diferencia.", "Imprimir cierre para control interno."] },
     { roles: ["admin", "ventas_admin", "almacen", "supervisor"], context: "Inventario", title: "Reponer stock", view: "inventory", steps: ["Revisar prioridad del dia en Inventario.", "Exportar riesgos o preparar compra sugerida.", "Validar cantidades y costos.", "Registrar compra o dejar orden pendiente.", "Recibir compra para sumar stock y Kardex."] },
-    { roles: ["admin", "ventas_admin", "cajero", "vendedor", "supervisor"], context: "Clientes", title: "Cobrar deuda", view: "customers", steps: ["Entrar a Clientes.", "Buscar cuentas por cobrar.", "Usar WhatsApp o copiar mensaje de cobro.", "Registrar pago parcial o total.", "Confirmar que el saldo cambie."] },
+    { roles: ["admin", "ventas_admin", "cajero", "supervisor"], context: "Clientes", title: "Cobrar deuda", view: "customers", steps: ["Entrar a Clientes.", "Buscar cuentas por cobrar.", "Usar WhatsApp o copiar mensaje de cobro.", "Registrar pago parcial o total.", "Confirmar que el saldo cambie."] },
+    { roles: ["vendedor"], context: "Atencion", title: "Atender clientes", view: "customers", steps: ["Registrar o actualizar datos del cliente.", "Consultar catalogo y precios disponibles.", "Copiar mensaje de seguimiento por WhatsApp.", "Revisar cartera pendiente sin registrar cobros.", "Derivar el pago a caja cuando corresponda."] },
     { roles: ["admin", "ventas_admin", "supervisor"], context: "Auditoria", title: "Revisar reportes", view: "reports", steps: ["Seleccionar periodo.", "Leer decision recomendada.", "Atender alertas de caja, stock o cobranza.", "Exportar CSV necesario.", "Revisar eventos de auditoria visibles."] },
     { roles: ["admin"], context: "Configuracion", title: "Entregar una tienda", view: "settings", steps: ["Completar datos de empresa y comprobante.", "Configurar cantidad de cajas.", "Crear usuarios por rol.", "Cargar productos iniciales.", "Realizar venta y cierre de prueba."] },
     { roles: ["admin"], context: "Usuarios", title: "Auditar permisos", view: "users", steps: ["Revisar cobertura de roles activos.", "Evitar accesos amplios innecesarios.", "Asignar caja fija si corresponde.", "Desactivar usuarios que ya no trabajan.", "Probar ingreso con cada rol clave."] }
@@ -4948,7 +4981,7 @@ function rolePermissionMatrix() {
     { key: "cajero", shortLabel: "Cajero", label: "Cajero", context: "Mostrador", permissions: ["Venta POS", "Abrir y cerrar su caja", "Historial y reimpresion"] },
     { key: "almacen", shortLabel: "Almacen", label: "Almacen", context: "Stock", permissions: ["Productos e inventario", "Compras y reposicion", "Kardex y alertas"] },
     { key: "supervisor", shortLabel: "Supervisor", label: "Supervisor", context: "Control", permissions: ["Reportes y auditoria", "Anular o devolver ventas", "Revision de caja"] },
-    { key: "vendedor", shortLabel: "Vendedor", label: "Vendedor", context: "Atencion", permissions: ["Venta rapida", "Clientes", "Historial propio"] }
+    { key: "vendedor", shortLabel: "Vendedor", label: "Vendedor", context: "Atencion", permissions: ["Clientes", "Catalogo y precios", "Historial propio"] }
   ];
 }
 
@@ -7620,11 +7653,13 @@ function defaultViewForRole() {
   if (currentUser?.role === "admin") return "settings";
   if (currentUser?.role === "almacen") return "inventory";
   if (currentUser?.role === "supervisor") return "summary";
+  if (currentUser?.role === "vendedor") return "customers";
   return accessibleViewsForRole(currentUser?.role)[0] || "summary";
 }
 function canSeeProfit() { return ["admin", "ventas_admin", "supervisor"].includes(currentUser?.role); }
-function isSimpleCashierMode() { return ["cajero", "vendedor"].includes(currentUser?.role); }
+function isSimpleCashierMode() { return currentUser?.role === "cajero"; }
 function isWarehouseMode() { return currentUser?.role === "almacen"; }
+function canCollectPayments() { return ["admin", "ventas_admin", "cajero"].includes(currentUser?.role); }
 function can(permission) {
   const role = currentUser?.role || "";
   const permissions = {
@@ -7652,7 +7687,7 @@ function accessibleViewsForRole(role) {
     admin: ["sell", "summary", "alerts", "finance", "history", "routes", "promotions", "reports", "catalog", "customers", "inventory", "purchases", "users", "settings", "help"],
     ventas_admin: ["sell", "summary", "alerts", "finance", "history", "routes", "promotions", "reports", "catalog", "customers", "inventory", "purchases", "settings", "help"],
     cajero: ["sell", "finance", "history", "help"],
-    vendedor: ["sell", "customers", "history", "help"],
+    vendedor: ["customers", "catalog", "history", "help"],
     almacen: ["inventory", "purchases", "alerts", "catalog", "help"],
     supervisor: ["summary", "alerts", "finance", "history", "reports", "customers", "inventory", "help"],
     funcionario: ["sell", "customers", "summary", "help"]
