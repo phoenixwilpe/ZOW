@@ -13,6 +13,7 @@ process.env.SEED_VENTAS_ADMIN_PASSWORD = "TestVentasAdmin2026#";
 process.env.SEED_CAJERO_PASSWORD = "TestCajero2026#";
 process.env.SEED_ALMACEN_PASSWORD = "TestAlmacen2026#";
 process.env.SEED_VENDEDOR_PASSWORD = "TestVendedor2026#";
+process.env.SEED_DIRECTOR_PASSWORD = "TestSupervisor2026#";
 process.env.SYSTEM_PASSWORD = "TestSistema2026#";
 process.env.ZOW_OWNER_PASSWORD = "TestOwner2026#";
 
@@ -103,6 +104,24 @@ test("vendedor no puede gestionar inventario ni promociones", async () => {
     method: "POST",
     token,
     body: { amount: 10, paymentMethod: "efectivo" }
+  }, 403);
+});
+
+test("supervisor revisa caja pero no abre ni cierra turnos", async () => {
+  const token = await login("director@zow.com", "TestSupervisor2026#");
+  const permissionsResponse = await request("/ventas/permissions", { token });
+  assert.equal(permissionsResponse.status, 200);
+  assert.equal(permissionsResponse.body.views.includes("finance"), true);
+  assert.equal(permissionsResponse.body.views.includes("sell"), false);
+  await expectStatus("/ventas/cash/open", {
+    method: "POST",
+    token,
+    body: { registerNumber: 1, openingAmount: 100 }
+  }, 403);
+  await expectStatus("/ventas/cash/close", {
+    method: "POST",
+    token,
+    body: { countedAmount: 100, note: "Intento sin permiso" }
   }, 403);
 });
 

@@ -1338,6 +1338,8 @@ function renderFinance() {
   const totalClosureDifference = cashClosures.reduce((sum, closure) => sum + Number(closure.differenceAmount || 0), 0);
   const paymentBreakdown = cashPaymentBreakdown();
   const cashHealth = buildCashHealth(expectedCash, movementsTotal, totalClosureDifference);
+  const canOperateCash = can("closeCash");
+  const financeProfile = financeRoleProfile({ expectedCash, movementsTotal, totalClosureDifference });
   const movementForm = can("cashMovements")
     ? `<form class="admin-form" id="cashMovementForm">
         <div class="form-grid">
@@ -1352,6 +1354,7 @@ function renderFinance() {
         <span>El cajero puede abrir, cobrar y cerrar su caja. Ingresos o egresos manuales quedan para encargado o administrador de ventas.</span>
       </div>`;
   mainList().innerHTML = `
+    ${renderFinanceRolePanel(financeProfile)}
     ${renderShiftCommandPanel({ expectedCash, movementsTotal, paymentBreakdown })}
     ${ventasMessage ? `<div class="cloud-safe-note"><strong>${escapeHtml(ventasMessage)}</strong><span>Usa este resumen para validar el turno antes del cierre.</span></div>` : ""}
     <section class="setup-overview">
@@ -1365,7 +1368,7 @@ function renderFinance() {
     <section class="cash-health-grid">
       ${cashHealth.map((item) => `<article class="${item.className}"><span>${escapeHtml(item.label)}</span><strong>${escapeHtml(item.value)}</strong><small>${escapeHtml(item.detail)}</small></article>`).join("")}
     </section>
-    <section class="cashier-grid">
+    ${canOperateCash ? `<section class="cashier-grid">
       <section class="admin-panel">
         <div class="admin-panel-head"><div><p class="eyebrow">Apertura</p><h3>${cashSession?.status === "abierta" ? "Caja abierta" : "Abrir caja"}</h3></div></div>
         ${cashSession?.status === "abierta" ? `
@@ -1403,7 +1406,7 @@ function renderFinance() {
           <button class="primary-button" type="submit" id="cashCloseSubmitBtn" ${cashSession?.status === "abierta" ? "" : "disabled"}>Cerrar caja</button>
         </form>
       </section>
-    </section>
+    </section>` : renderCashReviewOnlyPanel({ expectedCash, movementsTotal, paymentBreakdown, totalClosureDifference })}
     <section class="admin-panel">
       <div class="admin-panel-head"><div><p class="eyebrow">Metodos de pago</p><h3>Resumen del turno actual</h3></div></div>
       <div class="payment-breakdown-grid">
@@ -1441,6 +1444,86 @@ function renderFinance() {
     button.addEventListener("click", () => printCashClosure(button.dataset.printClosure));
   });
   document.querySelector("#exportCashClosuresCsv")?.addEventListener("click", exportCashClosuresCsv);
+}
+
+function financeRoleProfile({ expectedCash, movementsTotal, totalClosureDifference }) {
+  const cashOpen = cashSession?.status === "abierta";
+  if (currentUser?.role === "cajero") {
+    return {
+      className: "is-cashier",
+      eyebrow: "Caja",
+      title: cashOpen ? `Caja ${num(cashSession.registerNumber)} en turno` : "Abrir caja para iniciar",
+      detail: cashOpen ? "Controla ventas, efectivo esperado y cierre del turno." : "Abre tu caja asignada antes de confirmar ventas.",
+      cards: [
+        { label: "Esperado", value: money(expectedCash), detail: "Apertura + cobros + movimientos" },
+        { label: "Pendientes", value: num(cash.pendingSales?.length || 0), detail: "Ventas por cerrar" },
+        { label: "Estado", value: cashOpen ? "Abierta" : "Cerrada", detail: cashOpen ? formatDateTime(cashSession.openedAt) : "Sin turno activo" }
+      ]
+    };
+  }
+  if (currentUser?.role === "supervisor") {
+    return {
+      className: "is-supervisor",
+      eyebrow: "Revision de caja",
+      title: "Control y auditoria del turno",
+      detail: "Revisa cierres, diferencias, pagos y movimientos sin abrir ni cerrar caja.",
+      cards: [
+        { label: "Esperado actual", value: money(expectedCash), detail: cashOpen ? `Caja ${num(cashSession.registerNumber)} abierta` : "Sin caja abierta" },
+        { label: "Movimientos", value: money(movementsTotal), detail: "Ingresos y egresos del turno" },
+        { label: "Diferencias", value: money(totalClosureDifference), detail: "Acumulado en cierres" }
+      ]
+    };
+  }
+  return {
+    className: "is-admin",
+    eyebrow: "Finanzas",
+    title: "Caja, cierre y control operativo",
+    detail: "Administra apertura, movimientos, arqueo, cierres y exportacion de caja.",
+    cards: [
+      { label: "Esperado", value: money(expectedCash), detail: "Turno actual" },
+      { label: "Cierres", value: num(cashClosures.length), detail: "Historial registrado" },
+      { label: "Diferencia", value: money(totalClosureDifference), detail: "Acumulada" }
+    ]
+  };
+}
+
+function renderFinanceRolePanel(profile) {
+  return `<section class="finance-role-panel ${profile.className}">
+    <div>
+      <p class="eyebrow">${escapeHtml(profile.eyebrow)}</p>
+      <h3>${escapeHtml(profile.title)}</h3>
+      <span>${escapeHtml(profile.detail)}</span>
+    </div>
+    <div class="finance-role-cards">
+      ${profile.cards.map((card) => `<article><span>${escapeHtml(card.label)}</span><strong>${escapeHtml(card.value)}</strong><small>${escapeHtml(card.detail)}</small></article>`).join("")}
+    </div>
+  </section>`;
+}
+
+function renderCashReviewOnlyPanel({ expectedCash, movementsTotal, paymentBreakdown, totalClosureDifference }) {
+  const latestClosures = cashClosures.slice(0, 4);
+  return `<section class="cash-review-panel">
+    <div class="admin-panel-head">
+      <div><p class="eyebrow">Solo revision</p><h3>Panel de supervision de caja</h3></div>
+      <span>${cashSession?.status === "abierta" ? `Caja ${num(cashSession.registerNumber)} abierta` : "Sin caja abierta"}</span>
+    </div>
+    <div class="cash-review-grid">
+      <article><span>Efectivo esperado</span><strong>${money(expectedCash)}</strong><small>Operacion actual visible</small></article>
+      <article><span>Movimientos</span><strong>${money(movementsTotal)}</strong><small>No editable para este rol</small></article>
+      <article><span>Diferencias acumuladas</span><strong>${money(totalClosureDifference)}</strong><small>Historial de cierres</small></article>
+      <article><span>Metodos</span><strong>${num(paymentBreakdown.filter((item) => Number(item.total || 0) > 0).length)}</strong><small>Formas de pago usadas</small></article>
+    </div>
+    <div class="cash-review-columns">
+      <article>
+        <strong>Pagos del turno</strong>
+        ${paymentBreakdown.map((item) => `<span>${escapeHtml(item.label)}: ${money(item.total)} / ${num(item.count)} operacion${item.count === 1 ? "" : "es"}</span>`).join("")}
+      </article>
+      <article>
+        <strong>Ultimos cierres</strong>
+        ${latestClosures.length ? latestClosures.map((closure) => `<span>${escapeHtml(closure.code)} / caja ${num(closure.registerNumber)} / dif. ${money(closure.differenceAmount || 0)}</span>`).join("") : `<span>Sin cierres registrados.</span>`}
+      </article>
+    </div>
+  </section>`;
 }
 
 function renderShiftCommandPanel({ expectedCash, movementsTotal, paymentBreakdown }) {
