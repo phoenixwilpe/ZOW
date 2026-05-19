@@ -10978,16 +10978,38 @@ body.app-correspondencia .timeline-item::before {
 }
 
 .empty-state {
-  min-height: 520px;
+  min-height: min(360px, 42vh);
   display: grid;
+  gap: 8px;
   place-content: center;
   text-align: center;
   color: var(--muted);
+  padding: 22px;
+  border: 1px dashed color-mix(in srgb, var(--line) 78%, var(--accent) 22%);
+  border-radius: 14px;
+  background:
+    radial-gradient(circle at 18% 18%, color-mix(in srgb, var(--accent) 12%, transparent) 0 22%, transparent 44%),
+    linear-gradient(145deg, rgb(255 255 255 / 78%), rgb(255 255 255 / 48%));
 }
 
 .empty-state strong {
   color: var(--ink);
-  margin-bottom: 7px;
+}
+
+.empty-state span {
+  max-width: 460px;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.admin-list .empty-state,
+.sales-history-list .empty-state,
+.purchase-history-list .empty-state,
+.product-suggestion-grid .empty-state,
+.price-list .empty-state {
+  min-height: 124px;
+  grid-column: 1 / -1;
+  align-self: stretch;
 }
 
 .hidden {

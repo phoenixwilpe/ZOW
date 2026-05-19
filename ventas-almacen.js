@@ -647,7 +647,7 @@ function renderSummary() {
     ${renderLiveActivityPanel()}
     <section class="admin-panel">
       <div class="admin-panel-head"><div><p class="eyebrow">Ultimas ventas</p><h3>Movimiento comercial</h3></div></div>
-      <div class="admin-list">${sales.slice(0, 6).map(renderSaleRow).join("") || empty("Sin ventas registradas")}</div>
+      <div class="admin-list">${sales.slice(0, 6).map(renderSaleRow).join("") || empty("Sin ventas registradas", "Cuando el cajero confirme ventas, este panel mostrara el movimiento reciente.")}</div>
     </section>
   `;
   document.querySelectorAll("[data-commercial-alert-view]").forEach((button) => {
@@ -997,7 +997,7 @@ function renderAlerts() {
           <button class="ghost-button" type="button" id="exportReorderCsv">Exportar reposicion</button>
         </div>
       </div>
-      <div class="admin-list">${alerts.map(renderReorderRow).join("") || empty("No hay alertas de stock")}</div>
+      <div class="admin-list">${alerts.map(renderReorderRow).join("") || empty("No hay alertas de stock", "Cuando un producto llegue al minimo configurado, aparecera aqui para reponerlo.")}</div>
     </section>
     ${selectedKardex ? renderKardexPanel() : ""}
   `;
@@ -1096,7 +1096,7 @@ function renderSell() {
             <strong>${productSearch ? `Busqueda: ${escapeHtml(productSearch)}` : productCategoryFilter ? `Categoria: ${escapeHtml(productCategoryFilter)}` : "Vista general"}</strong>
             <span>Favoritos, coincidencias exactas y productos con stock aparecen primero.</span>
           </div>
-          <div class="product-suggestion-grid touch-product-grid">${visibleSellProducts.map(renderSellProduct).join("") || empty("Sin productos con esa busqueda")}</div>
+          <div class="product-suggestion-grid touch-product-grid">${visibleSellProducts.map(renderSellProduct).join("") || empty("Sin productos con esa busqueda", "Prueba con codigo, nombre, categoria o limpia el filtro para volver a ver el catalogo.")}</div>
           ${hiddenProductCount ? `<div class="pos-more-results">Hay ${num(hiddenProductCount)} producto${hiddenProductCount === 1 ? "" : "s"} mas. Usa la busqueda por nombre, codigo o categoria para filtrar.</div>` : ""}
         </div>
       </section>
@@ -1118,7 +1118,7 @@ function renderSell() {
           ${storeSettings.requireCustomerForSale ? `<div class="cloud-safe-note"><strong>Cliente requerido</strong><span>La configuracion de la tienda exige seleccionar un cliente antes de cobrar.</span></div>` : ""}
           ${!storeSettings.allowDiscounts ? `<div class="cloud-safe-note"><strong>Descuentos desactivados</strong><span>Solo el encargado puede volver a habilitarlos desde configuracion.</span></div>` : ""}
           ${lowStockInCart.length ? `<div class="pos-stock-note"><strong>Atencion stock bajo:</strong> ${lowStockInCart.map((product) => escapeHtml(product.name)).join(", ")}</div>` : ""}
-          <div class="pos-cart-list touch-cart-list">${saleCart.map(renderCartItem).join("") || empty("Toca un producto para agregarlo")}</div>
+          <div class="pos-cart-list touch-cart-list">${saleCart.map(renderCartItem).join("") || empty("Toca un producto para agregarlo", "El carrito se actualiza sin salir del modulo de venta, pensado para pantallas tactiles.")}</div>
           ${renderSaleReadinessPanel(saleReadiness)}
           <div class="pos-section-block pos-total-block">
             <div class="pos-section-title"><strong>Resumen de cobro</strong><span>Totales de la venta actual</span></div>
@@ -1351,7 +1351,7 @@ function renderFinance() {
     </section>
     <section class="admin-panel">
       <div class="admin-panel-head"><div><p class="eyebrow">Historial movimientos</p><h3>Turno actual</h3></div></div>
-      <div class="admin-list">${cashMovements.slice(0, 8).map(renderCashMovementRow).join("") || empty("Sin movimientos manuales")}</div>
+      <div class="admin-list">${cashMovements.slice(0, 8).map(renderCashMovementRow).join("") || empty("Sin movimientos manuales", "Registra ingresos o egresos cuando haya gastos, retiros o ajustes de caja.")}</div>
     </section>
     <section class="admin-panel">
       <div class="admin-panel-head">
@@ -1361,7 +1361,7 @@ function renderFinance() {
           <button class="ghost-button" type="button" id="exportCashClosuresCsv">Exportar cierres</button>
         </div>
       </div>
-      <div class="admin-list">${cashClosures.slice(0, 10).map(renderCashClosureRow).join("") || empty("Sin cierres registrados")}</div>
+      <div class="admin-list">${cashClosures.slice(0, 10).map(renderCashClosureRow).join("") || empty("Sin cierres registrados", "Al cerrar caja quedara el resumen del turno y cualquier diferencia encontrada.")}</div>
     </section>
   `;
   document.querySelector("#cashOpenForm")?.addEventListener("submit", openCashSession);
@@ -1510,7 +1510,7 @@ function renderHistory() {
         <label>Metodo<select id="historyMethod"><option value="">Todos</option>${paymentMethods().map((method) => `<option value="${method.id}" ${historyFilter.method === method.id ? "selected" : ""}>${method.label}</option>`).join("")}</select></label>
         <label>Estado<select id="historyStatus"><option value="">Todos</option><option value="pagada" ${historyFilter.status === "pagada" ? "selected" : ""}>Pagada</option><option value="pendiente" ${historyFilter.status === "pendiente" ? "selected" : ""}>Pendiente</option><option value="anulada" ${historyFilter.status === "anulada" ? "selected" : ""}>Anulada</option></select></label>
       </div>
-      <div class="sales-history-list">${visibleSales.map(renderHistorySaleRow).join("") || empty("Sin ventas con esos filtros")}</div>
+      <div class="sales-history-list">${visibleSales.map(renderHistorySaleRow).join("") || empty("Sin ventas con esos filtros", "Cambia fecha, estado o metodo de pago para ampliar la busqueda.")}</div>
     </section>
   `;
   document.querySelector("#historySearch")?.addEventListener("input", (event) => {
@@ -2521,11 +2521,11 @@ function renderCustomers() {
     </section>
     <section class="admin-panel">
       <div class="admin-panel-head"><div><p class="eyebrow">Cuentas por cobrar</p><h3>Ventas al credito</h3></div></div>
-      <div class="admin-list">${receivables.map(renderReceivableRow).join("") || empty("Sin saldos pendientes")}</div>
+      <div class="admin-list">${receivables.map(renderReceivableRow).join("") || empty("Sin saldos pendientes", "Las ventas a credito apareceran aqui para seguimiento y registro de pagos.")}</div>
     </section>
     <section class="admin-panel">
       <div class="admin-panel-head"><div><p class="eyebrow">Directorio</p><h3>Clientes registrados</h3></div><button class="ghost-button" type="button" id="exportCustomersFromCustomersCsv">Exportar clientes CSV</button></div>
-      <div class="admin-list customer-directory-list">${customers.map(renderCustomerDirectoryRow).join("") || empty("Sin clientes registrados")}</div>
+      <div class="admin-list customer-directory-list">${customers.map(renderCustomerDirectoryRow).join("") || empty("Sin clientes registrados", "Crea clientes para ventas a credito, historial comercial y mensajes de cobranza.")}</div>
     </section>
   `;
   document.querySelectorAll("[data-pay-receivable]").forEach((button) => {
@@ -2827,15 +2827,15 @@ function renderPurchases() {
           <button class="ghost-button danger-action" type="button" id="clearPurchaseCart" ${purchaseCart.length && can("managePurchases") ? "" : "disabled"}>Limpiar</button>
         </div>
       </div>
-      <div class="admin-list">${purchaseCart.map(renderPurchaseCartRow).join("") || empty("Agrega productos a la compra")}</div>
+      <div class="admin-list">${purchaseCart.map(renderPurchaseCartRow).join("") || empty("Agrega productos a la compra", "Selecciona articulos del inventario o usa la compra sugerida desde alertas de stock.")}</div>
     </section>
     <section class="admin-panel purchase-history-panel">
       <div class="admin-panel-head"><div><p class="eyebrow">Historial</p><h3>Compras recientes</h3></div><span>${money(purchases.reduce((sum, purchase) => sum + Number(purchase.total || 0), 0))}</span></div>
-      <div class="purchase-history-list">${purchases.slice(0, 12).map(renderPurchaseRow).join("") || empty("Sin compras registradas")}</div>
+      <div class="purchase-history-list">${purchases.slice(0, 12).map(renderPurchaseRow).join("") || empty("Sin compras registradas", "Cada compra recibida actualizara stock, costo y kardex del producto.")}</div>
     </section>
     <section class="admin-panel">
       <div class="admin-panel-head"><div><p class="eyebrow">Proveedores</p><h3>Directorio</h3></div></div>
-      <div class="admin-list">${suppliers.map(renderSupplierRow).join("") || empty("Sin proveedores registrados")}</div>
+      <div class="admin-list">${suppliers.map(renderSupplierRow).join("") || empty("Sin proveedores registrados", "Registra proveedores para generar pedidos y ordenar reposiciones por contacto.")}</div>
     </section>
   `;
   document.querySelector("#supplierForm")?.addEventListener("submit", saveSupplier);
@@ -3059,7 +3059,7 @@ function renderInventory() {
       </div>
       ${ventasMessage ? `<div class="cloud-safe-note"><strong>${escapeHtml(ventasMessage)}</strong><span>La accion se ejecuto sobre los datos de esta empresa.</span></div>` : ""}
       <label class="toolbar-search">Buscar producto<input id="productSearchInput" type="search" value="${escapeHtml(productSearch)}" placeholder="Codigo, nombre o categoria" /></label>
-      <div class="admin-list">${inventoryProducts.map(renderInventoryProductRow).join("") || empty("Sin productos con esa busqueda")}</div>
+      <div class="admin-list">${inventoryProducts.map(renderInventoryProductRow).join("") || empty("Sin productos con esa busqueda", "Busca por codigo, nombre, categoria o limpia el texto para revisar todo el inventario.")}</div>
     </section>
     ${selectedKardex ? renderKardexPanel() : ""}
   `;
@@ -4623,7 +4623,7 @@ function renderVentasUsersPanel() {
           <button class="primary-button" type="submit">${editing ? "Actualizar usuario" : "Crear usuario"}</button>
         </div>
       </form>
-      <div class="admin-list">${operativeUsers.map(renderVentasUserRow).join("") || empty("Aun no hay usuarios operativos de ventas")}</div>
+      <div class="admin-list">${operativeUsers.map(renderVentasUserRow).join("") || empty("Aun no hay usuarios operativos de ventas", "Crea cajeros, almacen o usuarios integrales segun el tamano de la tienda.")}</div>
     </section>
   `;
 }
@@ -6868,7 +6868,9 @@ function mainList() { return document.querySelector("#mainList"); }
 function setCount(text) { document.querySelector("#resultCount").textContent = text; }
 function value(selector) { return document.querySelector(selector).value; }
 function loadSession() { try { return JSON.parse(sessionStorage.getItem(SESSION_KEY)); } catch { return null; } }
-function empty(text) { return `<div class="empty-state"><strong>${escapeHtml(text)}</strong></div>`; }
+function empty(text, hint = "") {
+  return `<div class="empty-state"><strong>${escapeHtml(text)}</strong>${hint ? `<span>${escapeHtml(hint)}</span>` : ""}</div>`;
+}
 function money(value) { return `${Number(value || 0).toLocaleString("es-BO", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${storeSettings.currency || "BOB"}`; }
 function num(value) { return Number(value || 0).toLocaleString("es-BO"); }
 function formatDateTime(date) { return new Intl.DateTimeFormat("es-BO", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" }).format(new Date(date)); }
