@@ -2058,9 +2058,13 @@ function renderReports() {
   const profitRows = profitReport.rows || [];
   const profitTotals = profitReport.totals || {};
   const marginPercent = Number(profitTotals.netSales || 0) ? (Number(profitTotals.profit || 0) / Number(profitTotals.netSales || 0)) * 100 : 0;
-  const businessHealth = buildBusinessHealth({ confirmedSales, stockRisks, expiryRisks, pendingTotal, marginPercent, totalClosureDifference: cashClosures.reduce((sum, closure) => sum + Math.abs(Number(closure.differenceAmount || 0)), 0) });
+  const totalClosureDifference = cashClosures.reduce((sum, closure) => sum + Math.abs(Number(closure.differenceAmount || 0)), 0);
+  const supervisorMode = currentUser?.role === "supervisor";
+  const businessHealth = buildBusinessHealth({ confirmedSales, stockRisks, expiryRisks, pendingTotal, marginPercent, totalClosureDifference });
+  const reportRole = buildReportRoleProfile({ supervisorMode, businessHealth, confirmedSales, voidedSales, pendingTotal, stockRisks, expiryRisks, totalClosureDifference });
   setCount("Auditoria");
   mainList().innerHTML = `
+    ${renderReportRolePanel(reportRole)}
     <section class="admin-panel report-filter-panel">
       <div class="admin-panel-head"><div><p class="eyebrow">Periodo</p><h3>Filtro de analisis</h3></div></div>
       <div class="history-filters">
@@ -2086,25 +2090,29 @@ function renderReports() {
       </div>
     </section>
     ${renderExecutiveBriefPanel({ businessHealth, confirmedSales, voidedSales, totalIncome, totalSold, averageSale, pendingTotal, stockRisks, expiryRisks, paymentBreakdown })}
-    ${renderReportDecisionPanel({ businessHealth, confirmedSales, stockRisks, expiryRisks, pendingTotal, marginPercent, totalClosureDifference: cashClosures.reduce((sum, closure) => sum + Math.abs(Number(closure.differenceAmount || 0)), 0) })}
-    ${renderInventoryValuationReport()}
-    ${renderNoMovementProductsReport(profitRows)}
-    ${renderProductPerformanceReport(profitRows)}
+    ${renderReportDecisionPanel({ businessHealth, confirmedSales, stockRisks, expiryRisks, pendingTotal, marginPercent, totalClosureDifference })}
+    ${supervisorMode ? renderSupervisorReportFocus({ voidedSales, pendingTotal, stockRisks, expiryRisks, totalClosureDifference, paymentBreakdown }) : `
+      ${renderInventoryValuationReport()}
+      ${renderNoMovementProductsReport(profitRows)}
+      ${renderProductPerformanceReport(profitRows)}
+    `}
     ${renderTopCustomersReport(confirmedSales)}
     <section class="admin-panel">
       <div class="admin-panel-head"><div><p class="eyebrow">Cobros</p><h3>Ventas por metodo de pago</h3></div></div>
       <div class="payment-breakdown-grid">${paymentBreakdown.map((item) => `<article><span>${escapeHtml(item.label)}</span><strong>${money(item.total)}</strong><small>${num(item.count)} venta${item.count === 1 ? "" : "s"}</small></article>`).join("")}</div>
     </section>
-    ${renderCategorySalesReport(profitRows)}
-    <section class="admin-panel">
-      <div class="admin-panel-head"><div><p class="eyebrow">Utilidad real</p><h3>Ganancia por producto</h3></div><span>Margen ${marginPercent.toFixed(1)}%</span></div>
-      <div class="report-grid compact-report-grid">
-        <article><span>Venta neta</span><strong>${money(profitTotals.netSales || 0)}</strong><small>Despues de descuentos</small></article>
-        <article><span>Costo historico</span><strong>${money(profitTotals.costTotal || 0)}</strong><small>Costo al vender</small></article>
-        <article><span>Utilidad</span><strong>${money(profitTotals.profit || 0)}</strong><small>${num(profitTotals.quantity || 0)} unidades vendidas</small></article>
-      </div>
-      <div class="admin-list">${profitRows.slice(0, 12).map(renderProfitProductRow).join("") || empty("Sin ventas confirmadas en este periodo")}</div>
-    </section>
+    ${supervisorMode ? "" : `
+      ${renderCategorySalesReport(profitRows)}
+      <section class="admin-panel">
+        <div class="admin-panel-head"><div><p class="eyebrow">Utilidad real</p><h3>Ganancia por producto</h3></div><span>Margen ${marginPercent.toFixed(1)}%</span></div>
+        <div class="report-grid compact-report-grid">
+          <article><span>Venta neta</span><strong>${money(profitTotals.netSales || 0)}</strong><small>Despues de descuentos</small></article>
+          <article><span>Costo historico</span><strong>${money(profitTotals.costTotal || 0)}</strong><small>Costo al vender</small></article>
+          <article><span>Utilidad</span><strong>${money(profitTotals.profit || 0)}</strong><small>${num(profitTotals.quantity || 0)} unidades vendidas</small></article>
+        </div>
+        <div class="admin-list">${profitRows.slice(0, 12).map(renderProfitProductRow).join("") || empty("Sin ventas confirmadas en este periodo")}</div>
+      </section>
+    `}
     <section class="report-actions" aria-label="Exportaciones">
       <article class="report-export-card">
         <div><strong>Ventas del periodo</strong><span>Descarga operaciones con cliente, metodo de pago, estado y saldos para auditoria.</span></div>
@@ -2118,10 +2126,10 @@ function renderReports() {
         <div><strong>Clientes y saldos</strong><span>Exporta clientes, cuentas por cobrar y saldos pendientes para seguimiento comercial.</span></div>
         <button class="ghost-button" type="button" id="exportCustomersCsv">Exportar clientes CSV</button>
       </article>
-      <article class="report-export-card">
+      ${supervisorMode ? "" : `<article class="report-export-card">
         <div><strong>Utilidad por producto</strong><span>Descarga ventas netas, costo historico, utilidad y margen por articulo.</span></div>
         <button class="ghost-button" type="button" id="exportProfitCsv">Exportar utilidad CSV</button>
-      </article>
+      </article>`}
       <article class="report-export-card">
         <div><strong>Cierres de caja</strong><span>Exporta arqueos, esperado, contado, diferencia, ventas cerradas y observaciones.</span></div>
         <button class="ghost-button" type="button" id="exportClosuresCsv">Exportar cierres CSV</button>
@@ -2130,10 +2138,10 @@ function renderReports() {
         <div><strong>Auditoria comercial</strong><span>Descarga eventos sensibles: ventas, anulaciones, caja, inventario y usuarios responsables.</span></div>
         <button class="ghost-button" type="button" id="exportAuditCsv">Exportar auditoria CSV</button>
       </article>
-      <article class="report-export-card">
+      ${supervisorMode ? "" : `<article class="report-export-card">
         <div><strong>Respaldo operativo</strong><span>Descarga un archivo JSON con ventas, productos, clientes, compras y configuracion visible.</span></div>
         <button class="ghost-button" type="button" id="exportBackupJson">Exportar respaldo JSON</button>
-      </article>
+      </article>`}
     </section>
     <section class="admin-panel">
       <div class="admin-panel-head"><div><p class="eyebrow">Control</p><h3>Productos que requieren accion</h3></div></div>
@@ -2172,6 +2180,73 @@ function renderReports() {
   document.querySelector("#copyExecutiveBrief")?.addEventListener("click", copyExecutiveBrief);
   document.querySelector("#printExecutiveBrief")?.addEventListener("click", printExecutiveBrief);
   bindProductLabelActions();
+}
+
+function buildReportRoleProfile({ supervisorMode, businessHealth, confirmedSales, voidedSales, pendingTotal, stockRisks, expiryRisks, totalClosureDifference }) {
+  if (supervisorMode) {
+    const alertCount = Number(voidedSales || 0) + stockRisks.length + expiryRisks.length + (pendingTotal > 0 ? 1 : 0) + (totalClosureDifference > 0 ? 1 : 0);
+    return {
+      className: "is-supervisor",
+      eyebrow: "Panel supervisor",
+      title: "Control operativo y auditoria",
+      detail: "Vista preparada para revisar caja, anulaciones, cobranza e inventario sin editar configuracion ni entrar a la operacion diaria.",
+      score: `${alertCount} alerta${alertCount === 1 ? "" : "s"}`,
+      cards: [
+        { label: "Ventas revisadas", value: num(confirmedSales.length), detail: `${num(voidedSales)} anulada${voidedSales === 1 ? "" : "s"}` },
+        { label: "Diferencia caja", value: money(totalClosureDifference), detail: "Suma de diferencias en cierres" },
+        { label: "Cobranza", value: money(pendingTotal), detail: "Saldo pendiente visible" },
+        { label: "Inventario", value: `${stockRisks.length + expiryRisks.length}`, detail: "Alertas de stock o vencimiento" }
+      ]
+    };
+  }
+  return {
+    className: "is-admin",
+    eyebrow: "Panel encargado",
+    title: "Reporte completo del negocio",
+    detail: "Vista ejecutiva con ventas, caja, clientes, inventario valorizado, utilidad y respaldos para tomar decisiones.",
+    score: `${businessHealth.score}/100`,
+    cards: [
+      { label: "Salud comercial", value: `${businessHealth.score}%`, detail: reportDecisionTitle(businessHealth.score) },
+      { label: "Diferencia caja", value: money(totalClosureDifference), detail: "Control de cierres" },
+      { label: "Cobranza", value: money(pendingTotal), detail: "Saldo por recuperar" },
+      { label: "Alertas", value: `${stockRisks.length + expiryRisks.length}`, detail: "Stock y vencimientos" }
+    ]
+  };
+}
+
+function renderReportRolePanel(profile) {
+  return `<section class="report-role-panel ${profile.className}">
+    <div class="report-role-copy">
+      <p class="eyebrow">${escapeHtml(profile.eyebrow)}</p>
+      <h3>${escapeHtml(profile.title)}</h3>
+      <span>${escapeHtml(profile.detail)}</span>
+    </div>
+    <strong class="report-role-score">${escapeHtml(profile.score)}</strong>
+    <div class="report-role-cards">
+      ${profile.cards.map((card) => `<article><span>${escapeHtml(card.label)}</span><strong>${escapeHtml(card.value)}</strong><small>${escapeHtml(card.detail)}</small></article>`).join("")}
+    </div>
+  </section>`;
+}
+
+function renderSupervisorReportFocus({ voidedSales, pendingTotal, stockRisks, expiryRisks, totalClosureDifference, paymentBreakdown }) {
+  const mainPayment = paymentBreakdown.slice().sort((a, b) => Number(b.total || 0) - Number(a.total || 0))[0];
+  const focus = [
+    { title: "Anulaciones", value: num(voidedSales), detail: "Revisar motivo, usuario y comprobante antes del cierre.", view: "history", className: voidedSales ? "is-warning" : "is-ok" },
+    { title: "Caja", value: money(totalClosureDifference), detail: "Diferencias acumuladas entre efectivo esperado y contado.", view: "finance", className: totalClosureDifference > 0 ? "is-warning" : "is-ok" },
+    { title: "Cobranza", value: money(pendingTotal), detail: "Ventas a credito que siguen pendientes de pago.", view: "customers", className: pendingTotal > 0 ? "is-warning" : "is-ok" },
+    { title: "Inventario", value: num(stockRisks.length + expiryRisks.length), detail: "Productos bajo minimo, vencidos o por vencer.", view: "inventory", className: stockRisks.length || expiryRisks.length ? "is-danger" : "is-ok" }
+  ];
+  return `<section class="admin-panel supervisor-report-focus">
+    <div class="admin-panel-head"><div><p class="eyebrow">Revision supervisor</p><h3>Controles que necesitan seguimiento</h3></div><span>${escapeHtml(mainPayment?.label || "Sin cobros")}</span></div>
+    <div class="supervisor-focus-grid">
+      ${focus.map((item) => `<article class="${item.className}">
+        <span>${escapeHtml(item.title)}</span>
+        <strong>${escapeHtml(item.value)}</strong>
+        <small>${escapeHtml(item.detail)}</small>
+        ${canAccessView(item.view) ? `<button class="ghost-button" type="button" data-module-view="${item.view}">Revisar</button>` : ""}
+      </article>`).join("")}
+    </div>
+  </section>`;
 }
 
 function renderExecutiveBriefPanel({ businessHealth, confirmedSales, voidedSales, totalIncome, totalSold, averageSale, pendingTotal, stockRisks, expiryRisks, paymentBreakdown }) {
@@ -8143,7 +8218,7 @@ function defaultViewForRole() {
   if (currentUser?.role === "vendedor") return "customers";
   return accessibleViewsForRole(currentUser?.role)[0] || "summary";
 }
-function canSeeProfit() { return ["admin", "ventas_admin", "supervisor"].includes(currentUser?.role); }
+function canSeeProfit() { return ["admin", "ventas_admin"].includes(currentUser?.role); }
 function isSimpleCashierMode() { return currentUser?.role === "cajero"; }
 function isWarehouseMode() { return currentUser?.role === "almacen"; }
 function canCollectPayments() { return ["admin", "ventas_admin", "cajero"].includes(currentUser?.role); }

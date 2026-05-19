@@ -3480,6 +3480,147 @@ body.app-correspondencia .metrics article:hover {
   margin-bottom: 14px;
 }
 
+.report-role-panel {
+  display: grid;
+  grid-template-columns: minmax(230px, 0.78fr) auto minmax(360px, 1.28fr);
+  align-items: stretch;
+  gap: 12px;
+  margin-bottom: 14px;
+  border: 1px solid color-mix(in srgb, var(--accent) 22%, var(--line));
+  border-radius: 18px;
+  padding: clamp(14px, 2vw, 18px);
+  background:
+    radial-gradient(circle at 92% 12%, color-mix(in srgb, var(--accent) 18%, transparent), transparent 34%),
+    linear-gradient(135deg, rgb(255 255 255 / 96%), color-mix(in srgb, var(--accent-tint) 46%, white));
+  box-shadow: 0 20px 52px rgb(15 32 28 / 8%);
+}
+
+.report-role-panel.is-supervisor {
+  background:
+    radial-gradient(circle at 92% 12%, rgb(14 165 233 / 16%), transparent 34%),
+    linear-gradient(135deg, rgb(255 255 255 / 96%), rgb(240 249 255 / 78%));
+}
+
+.report-role-copy {
+  display: grid;
+  align-content: center;
+  gap: 7px;
+}
+
+.report-role-copy h3 {
+  margin: 0;
+  color: var(--accent-dark);
+  font-size: clamp(1.1rem, 2vw, 1.48rem);
+}
+
+.report-role-copy > span {
+  color: var(--muted);
+  font-size: 0.86rem;
+  font-weight: 800;
+  line-height: 1.42;
+}
+
+.report-role-score {
+  display: grid;
+  min-width: 112px;
+  place-items: center;
+  border-radius: 16px;
+  padding: 12px;
+  background: var(--accent-dark);
+  color: white;
+  font-size: clamp(1.25rem, 2.6vw, 1.78rem);
+  line-height: 1;
+  text-align: center;
+}
+
+.report-role-cards,
+.supervisor-focus-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.report-role-cards article,
+.supervisor-focus-grid article {
+  display: grid;
+  gap: 6px;
+  border: 1px solid color-mix(in srgb, var(--accent) 14%, var(--line));
+  border-radius: 14px;
+  padding: 12px;
+  background: rgb(255 255 255 / 84%);
+  min-width: 0;
+}
+
+.report-role-cards span,
+.report-role-cards small,
+.supervisor-focus-grid span,
+.supervisor-focus-grid small {
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 850;
+  line-height: 1.32;
+}
+
+.report-role-cards strong,
+.supervisor-focus-grid strong {
+  color: var(--accent-dark);
+  font-size: 1.05rem;
+  line-height: 1.1;
+}
+
+.supervisor-report-focus {
+  background:
+    radial-gradient(circle at 94% 10%, rgb(14 165 233 / 13%), transparent 34%),
+    linear-gradient(145deg, rgb(255 255 255 / 94%), rgb(240 249 255 / 78%));
+}
+
+.supervisor-focus-grid article.is-ok {
+  border-color: rgb(16 185 129 / 22%);
+  background: rgb(236 253 245 / 76%);
+}
+
+.supervisor-focus-grid article.is-warning {
+  border-color: rgb(245 158 11 / 26%);
+  background: rgb(255 251 235 / 78%);
+}
+
+.supervisor-focus-grid article.is-danger {
+  border-color: rgb(220 38 38 / 24%);
+  background: rgb(254 242 242 / 78%);
+}
+
+.supervisor-focus-grid .ghost-button {
+  min-height: 34px;
+  margin-top: 2px;
+}
+
+@media (max-width: 1180px) {
+  .report-role-panel {
+    grid-template-columns: 1fr;
+  }
+
+  .report-role-score {
+    min-height: 72px;
+  }
+
+  .report-role-cards,
+  .supervisor-focus-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 640px) {
+  .report-role-cards,
+  .supervisor-focus-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .report-role-score {
+    min-width: 0;
+    width: 100%;
+  }
+}
+
 .report-export-card {
   min-height: 118px;
   border: 1px solid color-mix(in srgb, var(--accent) 18%, var(--line));
