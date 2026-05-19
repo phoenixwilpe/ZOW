@@ -42,6 +42,10 @@ test("matriz de permisos de ventas se entrega desde el backend", async () => {
   assert.equal(response.body.role, "ventas_admin");
   assert.ok(response.body.views.includes("sell"));
   assert.ok(response.body.roles.some((role) => role.key === "cajero" && role.views.includes("finance")));
+  const supervisorRole = response.body.roles.find((role) => role.key === "supervisor");
+  assert.ok(supervisorRole);
+  assert.equal(supervisorRole.views.includes("sell"), false);
+  assert.ok(supervisorRole.views.includes("reports"));
 });
 
 test("cajero no puede operar funciones administrativas de ventas", async () => {

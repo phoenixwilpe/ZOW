@@ -74,8 +74,8 @@ const VENTAS_ROLE_ACCESS = {
     label: "Supervisor",
     shortLabel: "Supervisor",
     context: "Control",
-    views: ["sell", "summary", "alerts", "finance", "history", "routes", "promotions", "reports", "catalog", "customers", "inventory", "purchases", "help"],
-    permissions: ["Reportes y auditoria", "Anular o devolver ventas", "Revision de caja"]
+    views: ["summary", "alerts", "finance", "history", "reports", "customers", "inventory", "help"],
+    permissions: ["Reportes y auditoria", "Anular o devolver ventas", "Revision de caja y stock"]
   },
   vendedor: {
     label: "Vendedor",

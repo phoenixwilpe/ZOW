@@ -623,6 +623,7 @@ function renderSummary() {
       </div>
       <strong>${executiveScore.score}/100</strong>
     </section>
+    ${currentUser?.role === "supervisor" ? renderSupervisorControlPanel({ todaySales, criticalProducts, debtTotal, cashOpen }) : ""}
     ${renderTrainingBanner()}
     ${renderCommercialAlertsPanel()}
     <section class="setup-overview">
@@ -657,6 +658,50 @@ function renderSummary() {
       renderMain();
     });
   });
+}
+
+function renderSupervisorControlPanel({ todaySales, criticalProducts, debtTotal, cashOpen }) {
+  const openCashLabel = cashOpen ? `Caja ${num(cashSession.registerNumber)} abierta` : "Sin caja abierta";
+  const latestVoids = sales.filter((sale) => sale.status === "anulada").slice(0, 4);
+  const latestClosures = cashClosures.slice(0, 3);
+  const closureDifference = latestClosures.reduce((sum, closure) => sum + Math.abs(Number(closure.differenceAmount || 0)), 0);
+  const reviewItems = [
+    { label: "Caja", value: openCashLabel, detail: cashOpen ? `Esperado actual ${money(cashExpectedTotal())}` : "Verifica apertura antes del turno.", view: "finance", level: cashOpen ? "ok" : "warning" },
+    { label: "Ventas de hoy", value: num(todaySales.length), detail: `Cobrado ${money(todaySales.reduce((sum, sale) => sum + Number(sale.amount_paid || sale.cash_received || sale.total || 0), 0))}`, view: "history", level: todaySales.length ? "ok" : "info" },
+    { label: "Diferencias", value: money(closureDifference), detail: "Ultimos cierres revisables.", view: "finance", level: closureDifference ? "warning" : "ok" },
+    { label: "Stock critico", value: num(criticalProducts.length), detail: "Productos bajo minimo.", view: "inventory", level: criticalProducts.length ? "warning" : "ok" },
+    { label: "Cobranza", value: money(debtTotal), detail: `${num(receivables.length)} cuenta${receivables.length === 1 ? "" : "s"} pendiente${receivables.length === 1 ? "" : "s"}.`, view: "customers", level: debtTotal ? "warning" : "ok" }
+  ];
+  return `<section class="supervisor-control-panel">
+    <div class="supervisor-control-head">
+      <div>
+        <p class="eyebrow">Supervisor</p>
+        <h3>Revision rapida del turno</h3>
+        <span>Controla caja, anulaciones, stock y cobranza sin entrar al flujo de venta diaria.</span>
+      </div>
+      <div class="supervisor-control-actions">
+        <button class="primary-button" type="button" data-module-view="reports">Ver auditoria</button>
+        <button class="ghost-button" type="button" data-module-view="history">Ventas y anulaciones</button>
+      </div>
+    </div>
+    <div class="supervisor-review-grid">
+      ${reviewItems.map((item) => `<button class="supervisor-review-card is-${item.level}" type="button" data-module-view="${item.view}">
+        <span>${escapeHtml(item.label)}</span>
+        <strong>${escapeHtml(item.value)}</strong>
+        <small>${escapeHtml(item.detail)}</small>
+      </button>`).join("")}
+    </div>
+    <div class="supervisor-audit-strip">
+      <article>
+        <strong>Anulaciones recientes</strong>
+        ${latestVoids.length ? latestVoids.map((sale) => `<span>${escapeHtml(sale.code)} / ${money(sale.total)} / ${formatShortDate(sale.updated_at || sale.created_at)}</span>`).join("") : `<span>Sin anulaciones recientes.</span>`}
+      </article>
+      <article>
+        <strong>Cierres recientes</strong>
+        ${latestClosures.length ? latestClosures.map((closure) => `<span>Caja ${num(closure.registerNumber)} / dif. ${money(closure.differenceAmount || 0)} / ${formatShortDate(closure.createdAt || closure.created_at)}</span>`).join("") : `<span>Aun no hay cierres registrados.</span>`}
+      </article>
+    </div>
+  </section>`;
 }
 
 function buildCommercialAlerts() {
@@ -7574,6 +7619,7 @@ function canAccessView(view) { return accessibleViewsForRole(currentUser?.role).
 function defaultViewForRole() {
   if (currentUser?.role === "admin") return "settings";
   if (currentUser?.role === "almacen") return "inventory";
+  if (currentUser?.role === "supervisor") return "summary";
   return accessibleViewsForRole(currentUser?.role)[0] || "summary";
 }
 function canSeeProfit() { return ["admin", "ventas_admin", "supervisor"].includes(currentUser?.role); }
@@ -7608,7 +7654,7 @@ function accessibleViewsForRole(role) {
     cajero: ["sell", "finance", "history", "help"],
     vendedor: ["sell", "customers", "history", "help"],
     almacen: ["inventory", "purchases", "alerts", "catalog", "help"],
-    supervisor: ["sell", "summary", "alerts", "finance", "history", "routes", "promotions", "reports", "catalog", "customers", "inventory", "purchases", "help"],
+    supervisor: ["summary", "alerts", "finance", "history", "reports", "customers", "inventory", "help"],
     funcionario: ["sell", "customers", "summary", "help"]
   };
   return views[role] || ["summary"];
