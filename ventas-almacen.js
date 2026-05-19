@@ -2689,13 +2689,144 @@ function auditActionLabel(action) {
 }
 
 function renderCatalog() {
-  setCount(`${products.length} articulo${products.length === 1 ? "" : "s"}`);
+  const catalogProducts = filteredProducts({ includeInactive: can("manageCatalog") });
+  const activeProducts = products.filter(isProductActive);
+  const lowStock = activeProducts.filter((product) => Number(product.stock || 0) <= Number(product.min_stock || 0));
+  const profile = catalogRoleProfile({ catalogProducts, activeProducts, lowStock });
+  setCount(`${catalogProducts.length} articulo${catalogProducts.length === 1 ? "" : "s"}`);
   mainList().innerHTML = `
-    <section class="admin-panel"><div class="admin-panel-head"><div><p class="eyebrow">Categorias</p><h3>Agrupacion de articulos</h3></div></div><div class="admin-list">${categories.map((c) => `<article class="admin-row"><strong>${escapeHtml(c.name)}</strong><span>${escapeHtml(c.description || "Sin descripcion")}</span></article>`).join("") || empty("Sin categorias")}</div></section>
-    <section class="admin-panel"><div class="admin-panel-head"><div><p class="eyebrow">Articulos</p><h3>Productos registrados</h3></div><button class="ghost-button" type="button" id="printPriceListBtn">Lista de precios</button></div><div class="admin-list">${products.map(renderProductRow).join("") || empty("Sin productos")}</div></section>
+    <section class="catalog-role-panel ${profile.className}">
+      <div>
+        <p class="eyebrow">${escapeHtml(profile.eyebrow)}</p>
+        <h3>${escapeHtml(profile.title)}</h3>
+        <span>${escapeHtml(profile.detail)}</span>
+      </div>
+      <div class="catalog-role-cards">
+        ${profile.cards.map((card) => `<article><span>${escapeHtml(card.label)}</span><strong>${escapeHtml(card.value)}</strong><small>${escapeHtml(card.detail)}</small></article>`).join("")}
+      </div>
+    </section>
+    <section class="catalog-toolbar-panel">
+      <label class="toolbar-search">Buscar producto<input id="catalogSearchInput" type="search" autocomplete="off" value="${escapeHtml(productSearch)}" placeholder="Codigo, nombre, categoria o codigo de barras" /></label>
+      <button class="ghost-button" type="button" id="clearCatalogSearch" ${productSearch ? "" : "disabled"}>Limpiar</button>
+      <button class="ghost-button" type="button" id="printPriceListBtn">Lista de precios</button>
+    </section>
+    <section class="catalog-category-strip">
+      ${categories.map((c) => `<article><strong>${escapeHtml(c.name)}</strong><span>${escapeHtml(c.description || `${num(products.filter((product) => product.category === c.name).length)} producto${products.filter((product) => product.category === c.name).length === 1 ? "" : "s"}`)}</span></article>`).join("") || empty("Sin categorias")}
+    </section>
+    <section class="admin-panel">
+      <div class="admin-panel-head"><div><p class="eyebrow">Articulos</p><h3>${escapeHtml(profile.listTitle)}</h3></div></div>
+      <div class="catalog-product-grid">${catalogProducts.map(renderCatalogProductCard).join("") || empty("Sin productos con esa busqueda", "Limpia el filtro o registra productos para mostrarlos aqui.")}</div>
+    </section>
   `;
   document.querySelector("#printPriceListBtn")?.addEventListener("click", printPriceList);
+  document.querySelector("#clearCatalogSearch")?.addEventListener("click", () => { productSearch = ""; renderMain(); });
+  bindCatalogSearch();
   bindProductLabelActions();
+  document.querySelectorAll("[data-edit-product]").forEach((button) => {
+    button.addEventListener("click", () => openProductModal(button.dataset.editProduct));
+  });
+  document.querySelectorAll("[data-stock-history]").forEach((button) => {
+    button.addEventListener("click", () => viewStockHistory(button.dataset.stockHistory));
+  });
+}
+
+function catalogRoleProfile({ catalogProducts, activeProducts, lowStock }) {
+  if (currentUser?.role === "vendedor") {
+    return {
+      className: "is-seller",
+      eyebrow: "Catalogo comercial",
+      title: "Productos y precios para atencion",
+      detail: "Consulta precios, disponibilidad y categorias sin tocar inventario ni costos.",
+      listTitle: "Lista comercial",
+      cards: [
+        { label: "Productos activos", value: num(activeProducts.length), detail: "Disponibles para vender" },
+        { label: "Resultado", value: num(catalogProducts.length), detail: "Segun busqueda actual" },
+        { label: "Categorias", value: num(productCategories().length), detail: "Agrupaciones visibles" }
+      ]
+    };
+  }
+  if (currentUser?.role === "almacen") {
+    return {
+      className: "is-warehouse",
+      eyebrow: "Catalogo de almacen",
+      title: "Productos, stock y etiquetas",
+      detail: "Revisa stock, codigos y etiquetas. Los ajustes se hacen desde Inventario.",
+      listTitle: "Control rapido de productos",
+      cards: [
+        { label: "Activos", value: num(activeProducts.length), detail: "Productos habilitados" },
+        { label: "Bajo minimo", value: num(lowStock.length), detail: "Necesitan reposicion" },
+        { label: "Valor visible", value: money(activeProducts.reduce((sum, product) => sum + Number(product.stock || 0) * Number(product.cost_price || 0), 0)), detail: "Costo estimado en almacen" }
+      ]
+    };
+  }
+  return {
+    className: "is-admin",
+    eyebrow: "Catalogos",
+    title: "Productos, categorias y datos comerciales",
+    detail: "Administra articulos, precios, etiquetas y visibilidad del catalogo.",
+    listTitle: "Productos registrados",
+    cards: [
+      { label: "Total productos", value: num(products.length), detail: `${num(activeProducts.length)} activos` },
+      { label: "Bajo minimo", value: num(lowStock.length), detail: "Revisar inventario" },
+      { label: "Categorias", value: num(productCategories().length), detail: "Agrupaciones creadas" }
+    ]
+  };
+}
+
+function renderCatalogProductCard(product) {
+  const insight = productInventoryInsight(product);
+  const expiry = expiryStatus(product);
+  const active = isProductActive(product);
+  const lowStock = Number(product.stock || 0) <= Number(product.min_stock || 0);
+  const showCost = canSeeProfit() || currentUser?.role === "almacen";
+  return `<article class="catalog-product-card ${active ? "" : "is-inactive"} ${lowStock ? "is-low" : ""}">
+    <div class="catalog-product-main">
+      <span>${escapeHtml(product.code || "Sin codigo")}</span>
+      <strong>${escapeHtml(product.name)}</strong>
+      <small>${escapeHtml(product.category || "Sin categoria")} / ${escapeHtml(product.unit || "unidad")}</small>
+    </div>
+    <div class="catalog-product-price">
+      <strong>${money(product.sale_price)}</strong>
+      <span>Precio venta</span>
+    </div>
+    <div class="catalog-product-meta">
+      <span class="${lowStock ? "danger-text" : "ok-text"}">Stock ${num(product.stock)}</span>
+      ${showCost ? `<span>Costo ${money(product.cost_price)}</span><span>Margen ${num(insight.marginPercent)}%</span>` : ""}
+      ${expiry.label ? `<span class="${expiry.className}">${escapeHtml(expiry.label)}</span>` : ""}
+      <span class="${active ? "ok-text" : "danger-text"}">${active ? "Activo" : "Inactivo"}</span>
+    </div>
+    <div class="catalog-product-actions">
+      <button class="ghost-button" type="button" data-print-product-label="${product.id}">Etiquetas</button>
+      ${currentUser?.role === "almacen" ? `<button class="ghost-button" type="button" data-stock-history="${product.id}">Kardex</button>` : ""}
+      ${can("manageCatalog") ? `<button class="ghost-button" type="button" data-edit-product="${product.id}">Editar</button>` : ""}
+    </div>
+  </article>`;
+}
+
+function bindCatalogSearch() {
+  const input = document.querySelector("#catalogSearchInput");
+  if (!input) return;
+  input.addEventListener("input", () => {
+    productSearch = input.value;
+    clearTimeout(productSearchTimer);
+    const caretPosition = input.selectionStart || productSearch.length;
+    productSearchTimer = window.setTimeout(() => {
+      renderMain();
+      window.requestAnimationFrame(() => {
+        const nextInput = document.querySelector("#catalogSearchInput");
+        if (!nextInput || activeView !== "catalog") return;
+        nextInput.focus({ preventScroll: true });
+        nextInput.setSelectionRange(caretPosition, caretPosition);
+      });
+    }, 260);
+  });
+  input.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") {
+      productSearch = "";
+      clearTimeout(productSearchTimer);
+      renderMain();
+    }
+  });
 }
 
 function renderCustomers() {
