@@ -5009,6 +5009,64 @@ body.app-ventas .training-lab-actions > strong {
   margin-top: 8px;
 }
 
+.demo-guide-panel {
+  display: grid;
+  gap: 14px;
+  margin-bottom: 14px;
+  border: 1px solid rgb(14 165 233 / 18%);
+  border-radius: 22px;
+  padding: clamp(14px, 2vw, 18px);
+  background:
+    linear-gradient(135deg, rgb(255 255 255 / 96%), rgb(240 249 255 / 76%)),
+    radial-gradient(circle at 90% 10%, rgb(14 165 233 / 14%), transparent 34%);
+  box-shadow: 0 18px 44px rgb(14 165 233 / 7%);
+}
+
+.demo-guide-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.demo-guide-head h3 {
+  margin: 3px 0 4px;
+  color: var(--accent-dark);
+}
+
+.demo-guide-head span,
+.demo-guide-grid span {
+  display: block;
+  color: var(--muted);
+  font-size: 0.84rem;
+  font-weight: 830;
+  line-height: 1.35;
+}
+
+.demo-guide-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 10px;
+}
+
+.demo-guide-grid article {
+  display: grid;
+  align-content: start;
+  gap: 8px;
+  border: 1px solid rgb(14 165 233 / 15%);
+  border-radius: 14px;
+  padding: 12px;
+  background: rgb(255 255 255 / 84%);
+}
+
+.demo-guide-grid strong {
+  color: var(--accent-dark);
+}
+
+.demo-guide-grid button {
+  justify-self: start;
+}
+
 body.app-ventas .daily-operation-panel {
   display: grid;
   gap: 14px;
@@ -13460,6 +13518,7 @@ body.system-zow-site .site-footer {
   body.app-ventas .commercial-alerts-head,
   body.app-ventas .commercial-alert-card,
   .commercial-readiness-head,
+  .demo-guide-head,
   body.app-ventas .training-mode-banner,
   body.app-ventas .training-lab-panel {
     align-items: stretch;
