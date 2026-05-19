@@ -1550,11 +1550,13 @@ function printShiftSummary() {
 function renderHistory() {
   const visibleSales = filteredHistorySales();
   const historyStats = buildHistoryStats(visibleSales);
+  const profile = historyRoleProfile(visibleSales, historyStats);
   setCount(`${visibleSales.length} venta${visibleSales.length === 1 ? "" : "s"}`);
   mainList().innerHTML = `
+    ${renderHistoryRolePanel(profile, visibleSales, historyStats)}
     <section class="admin-panel sales-history-panel">
       <div class="admin-panel-head">
-        <div><p class="eyebrow">Historial</p><h3>Ventas y comprobantes</h3></div>
+        <div><p class="eyebrow">${escapeHtml(profile.eyebrow)}</p><h3>${escapeHtml(profile.listTitle)}</h3></div>
         <div class="admin-head-actions"><button class="ghost-button" type="button" id="exportHistoryVisibleCsv">Exportar vista</button><button class="ghost-button" type="button" id="clearHistoryFilters">Limpiar filtros</button></div>
       </div>
       <div class="history-kpi-grid">
@@ -1621,6 +1623,83 @@ function renderHistoryControlStrip(visibleSales, historyStats) {
     <article><span>Cuentas por cobrar</span><strong>${num(pendingPayments.length)}</strong><small>${money(historyStats.pending)} pendiente</small></article>
     <article><span>Caja cerrada</span><strong>${num(closedSales.length)}</strong><small>Solo consulta o reimpresion</small></article>
   </section>`;
+}
+
+function historyRoleProfile(visibleSales, historyStats) {
+  const voided = visibleSales.filter((sale) => saleStatus(sale) === "anulada");
+  const pending = visibleSales.filter((sale) => Number(sale.balance_due || 0) > 0 && sale.status !== "anulada");
+  const openCashSales = visibleSales.filter((sale) => !sale.cash_closed && sale.status !== "anulada");
+  if (currentUser?.role === "cajero") {
+    return {
+      className: "is-cashier",
+      eyebrow: "Historial de caja",
+      title: "Tu turno, comprobantes y pagos",
+      detail: "Consulta ventas del turno, reimprime comprobantes y revisa pendientes antes del cierre.",
+      listTitle: "Operaciones de caja",
+      cards: [
+        { label: "Turno visible", value: num(openCashSales.length), detail: "Ventas sin cierre de caja" },
+        { label: "Cobrado", value: money(historyStats.paid), detail: "Segun filtros activos" },
+        { label: "Pendiente", value: money(historyStats.pending), detail: `${num(pending.length)} venta${pending.length === 1 ? "" : "s"}` }
+      ]
+    };
+  }
+  if (currentUser?.role === "vendedor") {
+    return {
+      className: "is-seller",
+      eyebrow: "Historial comercial",
+      title: "Operaciones relacionadas con tu atencion",
+      detail: "Revisa comprobantes y clientes atendidos. Los cobros y anulaciones se gestionan desde caja o supervision.",
+      listTitle: "Clientes y comprobantes",
+      cards: [
+        { label: "Registros", value: num(historyStats.count), detail: "Ventas visibles para seguimiento" },
+        { label: "Clientes", value: num(uniqueSaleCustomers(visibleSales).length), detail: "Clientes con movimiento" },
+        { label: "Pendientes", value: num(pending.length), detail: "Para seguimiento comercial" }
+      ]
+    };
+  }
+  if (currentUser?.role === "supervisor") {
+    return {
+      className: "is-supervisor",
+      eyebrow: "Control de historial",
+      title: "Anulaciones, pendientes y cierre operativo",
+      detail: "Prioriza operaciones anulables, ventas pendientes y diferencias antes de validar el turno.",
+      listTitle: "Auditoria de ventas",
+      cards: [
+        { label: "Anuladas", value: num(voided.length), detail: "Operaciones reversadas" },
+        { label: "Anulables", value: num(openCashSales.filter((sale) => saleStatus(sale) !== "anulada").length), detail: "Aun sin caja cerrada" },
+        { label: "Credito", value: money(historyStats.pending), detail: `${num(pending.length)} pendiente${pending.length === 1 ? "" : "s"}` }
+      ]
+    };
+  }
+  return {
+    className: "is-admin",
+    eyebrow: "Historial",
+    title: "Ventas, comprobantes y auditoria",
+    detail: "Consulta operaciones, reimprime comprobantes, exporta vista y revisa estados de caja.",
+    listTitle: "Ventas y comprobantes",
+    cards: [
+      { label: "Ventas visibles", value: num(historyStats.count), detail: `${num(historyStats.voided)} anulada${historyStats.voided === 1 ? "" : "s"}` },
+      { label: "Total vendido", value: money(historyStats.total), detail: "Sin anuladas" },
+      { label: "Ticket promedio", value: money(historyStats.average), detail: "Ventas validas" }
+    ]
+  };
+}
+
+function renderHistoryRolePanel(profile, visibleSales, historyStats) {
+  return `<section class="history-role-panel ${profile.className}">
+    <div>
+      <p class="eyebrow">${escapeHtml(profile.eyebrow)}</p>
+      <h3>${escapeHtml(profile.title)}</h3>
+      <span>${escapeHtml(profile.detail)}</span>
+    </div>
+    <div class="history-role-cards">
+      ${profile.cards.map((card) => `<article><span>${escapeHtml(card.label)}</span><strong>${escapeHtml(card.value)}</strong><small>${escapeHtml(card.detail)}</small></article>`).join("")}
+    </div>
+  </section>`;
+}
+
+function uniqueSaleCustomers(list) {
+  return [...new Set(list.map((sale) => String(sale.customer_name || "").trim()).filter(Boolean))];
 }
 
 function filteredHistorySales() {
@@ -6245,7 +6324,7 @@ function renderSaleDetail(sale, items) {
     ${canReturn ? renderSaleReturnPanel(items) : ""}
     <div class="modal-actions">
       <button class="ghost-button" type="button" id="detailPrintSale">Reimprimir</button>
-      ${status !== "anulada" && !sale.cash_closed ? `<button class="ghost-button danger-action" type="button" id="detailVoidSale">Anular venta</button>` : ""}
+      ${status !== "anulada" && !sale.cash_closed && can("voidSales") ? `<button class="ghost-button danger-action" type="button" id="detailVoidSale">Anular venta</button>` : ""}
     </div>
   `;
   saleDetailContent.querySelector("#detailPrintSale")?.addEventListener("click", () => printTicket(sale, items));
