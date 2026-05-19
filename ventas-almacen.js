@@ -958,8 +958,18 @@ function buildSaleReadiness({ isCashOpen }) {
   };
 }
 
-function renderSaleReadinessPanel(readiness) {
+function renderSaleReadinessPanel(readiness, simpleMode = false) {
   if (!saleCart.length) return "";
+  if (simpleMode && readiness.canCharge) return "";
+  if (simpleMode) {
+    const issue = readiness.checks.find((item) => item.level === "danger" && !item.done) || readiness.stockIssues.find((item) => item.level === "danger") || readiness.warnings[0];
+    if (!issue) return "";
+    return `<section class="sale-readiness-panel is-warning is-simple">
+      <div class="sale-readiness-head">
+        <div><strong>Revisar antes de cobrar</strong><span>${escapeHtml(issue.detail || "Hay un punto pendiente en la venta.")}</span></div>
+      </div>
+    </section>`;
+  }
   const statusClass = readiness.canCharge ? "is-ok" : "is-warning";
   return `<section class="sale-readiness-panel ${statusClass}">
     <div class="sale-readiness-head">
@@ -1031,6 +1041,7 @@ function renderSell() {
     .map((item) => products.find((product) => product.id === item.productId))
     .filter((product) => product && Number(product.stock || 0) <= Number(product.min_stock || 0));
   const saleReadiness = buildSaleReadiness({ isCashOpen });
+  const simpleCashier = isSimpleCashierMode();
   mainList().innerHTML = `
     ${renderTrainingBanner()}
     <section class="pos-shell touch-pos-shell pos-mode-${posMobilePanel}">
@@ -1057,7 +1068,7 @@ function renderSell() {
         </div>
         ${posNotice ? `<div class="pos-toast">${escapeHtml(posNotice)}</div>` : ""}
         ${lastSaleReceipt ? renderLastSaleReceipt() : ""}
-        ${renderPosShiftPanel(isCashOpen, totals)}
+        ${simpleCashier ? renderSimpleCashierStatus(isCashOpen, totals) : renderPosShiftPanel(isCashOpen, totals)}
         ${activeSaleDraftInfo()}
         ${saleCart.length ? renderPosMiniCartPreview(totals, isCashOpen) : ""}
         <div class="pos-search-row">
@@ -1067,7 +1078,7 @@ function renderSell() {
           ${productSearch ? `<button class="ghost-button touch-action icon-text-button" type="button" id="clearSearchBtn"><span class="ui-ico">x</span>Limpiar</button>` : ""}
         </div>
         <div class="scanner-status"><strong>Lector listo</strong><span>F2 enfoca / escanea y Enter agrega</span></div>
-        <div class="pos-input-hint">Acepta cantidad rapida: <strong>3x codigo</strong>, <strong>codigo*3</strong> o lector de barras USB.</div>
+        ${simpleCashier ? "" : `<div class="pos-input-hint">Acepta cantidad rapida: <strong>3x codigo</strong>, <strong>codigo*3</strong> o lector de barras USB.</div>`}
         <div class="pos-section-block">
           <div class="pos-section-title"><strong>Categorias</strong><span>Filtra rapido por familia</span></div>
           <div class="pos-category-rail">
@@ -1092,10 +1103,10 @@ function renderSell() {
             <strong>Productos disponibles</strong>
             <span>${num(sortedSellProducts.length)} resultado${sortedSellProducts.length === 1 ? "" : "s"}${hiddenProductCount ? ` / mostrando ${num(visibleProductLimit)}` : ""}</span>
           </div>
-          <div class="pos-result-hint">
+          ${simpleCashier ? "" : `<div class="pos-result-hint">
             <strong>${productSearch ? `Busqueda: ${escapeHtml(productSearch)}` : productCategoryFilter ? `Categoria: ${escapeHtml(productCategoryFilter)}` : "Vista general"}</strong>
             <span>Favoritos, coincidencias exactas y productos con stock aparecen primero.</span>
-          </div>
+          </div>`}
           <div class="product-suggestion-grid touch-product-grid">${visibleSellProducts.map(renderSellProduct).join("") || empty("Sin productos con esa busqueda", "Prueba con codigo, nombre, categoria o limpia el filtro para volver a ver el catalogo.")}</div>
           ${hiddenProductCount ? `<div class="pos-more-results">Hay ${num(hiddenProductCount)} producto${hiddenProductCount === 1 ? "" : "s"} mas. Usa la busqueda por nombre, codigo o categoria para filtrar.</div>` : ""}
         </div>
@@ -1119,7 +1130,7 @@ function renderSell() {
           ${!storeSettings.allowDiscounts ? `<div class="cloud-safe-note"><strong>Descuentos desactivados</strong><span>Solo el encargado puede volver a habilitarlos desde configuracion.</span></div>` : ""}
           ${lowStockInCart.length ? `<div class="pos-stock-note"><strong>Atencion stock bajo:</strong> ${lowStockInCart.map((product) => escapeHtml(product.name)).join(", ")}</div>` : ""}
           <div class="pos-cart-list touch-cart-list">${saleCart.map(renderCartItem).join("") || empty("Toca un producto para agregarlo", "El carrito se actualiza sin salir del modulo de venta, pensado para pantallas tactiles.")}</div>
-          ${renderSaleReadinessPanel(saleReadiness)}
+          ${renderSaleReadinessPanel(saleReadiness, simpleCashier)}
           <div class="pos-section-block pos-total-block">
             <div class="pos-section-title"><strong>Resumen de cobro</strong><span>Totales de la venta actual</span></div>
             <div class="sale-total-card">
@@ -1259,6 +1270,17 @@ function renderPosShiftPanel(isCashOpen, totals) {
       ` : ""}
     </section>
   `;
+}
+
+function renderSimpleCashierStatus(isCashOpen, totals) {
+  return `<section class="simple-cashier-status ${isCashOpen ? "is-open" : "is-closed"}">
+    <div>
+      <span>${isCashOpen ? `Caja ${num(cashSession.registerNumber)} abierta` : "Caja sin abrir"}</span>
+      <strong>${money(totals.total)}</strong>
+      <small>${num(saleCart.length)} item${saleCart.length === 1 ? "" : "s"} en venta</small>
+    </div>
+    ${isCashOpen ? "" : `<button class="primary-button icon-text-button" type="button" id="goOpenCashBtn"><span class="ui-ico">+</span>Abrir caja</button>`}
+  </section>`;
 }
 
 function renderFinance() {
@@ -7482,6 +7504,7 @@ function comboAvailableStock(combo) {
 function canAccessView(view) { return accessibleViewsForRole(currentUser?.role).includes(view); }
 function defaultViewForRole() { return accessibleViewsForRole(currentUser?.role)[0] || "summary"; }
 function canSeeProfit() { return ["admin", "ventas_admin", "supervisor"].includes(currentUser?.role); }
+function isSimpleCashierMode() { return ["cajero", "vendedor"].includes(currentUser?.role); }
 function can(permission) {
   const role = currentUser?.role || "";
   const permissions = {

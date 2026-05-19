@@ -6385,6 +6385,10 @@ body.app-ventas .sale-readiness-panel.is-warning {
     linear-gradient(145deg, rgb(255 255 255 / 96%), rgb(255 251 235 / 78%));
 }
 
+body.app-ventas .sale-readiness-panel.is-simple {
+  padding: 10px 12px;
+}
+
 body.app-ventas .sale-readiness-head {
   display: flex;
   align-items: center;
@@ -6461,6 +6465,49 @@ body.app-ventas .sale-readiness-alerts span {
 body.app-ventas .sale-readiness-alerts span.is-danger {
   background: rgb(220 38 38 / 10%);
   color: #991b1b;
+}
+
+body.app-ventas .simple-cashier-status {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  margin: 0 0 12px;
+  border: 1px solid rgb(15 118 110 / 14%);
+  border-radius: 16px;
+  padding: 12px;
+  background:
+    radial-gradient(circle at 92% 0%, rgb(16 185 129 / 12%), transparent 34%),
+    linear-gradient(135deg, rgb(255 255 255 / 94%), rgb(236 253 245 / 78%));
+}
+
+body.app-ventas .simple-cashier-status.is-closed {
+  border-color: rgb(245 158 11 / 24%);
+  background:
+    radial-gradient(circle at 92% 0%, rgb(245 158 11 / 16%), transparent 34%),
+    linear-gradient(135deg, rgb(255 255 255 / 94%), rgb(255 251 235 / 82%));
+}
+
+body.app-ventas .simple-cashier-status span,
+body.app-ventas .simple-cashier-status small {
+  display: block;
+  color: var(--muted);
+  font-size: 0.8rem;
+  font-weight: 850;
+}
+
+body.app-ventas .simple-cashier-status strong {
+  display: block;
+  margin: 3px 0;
+  color: #10251f;
+  font-size: 1.42rem;
+  font-weight: 950;
+}
+
+body.app-ventas .simple-cashier-status button {
+  min-height: 48px;
+  border-radius: 14px;
+  white-space: nowrap;
 }
 
 body.app-ventas .sales-goal-panel {
