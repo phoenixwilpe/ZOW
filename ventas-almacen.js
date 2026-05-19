@@ -346,7 +346,8 @@ categoryForm.addEventListener("submit", async (event) => {
 });
 
 stockMovementForm.addEventListener("submit", saveStockMovement);
-document.querySelector("#stockMovementType")?.addEventListener("change", () => updateStockMovementLabels());
+document.querySelector("#stockMovementType")?.addEventListener("change", updateStockMovementPreview);
+document.querySelector("#stockMovementQuantity")?.addEventListener("input", updateStockMovementPreview);
 receivablePaymentForm.addEventListener("submit", saveReceivablePayment);
 voidSaleForm.addEventListener("submit", submitVoidSale);
 
@@ -7361,21 +7362,60 @@ async function openStockMovement(productId, type) {
   stockMovementDraft = { productId, type };
   stockMovementForm.reset();
   document.querySelector("#stockMovementTitle").textContent = type === "entrada" ? "Entrada de stock" : type === "salida" ? "Salida de stock" : "Ajuste exacto de stock";
-  document.querySelector("#stockMovementProduct").innerHTML = `<strong>${escapeHtml(product.name)}</strong><span>Stock actual ${num(product.stock)} / Minimo ${num(product.min_stock)}</span>`;
+  document.querySelector("#stockMovementProduct").innerHTML = renderStockMovementProductSummary(product);
   document.querySelector("#stockMovementType").value = type;
   document.querySelector("#stockMovementQuantity").value = type === "ajuste" ? Number(product.stock || 0) : 1;
   document.querySelector("#stockMovementReference").value = type === "entrada" ? "Reposicion" : type === "salida" ? "Merma / salida interna" : "Conteo fisico";
-  updateStockMovementLabels();
+  updateStockMovementPreview();
   stockMovementModal.showModal();
 }
 
-function updateStockMovementLabels() {
+function renderStockMovementProductSummary(product) {
+  const insight = productInventoryInsight(product);
+  const expiry = expiryStatus(product);
+  return `<div>
+    <strong>${escapeHtml(product.name)}</strong>
+    <span>${escapeHtml(product.code || "Sin codigo")} / ${escapeHtml(product.category || "Sin categoria")} / ${escapeHtml(product.unit || "Unidad")}</span>
+    <span>Stock actual ${num(product.stock)} / Minimo ${num(product.min_stock)} / Valor ${money(insight.stockValue)}</span>
+    ${expiry.label ? `<span class="${expiry.className}">${escapeHtml(expiry.label)}</span>` : ""}
+  </div>`;
+}
+
+function updateStockMovementPreview() {
   const type = value("#stockMovementType");
   const label = document.querySelector("#stockMovementQuantityLabel");
   const input = document.querySelector("#stockMovementQuantity");
   if (!label || !input) return;
   label.textContent = type === "ajuste" ? "Stock final contado" : "Cantidad";
   input.min = type === "ajuste" ? "0" : "0.01";
+  const product = products.find((item) => item.id === stockMovementDraft.productId);
+  const preview = document.querySelector("#stockMovementPreview");
+  if (!product || !preview) return;
+  const currentStock = Number(product.stock || 0);
+  const minStock = Number(product.min_stock || 0);
+  const quantity = Number(input.value || 0);
+  const nextStock = stockAfterMovement({ currentStock, type, quantity });
+  const delta = type === "ajuste" ? nextStock - currentStock : type === "salida" ? -quantity : quantity;
+  const status = nextStock < 0
+    ? { className: "is-danger", title: "Movimiento no permitido", detail: "El stock final quedaria negativo." }
+    : nextStock <= 0
+      ? { className: "is-danger", title: "Producto agotado", detail: "Despues del movimiento no quedara stock disponible." }
+      : nextStock <= minStock
+        ? { className: "is-warning", title: "Stock bajo", detail: "El producto quedara en minimo o por debajo del minimo configurado." }
+        : { className: "is-ok", title: "Movimiento saludable", detail: "El stock final queda por encima del minimo configurado." };
+  preview.className = `stock-movement-preview ${status.className}`;
+  preview.innerHTML = `
+    <article><span>Stock actual</span><strong>${num(currentStock)}</strong></article>
+    <article><span>Cambio</span><strong>${delta >= 0 ? "+" : ""}${num(delta)}</strong></article>
+    <article><span>Stock final</span><strong>${num(nextStock)}</strong></article>
+    <div><strong>${escapeHtml(status.title)}</strong><span>${escapeHtml(status.detail)}</span></div>
+  `;
+}
+
+function stockAfterMovement({ currentStock, type, quantity }) {
+  if (type === "ajuste") return quantity;
+  if (type === "salida") return currentStock - quantity;
+  return currentStock + quantity;
 }
 
 async function saveStockMovement(event) {
@@ -7396,6 +7436,11 @@ async function saveStockMovement(event) {
   }
   if (type === "salida" && quantity > Number(product.stock || 0)) {
     window.alert("La salida no puede superar el stock disponible.");
+    return;
+  }
+  const nextStock = stockAfterMovement({ currentStock: Number(product.stock || 0), type, quantity });
+  if (nextStock < 0) {
+    window.alert("El movimiento dejaria stock negativo. Revisa la cantidad.");
     return;
   }
   try {
