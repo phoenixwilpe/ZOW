@@ -4540,8 +4540,8 @@ function bindProductSearch() {
   input.addEventListener("input", () => {
     productSearch = input.value;
     clearTimeout(productSearchTimer);
+    if (isMobilePos()) return;
     const caretPosition = input.selectionStart || productSearch.length;
-    const mobile = isMobilePos();
     productSearchTimer = window.setTimeout(() => {
       if (document.activeElement === input && input.value !== productSearch) return;
       posMobilePanel = "products";
@@ -4549,10 +4549,10 @@ function bindProductSearch() {
       window.requestAnimationFrame(() => {
         const nextInput = document.querySelector("#productSearchInput");
         if (!nextInput || activeView !== "sell") return;
-        if (!mobile) nextInput.focus({ preventScroll: true });
+        nextInput.focus({ preventScroll: true });
         nextInput.setSelectionRange(caretPosition, caretPosition);
       });
-    }, mobile ? 1250 : 760);
+    }, 620);
   });
   input.addEventListener("keydown", (event) => {
     if (event.key === "Enter") {
