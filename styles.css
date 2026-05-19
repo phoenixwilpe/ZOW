@@ -14707,6 +14707,8 @@ body.system-zow-site .site-footer {
   .report-decision-grid,
   .executive-brief-metrics,
   .executive-brief-priority,
+  body.app-ventas .inventory-filter-bar,
+  body.app-ventas .inventory-filter-actions,
   body.app-ventas .daily-operation-track,
   .settings-overview-grid,
   .store-launch-grid,
@@ -14747,6 +14749,7 @@ body.system-zow-site .site-footer {
   }
 
   body.app-ventas .commercial-alert-card button,
+  body.app-ventas .inventory-filter-bar > .ghost-button,
   body.app-ventas .training-mode-banner button,
   body.app-ventas .training-lab-actions,
   body.app-ventas .training-lab-actions button {
@@ -16136,6 +16139,72 @@ body.app-ventas .inventory-risk-item small {
   color: var(--muted);
   font-size: 0.78rem;
   font-weight: 850;
+}
+
+body.app-ventas .inventory-filter-bar {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: stretch;
+  margin: 12px 0;
+}
+
+body.app-ventas .inventory-filter-actions {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 8px;
+}
+
+body.app-ventas .inventory-filter-actions button {
+  display: grid;
+  gap: 3px;
+  min-height: 74px;
+  border: 1px solid rgb(15 118 110 / 12%);
+  border-radius: 15px;
+  padding: 10px;
+  background:
+    radial-gradient(circle at 88% 12%, rgb(16 185 129 / 10%), transparent 32%),
+    rgb(255 255 255 / 86%);
+  color: var(--muted);
+  text-align: left;
+  box-shadow: 0 10px 24px rgb(8 30 26 / 5%);
+}
+
+body.app-ventas .inventory-filter-actions button.is-active {
+  border-color: rgb(15 118 110 / 32%);
+  background:
+    radial-gradient(circle at 88% 12%, rgb(245 158 11 / 16%), transparent 34%),
+    linear-gradient(145deg, #0f766e, #10b981);
+  color: white;
+  box-shadow: 0 16px 36px rgb(15 118 110 / 18%);
+}
+
+body.app-ventas .inventory-filter-actions span,
+body.app-ventas .inventory-filter-actions small {
+  font-size: 0.74rem;
+  font-weight: 900;
+  line-height: 1.25;
+}
+
+body.app-ventas .inventory-filter-actions strong {
+  color: var(--accent-dark);
+  font-size: 1.18rem;
+  line-height: 1;
+}
+
+body.app-ventas .inventory-filter-actions button.is-active strong {
+  color: white;
+}
+
+body.app-ventas .inventory-filter-bar > .ghost-button {
+  min-width: 132px;
+  min-height: 74px;
+}
+
+@media (max-width: 1180px) {
+  body.app-ventas .inventory-filter-actions {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
 }
 
 body.app-ventas .voided-sale-banner {

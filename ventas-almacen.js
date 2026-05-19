@@ -46,6 +46,7 @@ let editingPromotionId = "";
 let editingComboId = "";
 let productSearch = "";
 let productCategoryFilter = "";
+let inventoryFilter = "all";
 let productSearchTimer = 0;
 let ventasMessage = "";
 let posFeedbackMessage = "";
@@ -3647,15 +3648,17 @@ function renderSupplierRow(supplier) {
 }
 
 function renderInventory() {
-  const inventoryProducts = filteredProducts({ includeInactive: true });
   const activeCount = products.filter(isProductActive).length;
-  const outOfStock = products.filter((product) => isProductActive(product) && Number(product.stock || 0) <= 0).length;
-  const lowStock = products.filter((product) => isProductActive(product) && Number(product.stock || 0) > 0 && Number(product.stock || 0) <= Number(product.min_stock || 0)).length;
+  const outOfStockProducts = products.filter((product) => isProductActive(product) && Number(product.stock || 0) <= 0);
+  const lowStockProducts = products.filter((product) => isProductActive(product) && Number(product.stock || 0) > 0 && Number(product.stock || 0) <= Number(product.min_stock || 0));
+  const outOfStock = outOfStockProducts.length;
+  const lowStock = lowStockProducts.length;
   const expiringSoon = products.filter((product) => isProductActive(product) && expiryStatus(product).level === "warning").length;
   const expired = products.filter((product) => isProductActive(product) && expiryStatus(product).level === "danger").length;
   const inventoryValue = products.filter(isProductActive).reduce((sum, product) => sum + Number(product.stock || 0) * Number(product.cost_price || 0), 0);
   const potentialProfit = products.filter(isProductActive).reduce((sum, product) => sum + Number(product.stock || 0) * Math.max(Number(product.sale_price || 0) - Number(product.cost_price || 0), 0), 0);
-  const highValueProducts = inventoryProducts.filter((product) => inventoryClass(product) === "A").length;
+  const baseInventoryProducts = filteredProducts({ includeInactive: true });
+  const highValueProducts = baseInventoryProducts.filter((product) => inventoryClass(product) === "A").length;
   const expiringProducts = products
     .filter((product) => isProductActive(product) && ["danger", "warning"].includes(expiryStatus(product).level))
     .sort((a, b) => daysUntil(a.expires_at) - daysUntil(b.expires_at));
@@ -3673,6 +3676,9 @@ function renderInventory() {
         || suggestedReorderQuantity(b) * Number(b.cost_price || 0) - suggestedReorderQuantity(a) * Number(a.cost_price || 0);
     });
   const riskProducts = uniqueProducts([...reorderProducts, ...expiringProducts, ...overstockProducts, ...marginRiskProducts]);
+  const inventoryFilters = buildInventoryFilterOptions({ activeCount, outOfStockProducts, lowStockProducts, expiringProducts, overstockProducts, marginRiskProducts });
+  if (!inventoryFilters.some((item) => item.key === inventoryFilter)) inventoryFilter = "all";
+  const inventoryProducts = sortInventoryProducts(applyInventoryQuickFilter(baseInventoryProducts, inventoryFilter));
   const warehouseMode = isWarehouseMode();
   const profile = inventoryRoleProfile({ activeCount, outOfStock, lowStock, expiringSoon, expired, inventoryValue, reorderProducts });
   setCount(`${products.length} producto${products.length === 1 ? "" : "s"}`);
@@ -3717,11 +3723,13 @@ function renderInventory() {
       </div>
       ${ventasMessage ? `<div class="cloud-safe-note"><strong>${escapeHtml(ventasMessage)}</strong><span>La accion se ejecuto sobre los datos de esta empresa.</span></div>` : ""}
       <label class="toolbar-search">Buscar producto<input id="productSearchInput" type="search" autocomplete="off" value="${escapeHtml(productSearch)}" placeholder="Codigo, nombre o categoria" /></label>
+      ${renderInventoryFilterBar(inventoryFilters)}
       <div class="admin-list">${inventoryProducts.map(renderInventoryProductRow).join("") || empty("Sin productos con esa busqueda", "Busca por codigo, nombre, categoria o limpia el texto para revisar todo el inventario.")}</div>
     </section>
     ${selectedKardex ? renderKardexPanel() : ""}
   `;
   bindProductSearch();
+  bindInventoryFilterBar();
   document.querySelector("#prepareSuggestedPurchaseFromInventory")?.addEventListener("click", prepareSuggestedPurchase);
   document.querySelector("#exportInventoryRiskCsv")?.addEventListener("click", exportInventoryRiskCsv);
   document.querySelector("#loadStarterProducts")?.addEventListener("click", loadStarterProducts);
@@ -3786,6 +3794,78 @@ function inventoryRoleProfile({ activeCount, outOfStock, lowStock, expiringSoon,
       { label: "Valor almacen", value: money(inventoryValue), detail: "Costo estimado" }
     ]
   };
+}
+
+function buildInventoryFilterOptions({ activeCount, outOfStockProducts, lowStockProducts, expiringProducts, overstockProducts, marginRiskProducts }) {
+  return [
+    { key: "all", label: "Todo", count: products.length, detail: `${num(activeCount)} activos` },
+    { key: "critical", label: "Critico", count: outOfStockProducts.length + lowStockProducts.length, detail: "Agotado o bajo minimo" },
+    { key: "expiring", label: "Por vencer", count: expiringProducts.length, detail: "Vencido o proximo" },
+    { key: "overstock", label: "Sobrestock", count: overstockProducts.length, detail: "Stock muy alto" },
+    { key: "margin", label: "Sin margen", count: marginRiskProducts.length, detail: "Precio <= costo" },
+    { key: "inactive", label: "Inactivos", count: products.filter((product) => !isProductActive(product)).length, detail: "Fuera de venta" }
+  ];
+}
+
+function renderInventoryFilterBar(filters) {
+  return `<section class="inventory-filter-bar" aria-label="Filtros de inventario">
+    <div class="inventory-filter-actions">
+      ${filters.map((filter) => `<button class="${inventoryFilter === filter.key ? "is-active" : ""}" type="button" data-inventory-filter="${filter.key}">
+        <span>${escapeHtml(filter.label)}</span>
+        <strong>${num(filter.count)}</strong>
+        <small>${escapeHtml(filter.detail)}</small>
+      </button>`).join("")}
+    </div>
+    <button class="ghost-button" type="button" id="clearInventorySearch" ${productSearch || inventoryFilter !== "all" ? "" : "disabled"}>Limpiar vista</button>
+  </section>`;
+}
+
+function bindInventoryFilterBar() {
+  document.querySelectorAll("[data-inventory-filter]").forEach((button) => {
+    button.addEventListener("click", () => {
+      inventoryFilter = button.dataset.inventoryFilter || "all";
+      renderMain();
+    });
+  });
+  document.querySelector("#clearInventorySearch")?.addEventListener("click", () => {
+    productSearch = "";
+    inventoryFilter = "all";
+    renderMain();
+  });
+}
+
+function applyInventoryQuickFilter(productList, filter) {
+  return productList.filter((product) => {
+    const stock = Number(product.stock || 0);
+    const min = Number(product.min_stock || 0);
+    const expiry = expiryStatus(product).level;
+    if (filter === "critical") return isProductActive(product) && stock <= min;
+    if (filter === "expiring") return isProductActive(product) && ["danger", "warning"].includes(expiry);
+    if (filter === "overstock") return isProductActive(product) && min > 0 && stock >= min * 4;
+    if (filter === "margin") return isProductActive(product) && Number(product.sale_price || 0) <= Number(product.cost_price || 0);
+    if (filter === "inactive") return !isProductActive(product);
+    return true;
+  });
+}
+
+function sortInventoryProducts(productList) {
+  return [...productList].sort((a, b) => inventoryProductRank(b) - inventoryProductRank(a) || String(a.name || "").localeCompare(String(b.name || ""), "es"));
+}
+
+function inventoryProductRank(product) {
+  const stock = Number(product.stock || 0);
+  const min = Number(product.min_stock || 0);
+  const expiry = expiryStatus(product).level;
+  let rank = 0;
+  if (!isProductActive(product)) rank -= 80;
+  if (stock <= 0) rank += 120;
+  else if (stock <= min) rank += 90;
+  if (expiry === "danger") rank += 110;
+  if (expiry === "warning") rank += 70;
+  if (Number(product.sale_price || 0) <= Number(product.cost_price || 0)) rank += 55;
+  if (min > 0 && stock >= min * 4) rank += 25;
+  if (inventoryClass(product) === "A") rank += 10;
+  return rank;
 }
 
 function renderWarehouseActionStrip({ reorderProducts, expiringProducts, outOfStock, lowStock }) {
