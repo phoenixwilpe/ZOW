@@ -14046,6 +14046,18 @@ body.app-ventas .payment-helper-row {
   font-weight: 900;
 }
 
+body.app-ventas .payment-helper-row span {
+  display: grid;
+  gap: 2px;
+}
+
+body.app-ventas .payment-helper-row small {
+  color: rgb(101 115 112 / 82%);
+  font-size: 0.76rem;
+  font-weight: 850;
+  line-height: 1.25;
+}
+
 body.app-ventas .payment-helper-row button {
   border: 1px solid rgb(15 118 110 / 16%);
   border-radius: 999px;
@@ -14167,6 +14179,15 @@ body.app-ventas #paymentReceived,
 body.app-ventas #paymentResultValue {
   font-variant-numeric: tabular-nums;
   letter-spacing: 0;
+}
+
+body.app-ventas #paymentReceived:focus {
+  border-color: rgb(245 158 11 / 48%);
+  background:
+    linear-gradient(135deg, rgb(255 251 235 / 96%), rgb(236 253 245 / 86%));
+  box-shadow:
+    0 0 0 4px rgb(245 158 11 / 12%),
+    0 16px 34px rgb(8 30 26 / 10%);
 }
 
 body.app-ventas .touch-payment-actions {

@@ -5243,9 +5243,9 @@ function renderPaymentModal() {
         <article><span>${isCredit ? "Anticipo" : "Recibido"}</span><strong id="paymentPaidLabel">${money(paidTotal)}</strong></article>
         <article class="${insufficient ? "is-warning" : "is-ok"}"><span>${insufficient ? "Falta" : isCredit ? "Saldo" : "Vuelto"}</span><strong id="paymentBalanceLabel">${money(insufficient ? totals.total - paidTotal : isCredit ? balanceDue : change)}</strong></article>
       </div>
-      ${isCredit ? `<div class="cloud-safe-note"><strong>Venta al credito</strong><span>Quedara saldo pendiente de ${money(balanceDue)} en cuentas por cobrar.</span></div>` : isMixed ? renderMixedPaymentFields(totals.total) : `<div class="payment-helper-row"><span>Pagos rapidos</span><button type="button" id="clearPaymentBtn">Limpiar monto</button></div><div class="quick-cash-grid">${quickOptions.map((option) => `<button type="button" data-quick-cash="${option.amount}"><span>${escapeHtml(option.label)}</span><strong>${money(option.amount)}</strong></button>`).join("")}</div>`}
+      ${isCredit ? `<div class="cloud-safe-note"><strong>Venta al credito</strong><span>Quedara saldo pendiente de ${money(balanceDue)} en cuentas por cobrar.</span></div>` : isMixed ? renderMixedPaymentFields(totals.total) : `<div class="payment-helper-row"><span>Pagos rapidos <small>Toca el monto recibido para reemplazarlo completo.</small></span><button type="button" id="clearPaymentBtn">Limpiar monto</button></div><div class="quick-cash-grid">${quickOptions.map((option) => `<button type="button" data-quick-cash="${option.amount}"><span>${escapeHtml(option.label)}</span><strong>${money(option.amount)}</strong></button>`).join("")}</div>`}
       ${isMixed ? "" : `<div class="form-grid touch-payment-fields">
-        <label>${isCredit ? "Anticipo recibido" : "Monto recibido"}<input id="paymentReceived" type="text" inputmode="decimal" enterkeyhint="done" value="${Number(paymentDraft.received || 0).toFixed(2)}" /></label>
+        <label>${isCredit ? "Anticipo recibido" : "Monto recibido"}<input id="paymentReceived" type="text" inputmode="decimal" enterkeyhint="done" autocomplete="off" aria-label="${isCredit ? "Anticipo recibido" : "Monto recibido"}" value="${Number(paymentDraft.received || 0).toFixed(2)}" /></label>
         <label>${isCredit ? "Saldo pendiente" : "Vuelto"}<input id="paymentResultValue" type="text" value="${money(isCredit ? balanceDue : change)}" readonly /></label>
       </div>${renderPaymentKeypad(totals.total, isCredit)}`}
       <div class="payment-safety-card ${insufficient ? "is-warning" : changeWarning ? "is-caution" : "is-ok"}" id="paymentSafetyCard">
@@ -5266,7 +5266,18 @@ function renderPaymentModal() {
       window.requestAnimationFrame(() => focusPaymentReceived(!isMobilePos()));
     });
   });
-  paymentModalContent.querySelector("#paymentReceived")?.addEventListener("input", (event) => {
+  const receivedInput = paymentModalContent.querySelector("#paymentReceived");
+  receivedInput?.addEventListener("focus", () => {
+    window.setTimeout(() => receivedInput.select(), 0);
+  });
+  receivedInput?.addEventListener("pointerup", () => {
+    if (document.activeElement === receivedInput) window.setTimeout(() => receivedInput.select(), 0);
+  });
+  receivedInput?.addEventListener("blur", () => {
+    if (!receivedInput.value) return;
+    receivedInput.value = Number(paymentDraft.received || 0).toFixed(2);
+  });
+  receivedInput?.addEventListener("input", (event) => {
     const normalizedValue = String(event.target.value || "").replace(",", ".").replace(/[^\d.]/g, "");
     const dotIndex = normalizedValue.indexOf(".");
     const cleanedValue = dotIndex >= 0
