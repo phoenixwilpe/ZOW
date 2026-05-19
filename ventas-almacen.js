@@ -47,6 +47,7 @@ let editingComboId = "";
 let productSearch = "";
 let productCategoryFilter = "";
 let inventoryFilter = "all";
+let customerPortfolioFilter = "all";
 let productSearchTimer = 0;
 let ventasMessage = "";
 let posFeedbackMessage = "";
@@ -2951,6 +2952,10 @@ function renderCustomers() {
   const followUpList = buildReceivableFollowUpList().slice(0, 6);
   const customerHealth = buildCustomerPortfolioHealth(riskCustomers);
   const profile = customerRoleProfile();
+  const customerFilters = buildCustomerPortfolioFilters();
+  if (!customerFilters.some((item) => item.key === customerPortfolioFilter)) customerPortfolioFilter = "all";
+  const filteredReceivables = filterReceivablesForPortfolio(receivables, customerPortfolioFilter);
+  const filteredCustomers = filterCustomersForPortfolio(customers, customerPortfolioFilter);
   const showControlBlocks = ["admin", "ventas_admin", "supervisor"].includes(currentUser?.role);
   const showCollectionBlocks = ["admin", "ventas_admin", "cajero", "supervisor"].includes(currentUser?.role);
   setCount(`${customers.length} cliente${customers.length === 1 ? "" : "s"}`);
@@ -2988,6 +2993,7 @@ function renderCustomers() {
     ${showCollectionBlocks ? `<section class="collection-plan-grid">
       ${collectionPlan.map((item) => `<article class="${item.className}"><span>${escapeHtml(item.label)}</span><strong>${money(item.total)}</strong><small>${item.detail}</small></article>`).join("")}
     </section>` : ""}
+    ${renderCustomerPortfolioFilterBar(customerFilters)}
     ${showCollectionBlocks ? `<section class="customer-workspace-grid">
       <article class="admin-panel">
         <div class="admin-panel-head"><div><p class="eyebrow">Riesgo comercial</p><h3>Clientes que requieren seguimiento</h3></div></div>
@@ -3000,11 +3006,11 @@ function renderCustomers() {
     </section>` : ""}
     ${showCollectionBlocks ? `<section class="admin-panel">
       <div class="admin-panel-head"><div><p class="eyebrow">Cuentas por cobrar</p><h3>Ventas al credito</h3></div></div>
-      <div class="admin-list">${receivables.map(renderReceivableRow).join("") || empty("Sin saldos pendientes", "Las ventas a credito apareceran aqui para seguimiento y registro de pagos.")}</div>
+      <div class="admin-list">${filteredReceivables.map(renderReceivableRow).join("") || empty("Sin saldos pendientes en esta vista", "Cambia el filtro para revisar otros clientes o ventas a credito.")}</div>
     </section>` : ""}
     <section class="admin-panel">
       <div class="admin-panel-head"><div><p class="eyebrow">Directorio</p><h3>Clientes registrados</h3></div><button class="ghost-button" type="button" id="exportCustomersFromCustomersCsv">Exportar clientes CSV</button></div>
-      <div class="admin-list customer-directory-list">${customers.map(renderCustomerDirectoryRow).join("") || empty("Sin clientes registrados", "Crea clientes para ventas a credito, historial comercial y mensajes de cobranza.")}</div>
+      <div class="admin-list customer-directory-list">${filteredCustomers.map(renderCustomerDirectoryRow).join("") || empty("Sin clientes en esta vista", "Cambia el filtro o registra clientes para verlos aqui.")}</div>
     </section>
   `;
   document.querySelectorAll("[data-pay-receivable]").forEach((button) => {
@@ -3025,6 +3031,7 @@ function renderCustomers() {
   document.querySelectorAll("[data-print-customer-statement]").forEach((button) => {
     button.addEventListener("click", () => printCustomerStatement(button.dataset.printCustomerStatement));
   });
+  bindCustomerPortfolioFilterBar();
   document.querySelector("#quickNewCustomer")?.addEventListener("click", () => openCustomerModal());
   document.querySelector("#sellerNewCustomer")?.addEventListener("click", () => openCustomerModal());
   document.querySelector("#exportCustomersCommandCsv")?.addEventListener("click", exportCustomersCsv);
@@ -3064,6 +3071,86 @@ function customerRoleProfile() {
     detail: "Prioriza clientes con saldo vencido, revisa limite usado y registra pagos sin salir del modulo.",
     className: "is-admin"
   };
+}
+
+function buildCustomerPortfolioFilters() {
+  const debtCustomers = customers.filter((customer) => customerDebtByName(customer.name) > 0);
+  const overdue = receivables.filter((sale) => daysSince(sale.created_at) > 30);
+  const dueSoon = receivables.filter((sale) => {
+    const age = daysSince(sale.created_at);
+    return age >= 16 && age <= 30;
+  });
+  const noPhone = customers.filter((customer) => !String(customer.phone || "").trim());
+  const observed = customers.filter((customer) => ["bloqueado", "observado"].includes(customer.status));
+  return [
+    { key: "all", label: "Todo", count: customers.length, detail: `${num(receivables.length)} cuenta(s)` },
+    { key: "debt", label: "Con deuda", count: debtCustomers.length, detail: "Clientes con saldo" },
+    { key: "overdue", label: "Vencidos", count: overdue.length, detail: "Mas de 30 dias" },
+    { key: "soon", label: "Por vencer", count: dueSoon.length, detail: "16 a 30 dias" },
+    { key: "no-phone", label: "Sin celular", count: noPhone.length, detail: "Falta contacto" },
+    { key: "observed", label: "Observados", count: observed.length, detail: "Bloq. u observado" }
+  ];
+}
+
+function renderCustomerPortfolioFilterBar(filters) {
+  return `<section class="customer-filter-bar" aria-label="Filtros de clientes y cobranza">
+    <div class="customer-filter-actions">
+      ${filters.map((filter) => `<button class="${customerPortfolioFilter === filter.key ? "is-active" : ""}" type="button" data-customer-filter="${filter.key}">
+        <span>${escapeHtml(filter.label)}</span>
+        <strong>${num(filter.count)}</strong>
+        <small>${escapeHtml(filter.detail)}</small>
+      </button>`).join("")}
+    </div>
+    <button class="ghost-button" type="button" id="clearCustomerFilter" ${customerPortfolioFilter !== "all" ? "" : "disabled"}>Limpiar filtro</button>
+  </section>`;
+}
+
+function bindCustomerPortfolioFilterBar() {
+  document.querySelectorAll("[data-customer-filter]").forEach((button) => {
+    button.addEventListener("click", () => {
+      customerPortfolioFilter = button.dataset.customerFilter || "all";
+      renderMain();
+    });
+  });
+  document.querySelector("#clearCustomerFilter")?.addEventListener("click", () => {
+    customerPortfolioFilter = "all";
+    renderMain();
+  });
+}
+
+function filterReceivablesForPortfolio(source, filter) {
+  return source.filter((sale) => {
+    const customer = findCustomerForSale(sale);
+    if (filter === "debt") return Number(sale.balance_due || 0) > 0;
+    if (filter === "overdue") return daysSince(sale.created_at) > 30;
+    if (filter === "soon") {
+      const age = daysSince(sale.created_at);
+      return age >= 16 && age <= 30;
+    }
+    if (filter === "no-phone") return !String(customer?.phone || sale.customer_phone || "").trim();
+    if (filter === "observed") return ["bloqueado", "observado"].includes(customer?.status);
+    return true;
+  });
+}
+
+function filterCustomersForPortfolio(source, filter) {
+  return source.filter((customer) => {
+    if (filter === "debt") return customerDebtByName(customer.name) > 0;
+    if (filter === "overdue") return receivables.some((sale) => (sale.customer_name || "Cliente sin registrar") === customer.name && daysSince(sale.created_at) > 30);
+    if (filter === "soon") return receivables.some((sale) => {
+      const age = daysSince(sale.created_at);
+      return (sale.customer_name || "Cliente sin registrar") === customer.name && age >= 16 && age <= 30;
+    });
+    if (filter === "no-phone") return !String(customer.phone || "").trim();
+    if (filter === "observed") return ["bloqueado", "observado"].includes(customer.status);
+    return true;
+  });
+}
+
+function customerDebtByName(customerName) {
+  return receivables
+    .filter((sale) => (sale.customer_name || "Cliente sin registrar") === customerName)
+    .reduce((sum, sale) => sum + Number(sale.balance_due || 0), 0);
 }
 
 function renderCashierCollectionPanel({ totalDebt, oldestDebt, followUpList }) {
