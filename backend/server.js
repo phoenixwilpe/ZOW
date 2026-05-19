@@ -67,7 +67,7 @@ const VENTAS_ROLE_ACCESS = {
     label: "Almacen",
     shortLabel: "Almacen",
     context: "Stock",
-    views: ["inventory", "purchases", "alerts", "catalog", "summary", "help"],
+    views: ["inventory", "purchases", "alerts", "catalog", "help"],
     permissions: ["Productos e inventario", "Compras y reposicion", "Kardex y alertas"]
   },
   supervisor: {

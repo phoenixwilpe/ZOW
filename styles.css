@@ -6510,6 +6510,52 @@ body.app-ventas .simple-cashier-status button {
   white-space: nowrap;
 }
 
+body.app-ventas .warehouse-action-strip {
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) minmax(150px, 0.55fr) auto;
+  gap: 12px;
+  align-items: stretch;
+  margin: 0 0 14px;
+}
+
+body.app-ventas .warehouse-action-strip article,
+body.app-ventas .warehouse-action-strip > div {
+  display: grid;
+  align-content: center;
+  min-width: 0;
+  border: 1px solid rgb(15 118 110 / 14%);
+  border-radius: 16px;
+  padding: 14px;
+  background:
+    radial-gradient(circle at 92% 0%, rgb(16 185 129 / 12%), transparent 34%),
+    linear-gradient(135deg, rgb(255 255 255 / 94%), rgb(236 253 245 / 78%));
+}
+
+body.app-ventas .warehouse-action-strip span,
+body.app-ventas .warehouse-action-strip small {
+  color: var(--muted);
+  font-size: 0.8rem;
+  font-weight: 850;
+}
+
+body.app-ventas .warehouse-action-strip strong {
+  color: #10251f;
+  font-size: 1.2rem;
+  font-weight: 950;
+}
+
+body.app-ventas .warehouse-action-strip button {
+  min-height: 54px;
+  border-radius: 14px;
+  white-space: nowrap;
+}
+
+@media (max-width: 760px) {
+  body.app-ventas .warehouse-action-strip {
+    grid-template-columns: 1fr;
+  }
+}
+
 body.app-ventas .sales-goal-panel {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(220px, 0.45fr);

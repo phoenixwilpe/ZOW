@@ -3049,6 +3049,7 @@ function renderInventory() {
         || suggestedReorderQuantity(b) * Number(b.cost_price || 0) - suggestedReorderQuantity(a) * Number(a.cost_price || 0);
     });
   const riskProducts = uniqueProducts([...reorderProducts, ...expiringProducts, ...overstockProducts, ...marginRiskProducts]);
+  const warehouseMode = isWarehouseMode();
   setCount(`${products.length} producto${products.length === 1 ? "" : "s"}`);
   mainList().innerHTML = `
     <section class="inventory-health-grid">
@@ -3057,18 +3058,18 @@ function renderInventory() {
       <article><span>Bajo minimo</span><strong class="${lowStock ? "warn-text" : "ok-text"}">${num(lowStock)}</strong></article>
       <article><span>Por vencer</span><strong class="${expired ? "danger-text" : expiringSoon ? "warn-text" : "ok-text"}">${num(expired + expiringSoon)}</strong></article>
     </section>
-    <section class="inventory-insight-grid">
+    ${warehouseMode ? renderWarehouseActionStrip({ reorderProducts, expiringProducts, outOfStock, lowStock }) : `<section class="inventory-insight-grid">
       <article><span>Valor inventario</span><strong>${money(inventoryValue)}</strong><small>Costo total en almacen</small></article>
       <article><span>Margen potencial</span><strong>${money(potentialProfit)}</strong><small>Ganancia bruta estimada</small></article>
       <article><span>Productos clase A</span><strong>${num(highValueProducts)}</strong><small>Mayor valor inmovilizado</small></article>
       <article><span>Salud inventario</span><strong class="${outOfStock || lowStock ? "warn-text" : "ok-text"}">${outOfStock ? "Critico" : lowStock ? "Revisar" : "Estable"}</strong><small>Basado en stock minimo</small></article>
     </section>
     ${renderInventoryDecisionStrip({ reorderProducts, expiringProducts, overstockProducts, marginRiskProducts, riskProducts })}
-    ${renderInventoryRiskBoard({ expiringProducts, overstockProducts, marginRiskProducts })}
+    ${renderInventoryRiskBoard({ expiringProducts, overstockProducts, marginRiskProducts })}`}
     <section class="admin-panel inventory-reorder-panel">
       <div class="admin-panel-head">
         <div><p class="eyebrow">Reposicion inteligente</p><h3>Productos que necesitan atencion</h3></div>
-        <button class="primary-button" type="button" id="prepareSuggestedPurchaseFromInventory" ${reorderProducts.length && can("managePurchases") ? "" : "disabled"}>Preparar compra</button>
+        ${warehouseMode ? "" : `<button class="primary-button" type="button" id="prepareSuggestedPurchaseFromInventory" ${reorderProducts.length && can("managePurchases") ? "" : "disabled"}>Preparar compra</button>`}
       </div>
       <div class="inventory-reorder-grid">
         ${reorderProducts.slice(0, 6).map(renderInventoryReorderCard).join("") || empty("Sin productos bajo minimo")}
@@ -3110,6 +3111,38 @@ function renderInventory() {
     renderMain();
   });
   document.querySelector("#exportKardexCsv")?.addEventListener("click", exportSelectedKardexCsv);
+}
+
+function renderWarehouseActionStrip({ reorderProducts, expiringProducts, outOfStock, lowStock }) {
+  const primaryAction = outOfStock
+    ? "Reponer productos agotados"
+    : lowStock
+      ? "Preparar reposicion"
+      : expiringProducts.length
+        ? "Revisar vencimientos"
+        : "Inventario estable";
+  const detail = outOfStock
+    ? `${num(outOfStock)} producto${outOfStock === 1 ? "" : "s"} sin stock.`
+    : lowStock
+      ? `${num(lowStock)} producto${lowStock === 1 ? "" : "s"} bajo minimo.`
+      : expiringProducts.length
+        ? `${num(expiringProducts.length)} producto${expiringProducts.length === 1 ? "" : "s"} por vencer.`
+        : "No hay acciones urgentes de almacen.";
+  return `<section class="warehouse-action-strip">
+    <article>
+      <span>Prioridad de almacen</span>
+      <strong>${escapeHtml(primaryAction)}</strong>
+      <small>${escapeHtml(detail)}</small>
+    </article>
+    <article>
+      <span>Compra sugerida</span>
+      <strong>${num(reorderProducts.length)}</strong>
+      <small>Productos para reposicion</small>
+    </article>
+    <div>
+      <button class="primary-button" type="button" id="prepareSuggestedPurchaseFromInventory" ${reorderProducts.length && can("managePurchases") ? "" : "disabled"}>Preparar compra</button>
+    </div>
+  </section>`;
 }
 
 function renderInventoryDecisionStrip({ reorderProducts, expiringProducts, overstockProducts, marginRiskProducts, riskProducts }) {
@@ -7505,6 +7538,7 @@ function canAccessView(view) { return accessibleViewsForRole(currentUser?.role).
 function defaultViewForRole() { return accessibleViewsForRole(currentUser?.role)[0] || "summary"; }
 function canSeeProfit() { return ["admin", "ventas_admin", "supervisor"].includes(currentUser?.role); }
 function isSimpleCashierMode() { return ["cajero", "vendedor"].includes(currentUser?.role); }
+function isWarehouseMode() { return currentUser?.role === "almacen"; }
 function can(permission) {
   const role = currentUser?.role || "";
   const permissions = {
@@ -7533,7 +7567,7 @@ function accessibleViewsForRole(role) {
     ventas_admin: ["sell", "summary", "alerts", "finance", "history", "routes", "promotions", "reports", "catalog", "customers", "inventory", "purchases", "settings", "help"],
     cajero: ["sell", "finance", "history", "help"],
     vendedor: ["sell", "customers", "history", "help"],
-    almacen: ["inventory", "purchases", "alerts", "catalog", "summary", "help"],
+    almacen: ["inventory", "purchases", "alerts", "catalog", "help"],
     supervisor: ["sell", "summary", "alerts", "finance", "history", "routes", "promotions", "reports", "catalog", "customers", "inventory", "purchases", "help"],
     funcionario: ["sell", "customers", "summary", "help"]
   };
