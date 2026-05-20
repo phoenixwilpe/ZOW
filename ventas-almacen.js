@@ -2301,7 +2301,7 @@ function renderExecutiveBriefPanel({ businessHealth, confirmedSales, voidedSales
       <span>${escapeHtml(reportDecisionDetail(businessHealth.score, confirmedSales.length))}</span>
       <div class="executive-brief-actions">
         <button class="primary-button" type="button" id="copyExecutiveBrief">Copiar resumen</button>
-        <button class="ghost-button" type="button" id="printExecutiveBrief">Imprimir informe</button>
+        <button class="ghost-button" type="button" id="printExecutiveBrief">Informe comercial PDF</button>
       </div>
     </div>
     <div class="executive-brief-metrics">
@@ -2338,7 +2338,7 @@ async function copyExecutiveBrief() {
   renderMain();
 }
 
-function buildExecutiveBriefText() {
+function buildExecutiveBriefData() {
   const filteredSales = sales.filter(isSaleInsideReportFilter);
   const confirmedSales = filteredSales.filter((sale) => sale.status !== "anulada");
   const voidedSales = filteredSales.filter((sale) => sale.status === "anulada").length;
@@ -2346,47 +2346,93 @@ function buildExecutiveBriefText() {
   const expiryRisks = products.filter((product) => isProductActive(product) && ["danger", "warning"].includes(expiryStatus(product).level));
   const totalIncome = confirmedSales.reduce((sum, sale) => sum + Number(sale.amount_paid || sale.cash_received || sale.total || 0), 0);
   const totalSold = confirmedSales.reduce((sum, sale) => sum + Number(sale.total || 0), 0);
+  const averageSale = confirmedSales.length ? totalSold / confirmedSales.length : 0;
   const pendingTotal = receivables.reduce((sum, sale) => sum + Number(sale.balance_due || 0), 0);
   const paymentBreakdown = buildSalesPaymentBreakdown(confirmedSales).filter((item) => Number(item.total || 0) > 0);
+  const profitTotals = profitReport.totals || {};
+  const marginPercent = Number(profitTotals.netSales || 0) ? (Number(profitTotals.profit || 0) / Number(profitTotals.netSales || 0)) * 100 : 0;
+  const totalClosureDifference = cashClosures.reduce((sum, closure) => sum + Math.abs(Number(closure.differenceAmount || 0)), 0);
+  const businessHealth = buildBusinessHealth({ confirmedSales, stockRisks, expiryRisks, pendingTotal, marginPercent, totalClosureDifference });
   const company = storeSettings.storeName || storeSettings.companyName || currentUser.companyName || "Empresa cliente";
   const period = reportFilter.from || reportFilter.to ? `${reportFilter.from || "inicio"} a ${reportFilter.to || "hoy"}` : "periodo actual";
+  const actions = buildExecutiveBriefActions({ confirmedSales, pendingTotal, stockRisks, expiryRisks, businessHealth });
+  return {
+    company,
+    period,
+    confirmedSales,
+    voidedSales,
+    stockRisks,
+    expiryRisks,
+    totalIncome,
+    totalSold,
+    averageSale,
+    pendingTotal,
+    paymentBreakdown,
+    marginPercent,
+    totalClosureDifference,
+    businessHealth,
+    actions
+  };
+}
+
+function buildExecutiveBriefText() {
+  const report = buildExecutiveBriefData();
   const lines = [
-    `Resumen gerencial ZOW Ventas-Almacen - ${company}`,
-    `Periodo: ${period}`,
-    `Ventas validas: ${num(confirmedSales.length)} / Anuladas: ${num(voidedSales)}`,
-    `Total vendido: ${money(totalSold)}`,
-    `Total cobrado: ${money(totalIncome)}`,
-    `Cuentas por cobrar: ${money(pendingTotal)}`,
-    `Stock critico: ${num(stockRisks.length)} producto(s)`,
-    `Vencimientos: ${num(expiryRisks.length)} producto(s)`,
+    `Resumen gerencial ZOW Ventas-Almacen - ${report.company}`,
+    `Periodo: ${report.period}`,
+    `Salud del negocio: ${report.businessHealth.score}/100 - ${reportDecisionTitle(report.businessHealth.score)}`,
+    `Ventas validas: ${num(report.confirmedSales.length)} / Anuladas: ${num(report.voidedSales)}`,
+    `Total vendido: ${money(report.totalSold)}`,
+    `Total cobrado: ${money(report.totalIncome)}`,
+    `Ticket promedio: ${money(report.averageSale)}`,
+    `Cuentas por cobrar: ${money(report.pendingTotal)}`,
+    `Stock critico: ${num(report.stockRisks.length)} producto(s)`,
+    `Vencimientos: ${num(report.expiryRisks.length)} producto(s)`,
     "",
     "Cobro por metodo:"
   ];
-  if (paymentBreakdown.length) {
-    paymentBreakdown.forEach((item) => lines.push(`- ${item.label}: ${money(item.total)} (${num(item.count)} venta${item.count === 1 ? "" : "s"})`));
+  if (report.paymentBreakdown.length) {
+    report.paymentBreakdown.forEach((item) => lines.push(`- ${item.label}: ${money(item.total)} (${num(item.count)} venta${item.count === 1 ? "" : "s"})`));
   } else {
     lines.push("- Sin ventas cobradas en el periodo.");
   }
   lines.push("", "Acciones sugeridas:");
-  buildExecutiveBriefActions({
-    confirmedSales,
-    pendingTotal,
-    stockRisks,
-    expiryRisks,
-    businessHealth: buildBusinessHealth({ confirmedSales, stockRisks, expiryRisks, pendingTotal, marginPercent: 100, totalClosureDifference: 0 })
-  }).forEach((item, index) => lines.push(`${index + 1}. ${item.title}: ${item.detail}`));
+  report.actions.forEach((item, index) => lines.push(`${index + 1}. ${item.title}: ${item.detail}`));
   return lines.join("\n");
 }
 
 function printExecutiveBrief() {
-  const text = buildExecutiveBriefText();
+  const report = buildExecutiveBriefData();
+  const statusClass = report.businessHealth.score >= 80 ? "ok" : report.businessHealth.score >= 50 ? "warning" : "danger";
+  const generatedAt = formatDateTime(new Date().toISOString());
   const printable = window.open("", "_blank", "width=820,height=900");
   if (!printable) return;
-  printable.document.write(`<!doctype html><html><head><meta charset="UTF-8"><title>Resumen gerencial</title><style>
-    *{box-sizing:border-box}body{font-family:Arial,sans-serif;margin:0;padding:30px;color:#10251f;background:#fff}.toolbar{margin-bottom:16px}.toolbar button{border:0;border-radius:10px;padding:11px 18px;background:#0f172a;color:#fff;font-weight:900}
-    h1{margin:0 0 6px;font-size:25px;text-transform:uppercase}.muted{color:#64746f;font-size:12px}.box{white-space:pre-wrap;border:1px solid #d9ebe5;border-radius:16px;padding:18px;background:#f8fffc;line-height:1.55;font-size:13px}.foot{text-align:center;margin-top:18px;color:#64748b;font-size:11px}
-    @media print{.toolbar{display:none}body{padding:18px}}
-  </style></head><body><div class="toolbar"><button onclick="print()">Imprimir / Guardar PDF</button></div><h1>Resumen gerencial</h1><p class="muted">Generado: ${formatDateTime(new Date().toISOString())}</p><div class="box">${escapeHtml(text)}</div><p class="foot">SYSTEM ZOW SAAS - Ventas-Almacen</p></body></html>`);
+  printable.document.write(`<!doctype html><html lang="es"><head><meta charset="UTF-8"><title>Informe comercial ZOW</title><style>
+    *{box-sizing:border-box}body{font-family:Inter,Arial,sans-serif;margin:0;color:#10251f;background:#eef8f4;padding:22px}.sheet{max-width:980px;margin:0 auto;background:#fff;border:1px solid #d8ebe5;border-radius:24px;overflow:hidden;box-shadow:0 24px 70px rgba(12,55,43,.13)}
+    .toolbar{max-width:980px;margin:0 auto 14px;text-align:right}.toolbar button{border:0;border-radius:12px;padding:12px 18px;background:#0d5c49;color:#fff;font-weight:900;cursor:pointer}.hero{padding:26px 28px;color:#fff;background:linear-gradient(135deg,#08382f,#0fa47f 62%,#f0a400);display:grid;grid-template-columns:1fr auto;gap:18px;align-items:end}.eyebrow{margin:0 0 8px;font-size:11px;font-weight:900;letter-spacing:.12em;text-transform:uppercase;opacity:.8}.hero h1{margin:0;font-size:28px;line-height:1.05}.hero p{margin:8px 0 0;opacity:.9}.score{min-width:150px;text-align:center;background:rgba(255,255,255,.14);border:1px solid rgba(255,255,255,.22);border-radius:18px;padding:16px}.score strong{display:block;font-size:38px}.score span{font-size:12px;font-weight:800;text-transform:uppercase}.score.ok{background:rgba(12,135,89,.28)}.score.warning{background:rgba(245,158,11,.28)}.score.danger{background:rgba(220,38,38,.25)}
+    .content{padding:24px 28px}.section-title{display:flex;justify-content:space-between;gap:14px;align-items:end;border-bottom:1px solid #dbeee8;padding-bottom:10px;margin:0 0 16px}.section-title h2{font-size:16px;margin:0}.section-title span{font-size:12px;color:#64746f}.kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:22px}.kpis article,.card{border:1px solid #d9ebe5;border-radius:16px;background:#f8fffc;padding:14px}.kpis span,.card span{display:block;color:#65756f;font-size:11px;font-weight:900;text-transform:uppercase}.kpis strong{display:block;margin-top:7px;font-size:18px}.kpis small{display:block;margin-top:3px;color:#6b7c75}.two-col{display:grid;grid-template-columns:1.05fr .95fr;gap:16px}.table{width:100%;border-collapse:separate;border-spacing:0 8px}.table th{text-align:left;color:#65756f;font-size:11px;text-transform:uppercase}.table td{background:#f8fffc;border-top:1px solid #d9ebe5;border-bottom:1px solid #d9ebe5;padding:10px;font-size:13px}.table td:first-child{border-left:1px solid #d9ebe5;border-radius:12px 0 0 12px}.table td:last-child{border-right:1px solid #d9ebe5;border-radius:0 12px 12px 0;text-align:right;font-weight:900}.actions{display:grid;gap:10px}.actions article{border-left:5px solid #16a37b}.actions article.is-warning{border-left-color:#f59e0b}.actions article.is-danger{border-left-color:#dc2626}.actions article.is-ok{border-left-color:#0ea66f}.health{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:18px}.health article{border-radius:14px;padding:12px;background:#f7fbfa;border:1px solid #d9ebe5}.health article.is-warning{background:#fff7ed;border-color:#fed7aa}.foot{text-align:center;color:#64748b;font-size:11px;padding:16px 24px 22px}.muted{color:#64746f}@media(max-width:760px){body{padding:10px}.hero,.two-col{grid-template-columns:1fr}.kpis,.health{grid-template-columns:1fr 1fr}.score{text-align:left}.content{padding:18px}.hero{padding:22px}}@media print{body{background:#fff;padding:0}.toolbar{display:none}.sheet{box-shadow:none;border:0;border-radius:0}.hero{-webkit-print-color-adjust:exact;print-color-adjust:exact}.content{padding:18px}.kpis{grid-template-columns:repeat(4,1fr)}}
+  </style></head><body><div class="toolbar"><button onclick="print()">Imprimir / Guardar PDF</button></div><main class="sheet">
+    <header class="hero"><div><p class="eyebrow">Informe comercial ZOW Ventas-Almacen</p><h1>${escapeHtml(report.company)}</h1><p>Periodo: ${escapeHtml(report.period)} / Generado: ${escapeHtml(generatedAt)}</p></div><div class="score ${statusClass}"><strong>${report.businessHealth.score}</strong><span>salud del negocio</span></div></header>
+    <section class="content">
+      <div class="section-title"><div><h2>${escapeHtml(reportDecisionTitle(report.businessHealth.score))}</h2><span>${escapeHtml(reportDecisionDetail(report.businessHealth.score, report.confirmedSales.length))}</span></div><span>${escapeHtml(storeSettings.currency || "BOB")}</span></div>
+      <div class="kpis">
+        <article><span>Ventas validas</span><strong>${num(report.confirmedSales.length)}</strong><small>${num(report.voidedSales)} anulada${report.voidedSales === 1 ? "" : "s"}</small></article>
+        <article><span>Total vendido</span><strong>${money(report.totalSold)}</strong><small>Cobrado ${money(report.totalIncome)}</small></article>
+        <article><span>Ticket promedio</span><strong>${money(report.averageSale)}</strong><small>Promedio por venta</small></article>
+        <article><span>Por cobrar</span><strong>${money(report.pendingTotal)}</strong><small>Cuentas pendientes</small></article>
+        <article><span>Stock critico</span><strong>${num(report.stockRisks.length)}</strong><small>Bajo minimo</small></article>
+        <article><span>Vencimientos</span><strong>${num(report.expiryRisks.length)}</strong><small>Vencido o por vencer</small></article>
+        <article><span>Margen</span><strong>${report.marginPercent.toFixed(1)}%</strong><small>Segun ventas con costo</small></article>
+        <article><span>Diferencia caja</span><strong>${money(report.totalClosureDifference)}</strong><small>Cierres revisados</small></article>
+      </div>
+      <div class="two-col">
+        <section class="card"><div class="section-title"><h2>Cobro por metodo</h2><span>${num(report.paymentBreakdown.length)} metodo(s)</span></div><table class="table"><thead><tr><th>Metodo</th><th>Ventas</th><th>Total</th></tr></thead><tbody>${report.paymentBreakdown.length ? report.paymentBreakdown.map((item) => `<tr><td>${escapeHtml(item.label)}</td><td>${num(item.count)}</td><td>${money(item.total)}</td></tr>`).join("") : `<tr><td colspan="3">Sin ventas cobradas en el periodo.</td></tr>`}</tbody></table></section>
+        <section class="card"><div class="section-title"><h2>Acciones sugeridas</h2><span>Prioridad operativa</span></div><div class="actions">${report.actions.map((item, index) => `<article class="card ${item.className}"><span>Paso ${index + 1}</span><strong>${escapeHtml(item.title)}</strong><p class="muted">${escapeHtml(item.detail)}</p></article>`).join("")}</div></section>
+      </div>
+      <div class="health">${report.businessHealth.items.map((item) => `<article class="${item.className}"><span>${escapeHtml(item.label)}</span><strong>${escapeHtml(item.ok ? "Controlado" : "Revisar")}</strong><p class="muted">${escapeHtml(item.detail)}</p></article>`).join("")}</div>
+    </section>
+    <p class="foot">SYSTEM ZOW SAAS - Informe generado por ZOW Ventas-Almacen</p>
+  </main></body></html>`);
   printable.document.close();
   printable.focus();
 }
