@@ -6123,6 +6123,7 @@ function renderVentasUsersPanel() {
         <span>${operativeUsers.length} usuario${operativeUsers.length === 1 ? "" : "s"}</span>
       </div>
       ${ventasMessage ? `<div class="cloud-safe-note"><strong>${escapeHtml(ventasMessage)}</strong><span>Si algo no se guarda, revisa que la contrasena tenga mayuscula, minuscula, numero y 10 caracteres como minimo.</span></div>` : ""}
+      ${renderRoleAssignmentAdvisor(operativeUsers)}
       <div class="role-template-grid" aria-label="Plantillas de roles">
         <button type="button" data-role-template="integral"><span>1 o 2 personas</span><strong>Operador integral</strong><small>Venta, caja, inventario, rutas y reportes.</small></button>
         <button type="button" data-role-template="cashier"><span>Mostrador</span><strong>Cajero vendedor</strong><small>Venta, clientes, caja y rutas basicas.</small></button>
@@ -6190,6 +6191,91 @@ function bindVentasUsersPanel() {
   document.querySelectorAll("[data-role-template]").forEach((button) => {
     button.addEventListener("click", () => applyRoleTemplate(button.dataset.roleTemplate));
   });
+}
+
+function renderRoleAssignmentAdvisor(operativeUsers) {
+  const advice = buildRoleAssignmentAdvice(operativeUsers);
+  return `<section class="role-advisor-panel ${advice.className}">
+    <div class="role-advisor-main">
+      <p class="eyebrow">Modelo recomendado</p>
+      <h3>${escapeHtml(advice.title)}</h3>
+      <span>${escapeHtml(advice.detail)}</span>
+      <div class="role-advisor-metrics">
+        ${advice.metrics.map((metric) => `<article><span>${escapeHtml(metric.label)}</span><strong>${escapeHtml(metric.value)}</strong><small>${escapeHtml(metric.detail)}</small></article>`).join("")}
+      </div>
+    </div>
+    <div class="role-advisor-actions">
+      ${advice.template ? `<button class="primary-button" type="button" data-role-template="${advice.template}">${escapeHtml(advice.buttonLabel)}</button>` : ""}
+      <button class="ghost-button" type="button" data-module-view="settings">Ajustar cajas</button>
+      <button class="ghost-button" type="button" data-module-view="help">Ver guia</button>
+    </div>
+  </section>`;
+}
+
+function buildRoleAssignmentAdvice(operativeUsers) {
+  const activeUsers = operativeUsers.filter((user) => user.active);
+  const cashBoxes = Number(storeSettings.cashRegisterCount || 1);
+  const activeCashiers = activeUsers.filter((user) => ["cajero", "ventas_admin"].includes(user.role));
+  const hasWarehouse = activeUsers.some((user) => ["almacen", "ventas_admin"].includes(user.role));
+  const hasSupervisor = activeUsers.some((user) => ["supervisor", "ventas_admin"].includes(user.role));
+  const activeProducts = products.filter(isProductActive).length;
+  const compactStore = cashBoxes <= 1 && activeUsers.length <= 2;
+  const needsCashiers = cashBoxes > activeCashiers.length;
+  const needsWarehouse = activeProducts >= 40 && !hasWarehouse;
+  const needsSupervisor = activeUsers.length >= 4 && !hasSupervisor;
+  const metrics = [
+    { label: "Cajas", value: num(cashBoxes), detail: `${num(activeCashiers.length)} usuario${activeCashiers.length === 1 ? "" : "s"} puede${activeCashiers.length === 1 ? "" : "n"} cobrar` },
+    { label: "Usuarios", value: num(activeUsers.length), detail: "Credenciales activas" },
+    { label: "Productos", value: num(activeProducts), detail: hasWarehouse ? "Con responsable de stock" : "Sin rol exclusivo de almacen" }
+  ];
+  if (compactStore) {
+    return {
+      className: "is-compact",
+      title: "Tienda compacta: operador integral",
+      detail: "Para una empresa atendida por 1 o 2 personas, usa operador integral y una caja fija. Es simple, rapido y mantiene todo operable sin exceso de roles.",
+      template: "integral",
+      buttonLabel: "Usar operador integral",
+      metrics
+    };
+  }
+  if (needsCashiers) {
+    return {
+      className: "is-warning",
+      title: "Faltan cajeros para las cajas configuradas",
+      detail: "Cada punto de cobro deberia tener un cajero responsable o un operador integral con caja fija para mejorar cierres y auditoria.",
+      template: "cashier",
+      buttonLabel: "Preparar cajero",
+      metrics
+    };
+  }
+  if (needsWarehouse) {
+    return {
+      className: "is-warning",
+      title: "Conviene separar almacen",
+      detail: "Ya hay un catalogo amplio. Asigna un responsable de almacen para compras, stock minimo, Kardex y recepcion de mercaderia.",
+      template: "warehouse",
+      buttonLabel: "Preparar almacen",
+      metrics
+    };
+  }
+  if (needsSupervisor) {
+    return {
+      className: "is-control",
+      title: "Operacion con supervision",
+      detail: "Por la cantidad de usuarios, conviene tener un supervisor para reportes, anulaciones, cierres y control de permisos.",
+      template: null,
+      buttonLabel: "",
+      metrics
+    };
+  }
+  return {
+    className: "is-ok",
+    title: "Roles equilibrados",
+    detail: "La estructura actual es suficiente para operar. Mantiene ventas, caja, inventario y control sin cargar el sistema con roles innecesarios.",
+    template: null,
+    buttonLabel: "",
+    metrics
+  };
 }
 
 function renderVentasUserRow(user) {
