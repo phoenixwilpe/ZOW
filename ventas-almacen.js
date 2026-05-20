@@ -4306,10 +4306,12 @@ function renderHelp() {
         <button class="ghost-button" type="button" id="printCommercialSummaryBtn">Resumen comercial</button>
         <button class="ghost-button" type="button" id="printClosureRoadmapBtn">Ruta de cierre</button>
         <button class="ghost-button" type="button" id="printDemoGuideBtn">Guia demo</button>
+        <button class="ghost-button" type="button" id="printDemoDataKitBtn">Kit demo</button>
       </div>
     </section>
     ${renderCommercialReadinessPanel(certification, automated)}
     ${renderCommercialClosureRoadmapPanel()}
+    ${renderDemoDataKitPanel()}
     ${renderDemoSalesGuidePanel()}
     <section class="help-guide-grid">
       ${guides.map((guide) => `<article>
@@ -4391,12 +4393,124 @@ function renderHelp() {
   document.querySelector("#printClosureRoadmapInlineBtn")?.addEventListener("click", printCommercialClosureRoadmap);
   document.querySelector("#printDemoGuideBtn")?.addEventListener("click", printDemoSalesGuide);
   document.querySelector("#printDemoGuideInlineBtn")?.addEventListener("click", printDemoSalesGuide);
+  document.querySelector("#printDemoDataKitBtn")?.addEventListener("click", printDemoDataKit);
+  document.querySelector("#printDemoDataKitInlineBtn")?.addEventListener("click", printDemoDataKit);
+  document.querySelector("#downloadDemoProductsBtn")?.addEventListener("click", downloadDemoProductsCsv);
+  document.querySelector("#downloadDemoCustomersBtn")?.addEventListener("click", downloadDemoCustomersCsv);
+  document.querySelector("#loadStarterProductsFromHelp")?.addEventListener("click", loadStarterProducts);
   document.querySelectorAll("[data-help-role]").forEach((button) => {
     button.addEventListener("click", () => {
       helpRolePreview = button.dataset.helpRole;
       renderHelp();
     });
   });
+}
+
+function renderDemoDataKitPanel() {
+  const activeProducts = products.filter(isProductActive);
+  const confirmedSales = sales.filter((sale) => sale.status !== "anulada");
+  const demoScoreItems = [
+    { label: "Productos", value: `${num(activeProducts.length)}/12`, done: activeProducts.length >= 12, detail: "Catalogo suficiente para mostrar busqueda, categorias y stock." },
+    { label: "Clientes", value: `${num(customers.length)}/3`, done: customers.length >= 3, detail: "Permite demostrar venta a credito, cobranza y seguimiento." },
+    { label: "Ventas", value: `${num(confirmedSales.length)}/3`, done: confirmedSales.length >= 3, detail: "Genera reportes, ticket promedio y ventas por metodo." },
+    { label: "Compras", value: `${num(purchases.length)}/1`, done: purchases.length >= 1, detail: "Muestra reposicion, proveedor, recepcion y Kardex." }
+  ];
+  const readyCount = demoScoreItems.filter((item) => item.done).length;
+  return `<section class="demo-data-kit-panel ${readyCount >= demoScoreItems.length ? "is-ready" : "is-pending"}">
+    <div class="demo-data-kit-head">
+      <div>
+        <p class="eyebrow">Empresa demo</p>
+        <h3>${readyCount >= demoScoreItems.length ? "Datos listos para presentar" : "Prepara una demo profesional"}</h3>
+        <span>Usa datos de ejemplo separados de clientes reales para mostrar venta, caja, inventario, compras, clientes y reportes.</span>
+      </div>
+      <strong>${readyCount}/${demoScoreItems.length}</strong>
+    </div>
+    <div class="demo-data-kit-metrics">
+      ${demoScoreItems.map((item) => `<article class="${item.done ? "done" : "pending"}">
+        <span>${escapeHtml(item.label)}</span>
+        <strong>${escapeHtml(item.value)}</strong>
+        <small>${escapeHtml(item.detail)}</small>
+      </article>`).join("")}
+    </div>
+    <div class="demo-data-kit-actions">
+      ${can("manageInventory") ? `<button class="primary-button" type="button" id="loadStarterProductsFromHelp">Cargar productos demo</button>` : ""}
+      <button class="ghost-button" type="button" id="downloadDemoProductsBtn">CSV productos demo</button>
+      <button class="ghost-button" type="button" id="downloadDemoCustomersBtn">CSV clientes demo</button>
+      <button class="ghost-button" type="button" id="printDemoDataKitInlineBtn">Imprimir kit demo</button>
+    </div>
+  </section>`;
+}
+
+function demoProductRows() {
+  return starterProducts.map((product) => ({
+    codigo: product.code,
+    codigo_barras: product.barcode || "",
+    nombre: product.name,
+    categoria: product.category,
+    unidad: product.unit,
+    costo: Number(product.costPrice || 0).toFixed(2),
+    precio: Number(product.salePrice || 0).toFixed(2),
+    stock_minimo: Number(product.minStock || 0),
+    stock_inicial: Number(product.stock || 0),
+    lote: "",
+    vencimiento: ""
+  }));
+}
+
+function demoCustomerRows() {
+  return [
+    { cliente: "Cliente Mostrador", ci_nit: "0000001", celular: "70000001", email: "mostrador@demo.com", direccion: "Venta rapida", limite_credito: "0.00", uso_demo: "Venta contado y ticket simple" },
+    { cliente: "Minimarket Central", ci_nit: "10203040", celular: "70000002", email: "compras@minimarket-demo.com", direccion: "Av. Principal 123", limite_credito: "500.00", uso_demo: "Venta a credito y cobranza" },
+    { cliente: "Distribuidora Norte", ci_nit: "20304050", celular: "70000003", email: "admin@distnorte-demo.com", direccion: "Zona Norte", limite_credito: "1000.00", uso_demo: "Pago parcial y seguimiento" },
+    { cliente: "Restaurante El Punto", ci_nit: "30405060", celular: "70000004", email: "restaurante@demo.com", direccion: "Calle Comercio 45", limite_credito: "350.00", uso_demo: "Cliente frecuente" }
+  ];
+}
+
+function demoDataKitSteps() {
+  return [
+    "Crear una empresa demo desde el panel ZOW y asignarle acceso a ZOW Ventas-Almacen.",
+    "Ingresar con el encargado de sistema de esa empresa demo.",
+    "Completar nombre de tienda, moneda, NIT, direccion, cantidad de cajas y nota de comprobante.",
+    "Crear usuarios demo: encargado, cajero, almacen y supervisor.",
+    "Cargar productos demo desde el boton del sistema o importar el CSV de productos.",
+    "Registrar clientes demo manualmente usando el CSV de referencia.",
+    "Abrir caja, realizar una venta en efectivo, una con QR/tarjeta y una a credito.",
+    "Anular una venta para demostrar devolucion de stock y auditoria.",
+    "Registrar una compra pendiente y luego recibirla para demostrar Kardex.",
+    "Cerrar caja e imprimir reporte comercial, ruta de cierre y resumen gerencial."
+  ];
+}
+
+function downloadDemoProductsCsv() {
+  downloadCsv(`productos-demo-zow-${csvDateStamp()}.csv`, demoProductRows());
+}
+
+function downloadDemoCustomersCsv() {
+  downloadCsv(`clientes-demo-zow-${csvDateStamp()}.csv`, demoCustomerRows());
+}
+
+function printDemoDataKit() {
+  const printable = window.open("", "_blank", "width=900,height=920");
+  if (!printable) return;
+  const title = storeSettings.storeName || storeSettings.companyName || currentUser.companyName || "Empresa demo";
+  const productsList = demoProductRows().slice(0, 12);
+  const customersList = demoCustomerRows();
+  printable.document.write(`<!doctype html><html><head><meta charset="UTF-8"><title>Kit demo ${escapeHtml(title)}</title><style>
+    *{box-sizing:border-box}body{font-family:Arial,sans-serif;margin:0;padding:28px;color:#10251f;background:#fff}.toolbar{margin-bottom:16px}.toolbar button{border:0;border-radius:10px;padding:11px 18px;background:#0f172a;color:#fff;font-weight:900}
+    .head{display:flex;justify-content:space-between;gap:22px;border-bottom:3px solid #0f766e;padding-bottom:16px;margin-bottom:18px}h1{margin:0;font-size:25px;text-transform:uppercase}h2{margin:18px 0 8px;color:#0f766e;font-size:16px}.muted{color:#5b6f69;font-size:12px;line-height:1.45}
+    .grid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}.card{break-inside:avoid;border:1px solid #d9ebe5;border-radius:14px;padding:12px;background:#f8fffc}.card strong{display:block;color:#0f3d34}.card span{display:block;margin-top:5px;color:#53645f;font-size:12px;line-height:1.4}
+    ol{margin:8px 0 0;padding-left:22px}li{margin:6px 0;line-height:1.38}.box{border:1px dashed #94a3b8;border-radius:12px;padding:12px;margin:14px 0}.foot{margin-top:20px;text-align:center;color:#64748b;font-size:11px}@media print{.toolbar{display:none}body{padding:18px}.card{break-inside:avoid}}
+  </style></head><body>
+    <div class="toolbar"><button onclick="print()">Imprimir / Guardar PDF</button></div>
+    <div class="head"><div><h1>Kit demo profesional</h1><p class="muted">${escapeHtml(title)}<br>ZOW Ventas-Almacen<br>Generado: ${formatDateTime(new Date().toISOString())}</p></div><strong>Demo segura</strong></div>
+    <div class="box"><strong>Regla importante</strong><p class="muted">Usa este kit en una empresa demo o en modo entrenamiento. No mezcles clientes ni ventas reales con datos de demostracion.</p></div>
+    <h2>Pasos recomendados</h2><ol>${demoDataKitSteps().map((step) => `<li>${escapeHtml(step)}</li>`).join("")}</ol>
+    <h2>Productos sugeridos</h2><div class="grid">${productsList.map((item) => `<article class="card"><strong>${escapeHtml(item.nombre)}</strong><span>${escapeHtml(item.codigo)} / ${escapeHtml(item.categoria)} / Stock ${escapeHtml(item.stock_inicial)} / Precio ${escapeHtml(item.precio)}</span></article>`).join("")}</div>
+    <h2>Clientes sugeridos</h2><div class="grid">${customersList.map((item) => `<article class="card"><strong>${escapeHtml(item.cliente)}</strong><span>${escapeHtml(item.celular)} / Limite ${escapeHtml(item.limite_credito)} / ${escapeHtml(item.uso_demo)}</span></article>`).join("")}</div>
+    <p class="foot">SYSTEM ZOW SAAS - Kit demo ZOW Ventas-Almacen</p>
+  </body></html>`);
+  printable.document.close();
+  printable.focus();
 }
 
 function renderCommercialClosureRoadmapPanel() {
@@ -8122,6 +8236,7 @@ async function toggleProductStatus(productId) {
 }
 
 async function loadStarterProducts() {
+  if (!confirm("Cargar productos demo en esta empresa? Usa esta opcion solo para una empresa de prueba o una demo controlada.")) return;
   ventasMessage = "";
   let created = 0;
   let skipped = 0;
