@@ -4504,10 +4504,10 @@ function demoSalesGuideSteps() {
     { title: "1. Presenta el problema", view: "summary", detail: "Muestra el resumen: ventas, caja, alertas y estado general para explicar el control diario." },
     { title: "2. Activa entrenamiento", view: "help", detail: "Activa modo entrenamiento para simular ventas sin tocar datos reales de la empresa." },
     { title: "3. Demuestra el POS", view: "sell", detail: "Busca productos, agrega al carrito, cambia cantidades, cobra e imprime un ticket de entrenamiento." },
-    { title: "4. Enseña caja", view: "finance", detail: "Explica apertura, ingresos, egresos, esperado, contado, diferencia y cierre de turno." },
-    { title: "5. Recorre inventario", view: "inventory", detail: "Muestra stock, mínimos, Kardex, ajustes, etiquetas y productos que requieren reposicion." },
-    { title: "6. Muestra compras", view: "purchases", detail: "Enseña proveedor, compra sugerida, orden, recepción y actualización de stock." },
-    { title: "7. Explica clientes", view: "customers", detail: "Muestra crédito, saldos pendientes, pagos parciales y mensaje de cobranza." },
+    { title: "4. Ensena caja", view: "finance", detail: "Explica apertura, ingresos, egresos, esperado, contado, diferencia y cierre de turno." },
+    { title: "5. Recorre inventario", view: "inventory", detail: "Muestra stock, minimos, Kardex, ajustes, etiquetas y productos que requieren reposicion." },
+    { title: "6. Muestra compras", view: "purchases", detail: "Ensena proveedor, compra sugerida, orden, recepcion y actualizacion de stock." },
+    { title: "7. Explica clientes", view: "customers", detail: "Muestra credito, saldos pendientes, pagos parciales y mensaje de cobranza." },
     { title: "8. Cierra con reportes", view: "reports", detail: "Presenta utilidad, clientes principales, auditoria, seguridad y exportaciones CSV." }
   ];
 }
@@ -4617,7 +4617,7 @@ function printSalesCommercialSummary() {
     "Permite trabajar con cajeros, almacen y supervisores con permisos separados.",
     "Entrega reportes para tomar decisiones sin depender de hojas sueltas.",
     "Mantiene historial y auditoria para revisar operaciones sensibles.",
-    "Se adapta a tiendas pequeñas con 1 o 2 personas y a equipos mas grandes."
+    "Se adapta a tiendas pequenas con 1 o 2 personas y a equipos mas grandes."
   ];
   printable.document.write(`<!doctype html><html><head><meta charset="UTF-8"><title>Resumen comercial ${escapeHtml(title)}</title><style>
     *{box-sizing:border-box}body{font-family:Arial,sans-serif;margin:0;padding:28px;color:#10251f;background:#fff}
@@ -4641,8 +4641,8 @@ function printSalesCommercialSummary() {
     <h2>Modulos incluidos</h2><div class="grid">${modules.map(([name, detail]) => `<article class="module"><strong>${escapeHtml(name)}</strong><span>${escapeHtml(detail)}</span></article>`).join("")}</div>
     <h2>Beneficios para la empresa</h2><div class="list"><ul>${benefits.map((benefit) => `<li>${escapeHtml(benefit)}</li>`).join("")}</ul></div>
     <h2>Checklist de entrega</h2><div class="checks">${launchChecks.map((item) => `<article class="check ${item.done ? "" : "pending"}"><b>${item.done ? "OK" : "!"}</b><span>${escapeHtml(item.label)} - ${escapeHtml(item.detail)}</span></article>`).join("")}</div>
-    <div class="box"><strong>Propuesta de uso</strong><p class="muted">El sistema esta preparado para empresas con un punto de atencion, con control de venta, caja, inventario, compras, clientes, cobranza, reportes y auditoria. Puede operar con pocos usuarios o con roles separados segun el tamaño del negocio.</p></div>
-    <p class="foot">SYSTEM ZOW SAAS - Wilmar Peinado B. - ZOW Ventas-Almacen</p>
+    <div class="box"><strong>Propuesta de uso</strong><p class="muted">El sistema esta preparado para empresas con un punto de atencion, con control de venta, caja, inventario, compras, clientes, cobranza, reportes y auditoria. Puede operar con pocos usuarios o con roles separados segun el tamano del negocio.</p></div>
+    <p class="foot">SYSTEM ZOW SAAS - ZOW Ventas-Almacen</p>
   </body></html>`);
   printable.document.close();
   printable.focus();
@@ -4876,7 +4876,7 @@ function renderSetupAssistant() {
       </article>`).join("")}
     </div>
     ${renderSetupStageTimeline(checks)}
-    <p class="setup-hint">Recomendacion: completa estos puntos antes de entregar el acceso a cajeros o almacen. Para tiendas pequeñas, un operador integral puede cubrir venta, caja e inventario.</p>
+    <p class="setup-hint">Recomendacion: completa estos puntos antes de entregar el acceso a cajeros o almacen. Para tiendas pequenas, un operador integral puede cubrir venta, caja e inventario.</p>
   </section>`;
 }
 
@@ -4913,7 +4913,7 @@ function buildSetupAssistantSteps() {
   const hasOperationTest = cashSession?.status === "abierta" || cashClosures.length > 0 || sales.length > 0;
   return [
     { label: "Datos de empresa", done: hasCompanyData, detail: hasCompanyData ? "Nombre y moneda listos para operar." : "Completa nombre legal/comercial y moneda.", owner: "Encargado", estimate: "5 min", view: "settings" },
-    { label: "Comprobante", done: hasPrintData, detail: hasPrintData ? "Datos fiscales y direccion listos para imprimir." : "Añade NIT/CI, direccion y nota de ticket.", owner: "Encargado", estimate: "8 min", view: "settings" },
+    { label: "Comprobante", done: hasPrintData, detail: hasPrintData ? "Datos fiscales y direccion listos para imprimir." : "Anade NIT/CI, direccion y nota de ticket.", owner: "Encargado", estimate: "8 min", view: "settings" },
     { label: "Cajas y reglas", done: hasCashRegisters, detail: hasCashRegisters ? `${num(storeSettings.cashRegisterCount || 1)} caja(s) configurada(s).` : "Define cuantas cajas usara la tienda.", owner: "Encargado", estimate: "5 min", view: "settings" },
     { label: "Usuarios operativos", done: hasUsers, detail: hasUsers ? "Ya existen roles comerciales activos." : "Crea cajero, almacen, supervisor o operador integral.", owner: "Encargado", estimate: "10 min", view: "users" },
     { label: "Inventario inicial", done: hasProducts, detail: hasProducts ? `${num(products.filter(isProductActive).length)} producto(s) activo(s).` : "Carga productos o importa inventario inicial.", owner: "Almacen", estimate: "20-60 min", view: "inventory" },
@@ -5772,7 +5772,7 @@ function renderAccessSecurityPanel(operativeUsers) {
     </div>
     <div class="access-security-tips">
       <strong>Buenas practicas</strong>
-      <span>Entrega credenciales personales, desactiva usuarios que ya no trabajan y usa operador integral solo en tiendas pequeñas o responsables de confianza.</span>
+      <span>Entrega credenciales personales, desactiva usuarios que ya no trabajan y usa operador integral solo en tiendas pequenas o responsables de confianza.</span>
     </div>
   </section>`;
 }
