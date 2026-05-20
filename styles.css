@@ -16123,6 +16123,81 @@ body.app-ventas .purchase-history-actions {
   gap: 8px;
 }
 
+body.app-ventas .purchase-filter-bar {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(170px, 0.24fr) auto;
+  gap: 10px;
+  align-items: stretch;
+  margin: 0 0 12px;
+}
+
+body.app-ventas .purchase-filter-actions {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+body.app-ventas .purchase-filter-actions button,
+body.app-ventas .purchase-filter-bar label {
+  min-width: 0;
+  border: 1px solid rgb(15 118 110 / 12%);
+  border-radius: 15px;
+  padding: 10px;
+  background:
+    radial-gradient(circle at 88% 12%, rgb(16 185 129 / 10%), transparent 32%),
+    rgb(255 255 255 / 86%);
+  color: var(--muted);
+  text-align: left;
+  box-shadow: 0 10px 24px rgb(8 30 26 / 5%);
+}
+
+body.app-ventas .purchase-filter-actions button {
+  display: grid;
+  gap: 3px;
+  min-height: 74px;
+}
+
+body.app-ventas .purchase-filter-actions button.is-active {
+  border-color: rgb(15 118 110 / 32%);
+  background:
+    radial-gradient(circle at 88% 12%, rgb(245 158 11 / 16%), transparent 34%),
+    linear-gradient(145deg, #0f766e, #10b981);
+  color: white;
+  box-shadow: 0 16px 36px rgb(15 118 110 / 18%);
+}
+
+body.app-ventas .purchase-filter-actions span,
+body.app-ventas .purchase-filter-actions small,
+body.app-ventas .purchase-filter-bar label {
+  font-size: 0.74rem;
+  font-weight: 900;
+  line-height: 1.25;
+}
+
+body.app-ventas .purchase-filter-actions strong {
+  color: var(--accent-dark);
+  font-size: 1.18rem;
+  line-height: 1;
+}
+
+body.app-ventas .purchase-filter-actions button.is-active strong {
+  color: white;
+}
+
+body.app-ventas .purchase-filter-bar select {
+  width: 100%;
+  margin-top: 6px;
+  border: 1px solid rgb(15 118 110 / 14%);
+  border-radius: 10px;
+  padding: 8px;
+  background: white;
+}
+
+body.app-ventas .purchase-filter-bar > .ghost-button {
+  min-width: 120px;
+  min-height: 74px;
+}
+
 body.app-ventas .supplier-row a.ghost-button {
   text-decoration: none;
 }
@@ -16488,6 +16563,8 @@ body.app-ventas .cloud-safe-note {
   body.app-ventas .purchase-review-grid,
   body.app-ventas .purchase-review-list,
   body.app-ventas .purchase-workflow-strip,
+  body.app-ventas .purchase-filter-bar,
+  body.app-ventas .purchase-filter-actions,
   body.app-ventas .purchase-line-row,
   body.app-ventas .purchase-history-row {
     grid-template-columns: 1fr;

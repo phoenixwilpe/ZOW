@@ -48,6 +48,7 @@ let productSearch = "";
 let productCategoryFilter = "";
 let inventoryFilter = "all";
 let customerPortfolioFilter = "all";
+let purchaseHistoryFilter = { status: "all", supplier: "" };
 let productSearchTimer = 0;
 let ventasMessage = "";
 let posFeedbackMessage = "";
@@ -3430,6 +3431,9 @@ function renderPurchases() {
   const pendingPurchases = purchases.filter((purchase) => (purchase.status || "confirmada") === "pendiente");
   const confirmedPurchases = purchases.filter((purchase) => ["confirmada", "recibida"].includes(purchase.status || "confirmada"));
   const canManagePurchaseFlow = can("managePurchases");
+  const purchaseHistoryFilters = buildPurchaseHistoryFilters();
+  if (!purchaseHistoryFilters.some((item) => item.key === purchaseHistoryFilter.status)) purchaseHistoryFilter.status = "all";
+  const filteredPurchases = filterPurchasesForHistory(purchases);
   const profile = purchaseRoleProfile({ purchaseTotal, pendingPurchases, confirmedPurchases, reorderAlerts, reorderValue, highPriority });
   setCount(`${purchases.length} compra${purchases.length === 1 ? "" : "s"}`);
   mainList().innerHTML = `
@@ -3510,7 +3514,8 @@ function renderPurchases() {
     </section>` : ""}
     <section class="admin-panel purchase-history-panel">
       <div class="admin-panel-head"><div><p class="eyebrow">Historial</p><h3>Compras recientes</h3></div><span>${money(purchases.reduce((sum, purchase) => sum + Number(purchase.total || 0), 0))}</span></div>
-      <div class="purchase-history-list">${purchases.slice(0, 12).map(renderPurchaseRow).join("") || empty("Sin compras registradas", "Cada compra recibida actualizara stock, costo y kardex del producto.")}</div>
+      ${renderPurchaseHistoryFilterBar(purchaseHistoryFilters)}
+      <div class="purchase-history-list">${filteredPurchases.slice(0, 12).map(renderPurchaseRow).join("") || empty("Sin compras en esta vista", "Cambia el filtro para revisar pendientes, recibidas, canceladas o proveedor.")}</div>
     </section>
     <section class="admin-panel">
       <div class="admin-panel-head"><div><p class="eyebrow">Proveedores</p><h3>Directorio</h3></div></div>
@@ -3539,6 +3544,7 @@ function renderPurchases() {
   document.querySelectorAll("[data-cancel-purchase]").forEach((button) => {
     button.addEventListener("click", () => cancelPurchaseOrder(button.dataset.cancelPurchase));
   });
+  bindPurchaseHistoryFilterBar();
   document.querySelector("#purchaseProduct")?.addEventListener("change", updatePurchaseCostFromProduct);
   updatePurchaseCostFromProduct();
 }
@@ -3599,6 +3605,62 @@ function renderPurchaseReviewOnlyPanel({ pendingPurchases, confirmedPurchases, r
       ${latestPending.length ? latestPending.map((purchase) => `<article><strong>${escapeHtml(purchase.code)}</strong><span>${escapeHtml(purchase.supplier_name || "Proveedor sin registrar")} / ${money(purchase.total)} / ${formatDateTime(purchase.created_at)}</span></article>`).join("") : `<article><strong>Sin recepciones pendientes</strong><span>No hay ordenes abiertas para revisar.</span></article>`}
     </div>
   </section>`;
+}
+
+function buildPurchaseHistoryFilters() {
+  const countByStatus = (status) => purchases.filter((purchase) => (purchase.status || "confirmada") === status).length;
+  return [
+    { key: "all", label: "Todo", count: purchases.length, detail: "Historial completo" },
+    { key: "pendiente", label: "Pendientes", count: countByStatus("pendiente"), detail: "Por recibir" },
+    { key: "recibida", label: "Recibidas", count: purchases.filter((purchase) => ["confirmada", "recibida"].includes(purchase.status || "confirmada")).length, detail: "Stock sumado" },
+    { key: "cancelada", label: "Canceladas", count: countByStatus("cancelada"), detail: "Sin afectar stock" }
+  ];
+}
+
+function renderPurchaseHistoryFilterBar(filters) {
+  const supplierOptions = [...new Set(purchases.map((purchase) => purchase.supplier_name || "Proveedor sin registrar"))]
+    .sort((a, b) => a.localeCompare(b, "es"));
+  return `<section class="purchase-filter-bar" aria-label="Filtros de compras">
+    <div class="purchase-filter-actions">
+      ${filters.map((filter) => `<button class="${purchaseHistoryFilter.status === filter.key ? "is-active" : ""}" type="button" data-purchase-filter="${filter.key}">
+        <span>${escapeHtml(filter.label)}</span>
+        <strong>${num(filter.count)}</strong>
+        <small>${escapeHtml(filter.detail)}</small>
+      </button>`).join("")}
+    </div>
+    <label>Proveedor<select id="purchaseSupplierFilter">
+      <option value="">Todos</option>
+      ${supplierOptions.map((supplier) => `<option value="${escapeHtml(supplier)}" ${purchaseHistoryFilter.supplier === supplier ? "selected" : ""}>${escapeHtml(supplier)}</option>`).join("")}
+    </select></label>
+    <button class="ghost-button" type="button" id="clearPurchaseFilter" ${purchaseHistoryFilter.status !== "all" || purchaseHistoryFilter.supplier ? "" : "disabled"}>Limpiar</button>
+  </section>`;
+}
+
+function bindPurchaseHistoryFilterBar() {
+  document.querySelectorAll("[data-purchase-filter]").forEach((button) => {
+    button.addEventListener("click", () => {
+      purchaseHistoryFilter.status = button.dataset.purchaseFilter || "all";
+      renderMain();
+    });
+  });
+  document.querySelector("#purchaseSupplierFilter")?.addEventListener("change", (event) => {
+    purchaseHistoryFilter.supplier = event.target.value;
+    renderMain();
+  });
+  document.querySelector("#clearPurchaseFilter")?.addEventListener("click", () => {
+    purchaseHistoryFilter = { status: "all", supplier: "" };
+    renderMain();
+  });
+}
+
+function filterPurchasesForHistory(source) {
+  return source.filter((purchase) => {
+    const status = purchase.status || "confirmada";
+    const statusMatch = purchaseHistoryFilter.status === "all"
+      || (purchaseHistoryFilter.status === "recibida" ? ["confirmada", "recibida"].includes(status) : status === purchaseHistoryFilter.status);
+    const supplierMatch = !purchaseHistoryFilter.supplier || (purchase.supplier_name || "Proveedor sin registrar") === purchaseHistoryFilter.supplier;
+    return statusMatch && supplierMatch;
+  });
 }
 
 function buildDebtAging(sourceReceivables) {
