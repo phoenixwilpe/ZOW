@@ -640,6 +640,7 @@ function renderSummary() {
     ${currentUser?.role === "supervisor" ? renderSupervisorControlPanel({ todaySales, criticalProducts, debtTotal, cashOpen }) : ""}
     ${renderTrainingBanner()}
     ${renderSalesMembershipNotice()}
+    ${renderAdminSystemOverview({ criticalProducts, cashOpen })}
     ${renderCommercialAlertsPanel()}
     <section class="setup-overview">
       <article><span>Clientes</span><strong>${customers.length}</strong></article>
@@ -673,6 +674,118 @@ function renderSummary() {
       renderMain();
     });
   });
+}
+
+function renderAdminSystemOverview({ criticalProducts, cashOpen }) {
+  if (!["admin", "ventas_admin"].includes(currentUser?.role || "")) return "";
+  const activeUsers = users.filter((user) => user.active !== false);
+  const operativeUsers = activeUsers.filter((user) => ["ventas_admin", "cajero", "almacen", "vendedor", "supervisor"].includes(user.role));
+  const roleCounts = ["ventas_admin", "cajero", "almacen", "supervisor", "vendedor"].map((role) => ({
+    role,
+    label: roleLabel(role),
+    count: operativeUsers.filter((user) => user.role === role).length
+  }));
+  const launchChecks = buildStoreLaunchChecks();
+  const pendingChecks = launchChecks.filter((item) => !item.done);
+  const readyPercent = Math.round(((launchChecks.length - pendingChecks.length) / launchChecks.length) * 100);
+  const security = buildAccessSecurityChecks(operativeUsers);
+  const securityRisks = security.checks.filter((item) => ["danger", "warning"].includes(item.level));
+  const membership = salesMembershipStatus();
+  const cashBoxes = Number(storeSettings.cashRegisterCount || 1);
+  const assignedCashiers = operativeUsers.filter((user) => ["cajero", "ventas_admin"].includes(user.role) && Number(user.cashRegisterNumber || 0)).length;
+  const productCount = products.filter(isProductActive).length;
+  const companyName = storeSettings.storeName || storeSettings.companyName || currentUser.companyName || "Empresa sin nombre";
+  const companyLegal = storeSettings.companyName || currentUser.companyName || "Datos legales pendientes";
+  const membershipStateLabel = membership.state === "none" ? "Sin fecha" : membership.label;
+  const planClass = membership.state === "expired" ? "is-danger" : ["today", "warning"].includes(membership.state) ? "is-warning" : "is-ok";
+  const setupClass = readyPercent >= 85 ? "is-ok" : readyPercent >= 55 ? "is-warning" : "is-danger";
+  const securityClass = securityRisks.some((item) => item.level === "danger") ? "is-danger" : securityRisks.length ? "is-warning" : "is-ok";
+  const cards = [
+    {
+      icon: "T",
+      label: "Empresa",
+      value: companyName,
+      detail: `${companyLegal} / ${storeSettings.currency || "BOB"}`,
+      view: "settings",
+      className: setupClass
+    },
+    {
+      icon: "P",
+      label: "Plan",
+      value: salesPlanLabel(currentUser.companyPlan || currentUser.company_plan),
+      detail: `${salesBillingPeriodLabel(currentUser.billingPeriod || currentUser.billing_period)} / ${membershipStateLabel}`,
+      view: "help",
+      className: planClass
+    },
+    {
+      icon: "C",
+      label: "Cajas",
+      value: `${num(cashBoxes)} configurada${cashBoxes === 1 ? "" : "s"}`,
+      detail: cashOpen ? `Caja ${num(cashSession.registerNumber)} abierta` : `${num(assignedCashiers)} cajero${assignedCashiers === 1 ? "" : "s"} con caja fija`,
+      view: "settings",
+      className: cashBoxes ? "is-ok" : "is-warning"
+    },
+    {
+      icon: "U",
+      label: "Usuarios",
+      value: `${num(activeUsers.length)} activo${activeUsers.length === 1 ? "" : "s"}`,
+      detail: `${num(operativeUsers.length)} operativo${operativeUsers.length === 1 ? "" : "s"} para ventas`,
+      view: "users",
+      className: operativeUsers.length ? "is-ok" : "is-danger"
+    },
+    {
+      icon: "S",
+      label: "Permisos",
+      value: securityRisks.length ? `${num(securityRisks.length)} alerta${securityRisks.length === 1 ? "" : "s"}` : "Correctos",
+      detail: securityRisks.length ? "Revisa roles amplios, caja fija o duplicados." : "Roles separados por funcion.",
+      view: "users",
+      className: securityClass
+    },
+    {
+      icon: "I",
+      label: "Inventario",
+      value: `${num(productCount)} producto${productCount === 1 ? "" : "s"}`,
+      detail: criticalProducts.length ? `${num(criticalProducts.length)} bajo minimo` : "Stock sin alertas criticas.",
+      view: "inventory",
+      className: criticalProducts.length ? "is-warning" : "is-ok"
+    }
+  ];
+  return `<section class="admin-system-overview">
+    <div class="admin-system-head">
+      <div>
+        <p class="eyebrow">Panel del encargado</p>
+        <h3>Estado de configuracion y acceso de la empresa</h3>
+        <span>Controla plan, cajas, usuarios, permisos e inventario antes de entregar el sistema al personal operativo.</span>
+      </div>
+      <div class="admin-system-score ${setupClass}">
+        <strong>${readyPercent}%</strong>
+        <span>listo</span>
+      </div>
+    </div>
+    <div class="admin-system-cards">
+      ${cards.map((card) => `<button class="admin-system-card ${card.className}" type="button" data-module-view="${card.view}">
+        <b>${escapeHtml(card.icon)}</b>
+        <span>${escapeHtml(card.label)}</span>
+        <strong>${escapeHtml(card.value)}</strong>
+        <small>${escapeHtml(card.detail)}</small>
+      </button>`).join("")}
+    </div>
+    <div class="admin-system-roles">
+      <strong>Roles configurados</strong>
+      <div>${roleCounts.map((item) => `<span class="${item.count ? "is-on" : ""}">${escapeHtml(item.label)} <b>${num(item.count)}</b></span>`).join("")}</div>
+    </div>
+    <div class="admin-system-footer">
+      <div>
+        <strong>${pendingChecks.length ? "Siguientes ajustes" : "Configuracion base lista"}</strong>
+        <span>${pendingChecks.length ? pendingChecks.slice(0, 3).map((item) => item.label).join(" / ") : "Ya puedes operar con caja, ventas, comprobantes e inventario."}</span>
+      </div>
+      <div class="admin-system-actions">
+        <button class="primary-button" type="button" data-module-view="settings">Configurar tienda</button>
+        <button class="ghost-button" type="button" data-module-view="users">Usuarios</button>
+        <button class="ghost-button" type="button" data-module-view="sell">Probar venta</button>
+      </div>
+    </div>
+  </section>`;
 }
 
 function renderSupervisorControlPanel({ todaySales, criticalProducts, debtTotal, cashOpen }) {
