@@ -4240,6 +4240,29 @@ body.app-correspondencia .metrics article:hover {
   min-height: 39px;
 }
 
+.users-delivery-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.users-delivery-actions > span {
+  border-radius: 999px;
+  padding: 7px 10px;
+  background: color-mix(in srgb, var(--accent) 8%, white);
+  color: var(--accent-dark);
+  font-size: 0.78rem;
+  font-weight: 920;
+}
+
+.users-delivery-actions button {
+  min-height: 36px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+
 .role-permission-grid article,
 .permission-note {
   border: 1px solid color-mix(in srgb, var(--accent) 16%, var(--line));
@@ -15597,8 +15620,14 @@ body.system-zow-site .site-footer {
   }
 
   .role-advisor-actions,
-  .role-advisor-actions button {
+  .role-advisor-actions button,
+  .users-delivery-actions,
+  .users-delivery-actions button {
     width: 100%;
+  }
+
+  .users-delivery-actions {
+    justify-content: stretch;
   }
 
   .sales-certification-head > strong {

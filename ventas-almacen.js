@@ -6120,7 +6120,11 @@ function renderVentasUsersPanel() {
     <section class="admin-panel">
       <div class="admin-panel-head">
         <div><p class="eyebrow">Usuarios Ventas-Almacen</p><h3>Credenciales operativas</h3></div>
-        <span>${operativeUsers.length} usuario${operativeUsers.length === 1 ? "" : "s"}</span>
+        <div class="users-delivery-actions">
+          <span>${operativeUsers.length} usuario${operativeUsers.length === 1 ? "" : "s"}</span>
+          <button class="ghost-button" type="button" id="exportVentasUsersCsv" ${operativeUsers.length ? "" : "disabled"}>Exportar CSV</button>
+          <button class="ghost-button" type="button" id="printVentasUsersSheet" ${operativeUsers.length ? "" : "disabled"}>Hoja de accesos</button>
+        </div>
       </div>
       ${ventasMessage ? `<div class="cloud-safe-note"><strong>${escapeHtml(ventasMessage)}</strong><span>Si algo no se guarda, revisa que la contrasena tenga mayuscula, minuscula, numero y 10 caracteres como minimo.</span></div>` : ""}
       ${renderRoleAssignmentAdvisor(operativeUsers)}
@@ -6191,6 +6195,8 @@ function bindVentasUsersPanel() {
   document.querySelectorAll("[data-role-template]").forEach((button) => {
     button.addEventListener("click", () => applyRoleTemplate(button.dataset.roleTemplate));
   });
+  document.querySelector("#exportVentasUsersCsv")?.addEventListener("click", exportVentasUsersCsv);
+  document.querySelector("#printVentasUsersSheet")?.addEventListener("click", printVentasUsersSheet);
 }
 
 function renderRoleAssignmentAdvisor(operativeUsers) {
@@ -6294,6 +6300,59 @@ function renderVentasUserRow(user) {
       <button class="ghost-button" type="button" data-toggle-user="${user.id}">${user.active ? "Desactivar" : "Activar"}</button>
     </div>
   </article>`;
+}
+
+function exportVentasUsersCsv() {
+  const operativeUsers = users.filter((user) => ["ventas_admin", "cajero", "almacen", "vendedor", "supervisor"].includes(user.role));
+  const rows = operativeUsers.map((user) => {
+    const scope = userRoleScope(user.role);
+    return {
+      nombre: user.name || "",
+      usuario: user.username || "",
+      rol: roleLabel(user.role),
+      cargo: user.position || "",
+      celular: user.phone || "",
+      ci: user.ci || "",
+      unidad: user.unitName || "",
+      caja: user.cashRegisterNumber ? `Caja ${user.cashRegisterNumber}` : "Sin caja fija",
+      estado: user.active ? "activo" : "inactivo",
+      acceso: scope.riskLabel,
+      modulos: scope.modules.join(" | ")
+    };
+  });
+  downloadCsv(`usuarios-ventas-${csvDateStamp()}.csv`, rows);
+}
+
+function printVentasUsersSheet() {
+  const operativeUsers = users.filter((user) => ["ventas_admin", "cajero", "almacen", "vendedor", "supervisor"].includes(user.role));
+  if (!operativeUsers.length) {
+    window.alert("No hay usuarios para imprimir.");
+    return;
+  }
+  const title = storeSettings.storeName || storeSettings.companyName || currentUser.companyName || "Zow Ventas-Almacen";
+  const printable = window.open("", "_blank", "width=900,height=920");
+  if (!printable) return;
+  const rows = operativeUsers.map((user) => {
+    const scope = userRoleScope(user.role);
+    return `<tr>
+      <td><strong>${escapeHtml(user.name || "")}</strong><br><small>${escapeHtml(user.username || "")}</small></td>
+      <td>${escapeHtml(roleLabel(user.role))}<br><small>${escapeHtml(user.position || "Sin cargo")}</small></td>
+      <td>${escapeHtml(user.cashRegisterNumber ? `Caja ${num(user.cashRegisterNumber)}` : "Sin caja fija")}<br><small>${escapeHtml(user.unitName || "Sin unidad")}</small></td>
+      <td>${escapeHtml(user.active ? "Activo" : "Inactivo")}<br><small>${escapeHtml(scope.riskLabel)}</small></td>
+      <td>${escapeHtml(scope.modules.join(", "))}</td>
+    </tr>`;
+  }).join("");
+  printable.document.write(`<!doctype html><html><head><meta charset="UTF-8"><title>Hoja de accesos ${escapeHtml(title)}</title><style>
+    body{margin:0;padding:22px;background:#f6fbf8;color:#17231f;font-family:Arial,sans-serif}.toolbar{position:sticky;top:0;background:#fff;padding:10px;border-bottom:1px solid #d9ebe5}.toolbar button{border:0;border-radius:999px;background:#0f766e;color:#fff;padding:10px 14px;font-weight:800;cursor:pointer}.sheet{max-width:980px;margin:18px auto;background:#fff;border:1px solid #d9ebe5;border-radius:18px;box-shadow:0 18px 45px rgba(15,32,28,.1);overflow:hidden}.head{display:flex;justify-content:space-between;gap:18px;padding:24px;background:linear-gradient(135deg,#064e3b,#0f766e);color:#ecfdf5}.head h1{margin:0 0 6px;font-size:24px}.head p{margin:0;color:#d1fae5;font-size:13px}.badge{align-self:flex-start;border:1px solid rgba(255,255,255,.24);border-radius:999px;padding:8px 11px;font-weight:800}.content{padding:22px}.note{border:1px solid #d9ebe5;border-radius:14px;background:#f8fffc;padding:12px;margin-bottom:14px;color:#475b55;font-size:13px;line-height:1.45}table{width:100%;border-collapse:separate;border-spacing:0 8px}th{text-align:left;color:#64746f;font-size:11px;text-transform:uppercase}td{background:#f8fffc;border-top:1px solid #d9ebe5;border-bottom:1px solid #d9ebe5;padding:10px;font-size:13px;vertical-align:top}td:first-child{border-left:1px solid #d9ebe5;border-radius:12px 0 0 12px}td:last-child{border-right:1px solid #d9ebe5;border-radius:0 12px 12px 0}small{color:#64746f}.signs{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-top:26px}.signs div{border-top:1px solid #94a3b8;padding-top:8px;text-align:center;color:#64746f;font-size:12px}.foot{text-align:center;color:#64748b;font-size:11px;padding:14px 22px 22px}@media print{body{background:#fff;padding:0}.toolbar{display:none}.sheet{margin:0;box-shadow:none;border:0;border-radius:0}.head{-webkit-print-color-adjust:exact;print-color-adjust:exact}tr{break-inside:avoid}}
+  </style></head><body><div class="toolbar"><button onclick="print()">Imprimir / Guardar PDF</button></div><main class="sheet">
+    <section class="head"><div><h1>Hoja de accesos operativos</h1><p>${escapeHtml(title)}<br>Generado: ${formatDateTime(new Date().toISOString())}</p></div><span class="badge">${num(operativeUsers.length)} usuario${operativeUsers.length === 1 ? "" : "s"}</span></section>
+    <section class="content">
+      <div class="note"><strong>Nota:</strong> Esta hoja no muestra contrasenas. Entrega las claves de forma privada y recomienda cambiarlas cuando corresponda.</div>
+      <table><thead><tr><th>Usuario</th><th>Rol</th><th>Caja / unidad</th><th>Estado</th><th>Modulos visibles</th></tr></thead><tbody>${rows}</tbody></table>
+      <div class="signs"><div>Firma encargado de sistema</div><div>Firma responsable empresa</div></div>
+    </section><p class="foot">SYSTEM ZOW SAAS - Ventas-Almacen</p></main></body></html>`);
+  printable.document.close();
+  printable.focus();
 }
 
 function renderUserRoleCoverage(operativeUsers) {
