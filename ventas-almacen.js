@@ -537,6 +537,12 @@ function buildOperationalNotifications() {
     const debt = receivables.reduce((sum, sale) => sum + Number(sale.balance_due || 0), 0);
     notices.push({ level: "info", title: `${num(receivables.length)} cuenta(s) por cobrar`, detail: `Saldo pendiente ${money(debt)}.`, view: "customers" });
   }
+  const membership = salesMembershipStatus();
+  if (membership.state === "expired") {
+    notices.push({ level: "danger", title: "Membresia vencida", detail: `${membership.label}. Contacta a SYSTEM ZOW para renovar.`, view: "help" });
+  } else if (["today", "warning"].includes(membership.state)) {
+    notices.push({ level: "warning", title: "Membresia por vencer", detail: `${membership.label}. Coordina renovacion para evitar suspension.`, view: "help" });
+  }
   const sensitiveEvent = auditEvents.find((event) => ["sale_void", "sale_return", "cash_close", "product_import"].includes(event.action));
   if (sensitiveEvent) {
     notices.push({ level: "info", title: auditActionLabel(sensitiveEvent.action), detail: sensitiveEvent.description || "Accion sensible registrada.", view: "reports" });
@@ -633,6 +639,7 @@ function renderSummary() {
     </section>
     ${currentUser?.role === "supervisor" ? renderSupervisorControlPanel({ todaySales, criticalProducts, debtTotal, cashOpen }) : ""}
     ${renderTrainingBanner()}
+    ${renderSalesMembershipNotice()}
     ${renderCommercialAlertsPanel()}
     <section class="setup-overview">
       <article><span>Clientes</span><strong>${customers.length}</strong></article>
@@ -729,6 +736,50 @@ function buildCommercialAlerts() {
   }
   const weight = { danger: 1, warning: 2, info: 3, ok: 4 };
   return notices.sort((a, b) => (weight[a.level] || 9) - (weight[b.level] || 9)).slice(0, 6);
+}
+
+function renderSalesMembershipNotice() {
+  if (!["admin", "ventas_admin"].includes(currentUser?.role || "")) return "";
+  const membership = salesMembershipStatus();
+  if (membership.state === "none" && !currentUser?.companyPlan && !currentUser?.company_plan) return "";
+  const endLabel = formatShortDate(currentUser.membershipEndsAt || currentUser.ends_at) || "Sin fecha definida";
+  const action = ["expired", "today", "warning"].includes(membership.state)
+    ? "Coordina la renovacion con SYSTEM ZOW para evitar suspension del servicio."
+    : "La empresa esta habilitada para operar con normalidad.";
+  return `<section class="membership-note ${membership.className}">
+    <div>
+      <strong>${escapeHtml(membership.title)} / ${escapeHtml(salesBillingPeriodLabel(currentUser.billingPeriod || currentUser.billing_period))}</strong>
+      <span>Plan ${escapeHtml(salesPlanLabel(currentUser.companyPlan || currentUser.company_plan))}. ${escapeHtml(membership.label)}. Vence: ${escapeHtml(endLabel)}. ${escapeHtml(action)}</span>
+    </div>
+  </section>`;
+}
+
+function salesMembershipStatus() {
+  const endDate = currentUser?.membershipEndsAt || currentUser?.ends_at || "";
+  const days = daysUntil(endDate);
+  if (days === null) return { state: "none", className: "", title: "Membresia sin vencimiento", label: "Sin vencimiento", days: null };
+  if (days < 0) return { state: "expired", className: "is-danger", title: "Membresia vencida", label: `Vencida hace ${num(Math.abs(days))} dia${Math.abs(days) === 1 ? "" : "s"}`, days };
+  if (days === 0) return { state: "today", className: "is-warning", title: "Membresia vence hoy", label: "Vence hoy", days };
+  if (days <= 15) return { state: "warning", className: "is-warning", title: "Membresia por vencer", label: `Faltan ${num(days)} dia${days === 1 ? "" : "s"}`, days };
+  return { state: "active", className: "", title: "Membresia activa", label: `Faltan ${num(days)} dia${days === 1 ? "" : "s"}`, days };
+}
+
+function salesPlanLabel(plan) {
+  return {
+    basico: "Basico",
+    profesional: "Profesional",
+    empresarial: "Empresarial",
+    personalizado: "Personalizado"
+  }[String(plan || "").toLowerCase()] || (plan ? String(plan) : "Sin plan");
+}
+
+function salesBillingPeriodLabel(period) {
+  return {
+    mensual: "Mensual",
+    trimestral: "Trimestral",
+    semestral: "Semestral",
+    anual: "Anual"
+  }[String(period || "").toLowerCase()] || "Sin periodo";
 }
 
 function renderCommercialAlertsPanel() {
@@ -4601,7 +4652,8 @@ function buildCommercialClosureRoadmap() {
   const security = buildAccessSecurityChecks(activeUsers.filter((user) => ["ventas_admin", "cajero", "almacen", "vendedor", "supervisor"].includes(user.role)));
   const securityRisks = security.checks.filter((item) => ["danger", "warning"].includes(item.level));
   const companySeparated = Boolean(currentUser?.companyId || currentUser?.company_id);
-  const membershipReady = Boolean(currentUser?.membershipEndsAt || currentUser?.companyPlan || currentUser?.company_plan);
+  const membership = salesMembershipStatus();
+  const membershipReady = membership.state !== "none" && membership.state !== "expired";
   const hasCompleteRealFlow = Boolean(
     storeSettings.companyName &&
     activeUsers.length &&
@@ -4653,10 +4705,12 @@ function buildCommercialClosureRoadmap() {
     closureRoadmapItem({
       title: "Planes y suspension",
       done: membershipReady,
-      review: companySeparated,
-      detail: membershipReady
-        ? "La empresa tiene datos de plan/membresia visibles para control comercial."
-        : "Validar desde panel ZOW alta, vencimiento y bloqueo por membresia.",
+      review: companySeparated || membership.state === "expired",
+      detail: membership.state === "expired"
+        ? `${membership.label}. Renovar desde panel ZOW para evitar bloqueo.`
+        : membershipReady
+          ? `Plan visible: ${salesPlanLabel(currentUser?.companyPlan || currentUser?.company_plan)} / ${salesBillingPeriodLabel(currentUser?.billingPeriod || currentUser?.billing_period)} / ${membership.label}.`
+          : "Validar desde panel ZOW alta, vencimiento y bloqueo por membresia.",
       view: "help"
     }),
     closureRoadmapItem({
