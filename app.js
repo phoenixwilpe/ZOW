@@ -2103,6 +2103,8 @@ function renderZowAdmin(mode = "overview") {
       <span>Empresas, usuarios, areas y documentos se leen desde PostgreSQL/Supabase. Un deploy de Vercel no debe borrar estos registros.</span>
     </section>
 
+    ${renderZowProductionReviewPanel()}
+
     <div class="admin-tabs" role="tablist" aria-label="ZOW SaaS">
       <button class="${mode === "overview" ? "is-active" : ""}" type="button" data-zow-tab="overview">Empresas</button>
       <button class="${mode === "new" ? "is-active" : ""}" type="button" data-zow-tab="new">Nueva empresa</button>
@@ -2333,6 +2335,63 @@ function renderCompanyListPanel() {
       </div>
     </section>
   `;
+}
+
+function renderZowProductionReviewPanel() {
+  const risks = buildZowProductionRisks();
+  const critical = risks.filter((item) => item.level === "danger").length;
+  const warnings = risks.filter((item) => item.level === "warning").length;
+  if (!companies.length) return "";
+  return `<section class="zow-production-review ${critical ? "has-danger" : warnings ? "has-warning" : ""}">
+    <div class="zow-production-head">
+      <div>
+        <p class="eyebrow">Revision de produccion</p>
+        <h3>${critical ? "Atencion antes de vender o renovar" : warnings ? "Ajustes recomendados" : "Empresas listas para operar"}</h3>
+        <span>${critical} critica(s), ${warnings} advertencia(s). Revisa vigencia, sistemas contratados, encargado y contacto comercial.</span>
+      </div>
+      <strong>${risks.length ? `${risks.length} revision${risks.length === 1 ? "" : "es"}` : "OK"}</strong>
+    </div>
+    <div class="zow-production-grid">
+      ${risks.slice(0, 6).map((risk) => `<article class="is-${risk.level}">
+        <span>${escapeHtml(risk.label)}</span>
+        <strong>${escapeHtml(risk.company.name)}</strong>
+        <small>${escapeHtml(risk.detail)}</small>
+        <div>
+          ${risk.action === "systems" ? `<button class="ghost-button" type="button" data-company-systems="${risk.company.id}">Sistemas</button>` : ""}
+          <button class="ghost-button" type="button" data-company-edit="${risk.company.id}">Editar</button>
+        </div>
+      </article>`).join("") || `<article class="is-ok"><span>Sin alertas</span><strong>Control correcto</strong><small>Todas las empresas visibles tienen encargado, sistemas y vigencia clara.</small></article>`}
+    </div>
+  </section>`;
+}
+
+function buildZowProductionRisks() {
+  const risks = [];
+  companies.forEach((company) => {
+    const renewal = companyRenewalStatus(company);
+    const systemsText = String(company.systems || "").trim();
+    const active = company.status === "active";
+    if (!company.admin_username) {
+      risks.push({ level: "danger", label: "Sin encargado", detail: "No hay usuario encargado visible para esta empresa.", company, action: "edit" });
+    }
+    if (active && !systemsText) {
+      risks.push({ level: "danger", label: "Sin sistema activo", detail: "La empresa esta activa pero no tiene sistemas SaaS habilitados.", company, action: "systems" });
+    }
+    if (active && renewal.state === "expired") {
+      risks.push({ level: "danger", label: "Membresia vencida", detail: renewal.label, company, action: "edit" });
+    }
+    if (active && renewal.state === "none") {
+      risks.push({ level: "warning", label: "Sin vencimiento", detail: "Define fecha de fin para control comercial y suspension automatica.", company, action: "edit" });
+    }
+    if (active && ["today", "warning"].includes(renewal.state)) {
+      risks.push({ level: "warning", label: "Renovar pronto", detail: renewal.label, company, action: "edit" });
+    }
+    if (active && !String(company.contact_phone || company.contact_email || "").trim()) {
+      risks.push({ level: "warning", label: "Sin contacto", detail: "Completa celular o correo para seguimiento comercial.", company, action: "edit" });
+    }
+  });
+  const weight = { danger: 1, warning: 2, info: 3 };
+  return risks.sort((a, b) => (weight[a.level] || 9) - (weight[b.level] || 9) || String(a.company.name).localeCompare(String(b.company.name), "es"));
 }
 
 function renderRenewalPanel() {
