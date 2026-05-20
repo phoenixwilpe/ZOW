@@ -9,6 +9,7 @@ const FAVORITE_PRODUCTS_KEY = "zowVentasAlmacen.favoriteProducts";
 const POS_FOCUS_KEY = "zowVentasAlmacen.posFocus";
 const ACTIVE_SALE_DRAFT_KEY = "zowVentasAlmacen.activeSaleDraft";
 const TRAINING_MODE_KEY = "zowVentasAlmacen.trainingMode";
+const LAST_BACKUP_KEY = "zowVentasAlmacen.lastBackup";
 
 /**
  * @typedef {{ id:string, code:string, barcode?:string, name:string, category:string, stock:number, sale_price:number, cost_price:number }} Product
@@ -68,6 +69,7 @@ let localSaleMeta = loadJson(LOCAL_SALE_META_KEY, {});
 let favoriteProducts = loadJson(FAVORITE_PRODUCTS_KEY, []);
 let posFocusMode = localStorage.getItem(POS_FOCUS_KEY) === "1";
 let trainingMode = localStorage.getItem(TRAINING_MODE_KEY) === "1";
+let lastBackupMeta = loadJson(LAST_BACKUP_KEY, null);
 let historyFilter = { status: "", method: "", date: "", q: "" };
 let storeSettings = {
   companyName: "",
@@ -2155,6 +2157,7 @@ function renderReports() {
         <div class="admin-list">${profitRows.slice(0, 12).map(renderProfitProductRow).join("") || empty("Sin ventas confirmadas en este periodo")}</div>
       </section>
     `}
+    ${supervisorMode ? "" : renderBackupControlPanel()}
     <section class="report-actions" aria-label="Exportaciones">
       <article class="report-export-card">
         <div><strong>Ventas del periodo</strong><span>Descarga operaciones con cliente, metodo de pago, estado y saldos para auditoria.</span></div>
@@ -2215,6 +2218,7 @@ function renderReports() {
   document.querySelector("#exportAuditCsv")?.addEventListener("click", exportAuditCsv);
   document.querySelector("#exportUserAuditCsv")?.addEventListener("click", exportUserAuditCsv);
   document.querySelector("#exportBackupJson")?.addEventListener("click", exportBackupJson);
+  document.querySelector("#exportBackupJsonTop")?.addEventListener("click", exportBackupJson);
   document.querySelector("#exportNoMovementCsv")?.addEventListener("click", () => exportNoMovementProductsCsv(profitRows));
   document.querySelector("#exportProductPerformanceCsv")?.addEventListener("click", () => exportProductPerformanceCsv(profitRows));
   document.querySelector("#exportTopCustomersCsv")?.addEventListener("click", () => exportTopCustomersCsv(confirmedSales));
@@ -2222,6 +2226,37 @@ function renderReports() {
   document.querySelector("#copyExecutiveBrief")?.addEventListener("click", copyExecutiveBrief);
   document.querySelector("#printExecutiveBrief")?.addEventListener("click", printExecutiveBrief);
   bindProductLabelActions();
+}
+
+function renderBackupControlPanel() {
+  const lastBackupAt = lastBackupMeta?.generatedAt || "";
+  const lastBackupText = lastBackupAt ? formatDateTime(lastBackupAt) : "Sin respaldo en este navegador";
+  const activityCount = sales.length + purchases.length + cashClosures.length + products.length + customers.length;
+  const backupReady = products.length > 0 || sales.length > 0 || customers.length > 0;
+  const checks = [
+    { label: "Antes de actualizar sistema", detail: "Descarga JSON y CSV criticos antes de cambios grandes.", done: Boolean(lastBackupAt) },
+    { label: "Despues de carga inicial", detail: "Respalda cuando termines productos, clientes y usuarios.", done: Boolean(lastBackupAt && products.length) },
+    { label: "Antes de entregar accesos", detail: "Guarda evidencia de configuracion, caja, ventas y reportes.", done: Boolean(lastBackupAt && activityCount > 0) }
+  ];
+  return `<section class="backup-control-panel ${backupReady ? "is-ready" : "is-empty"}">
+    <div class="backup-control-head">
+      <div>
+        <p class="eyebrow">Respaldo y recuperacion</p>
+        <h3>${lastBackupAt ? "Ultimo respaldo registrado" : "Crea un respaldo antes de vender"}</h3>
+        <span>${escapeHtml(lastBackupText)}. El respaldo se descarga en tu equipo; la nube no se borra por actualizar el sistema.</span>
+      </div>
+      <button class="primary-button" type="button" id="exportBackupJsonTop">Exportar respaldo JSON</button>
+    </div>
+    <div class="backup-control-grid">
+      <article><span>Productos</span><strong>${num(products.length)}</strong><small>Inventario visible</small></article>
+      <article><span>Ventas</span><strong>${num(sales.length)}</strong><small>Historial exportado</small></article>
+      <article><span>Clientes</span><strong>${num(customers.length)}</strong><small>Incluye cartera visible</small></article>
+      <article><span>Compras</span><strong>${num(purchases.length)}</strong><small>Proveedor y entradas</small></article>
+    </div>
+    <div class="backup-check-grid">
+      ${checks.map((item) => `<article class="${item.done ? "done" : "pending"}"><b>${item.done ? "OK" : "!"}</b><div><strong>${escapeHtml(item.label)}</strong><span>${escapeHtml(item.detail)}</span></div></article>`).join("")}
+    </div>
+  </section>`;
 }
 
 function buildReportRoleProfile({ supervisorMode, businessHealth, confirmedSales, voidedSales, pendingTotal, stockRisks, expiryRisks, totalClosureDifference }) {
@@ -4606,10 +4641,12 @@ function buildCommercialClosureRoadmap() {
     }),
     closureRoadmapItem({
       title: "Backups y recuperacion",
-      done: canAccessView("reports"),
+      done: canAccessView("reports") && Boolean(lastBackupMeta?.generatedAt),
       review: true,
-      detail: canAccessView("reports")
-        ? "Exportacion JSON y CSV disponibles. Falta ejecutar respaldo antes de cada entrega real."
+      detail: canAccessView("reports") && lastBackupMeta?.generatedAt
+        ? `Ultimo respaldo registrado: ${formatDateTime(lastBackupMeta.generatedAt)}.`
+        : canAccessView("reports")
+          ? "Exportacion JSON y CSV disponibles. Ejecuta respaldo antes de cada entrega real."
         : "Habilitar respaldo operativo para el rol encargado.",
       view: "reports"
     }),
@@ -8584,17 +8621,44 @@ function exportReorderCsv() {
 }
 
 function exportBackupJson() {
+  if (!confirm("Descargar respaldo operativo JSON? Guarda este archivo en un lugar seguro antes de actualizaciones o entregas.")) return;
+  const generatedAt = new Date().toISOString();
   const backup = {
-    generatedAt: new Date().toISOString(),
+    schema: "zow-ventas-almacen-backup-v1",
+    generatedAt,
     company: storeSettings.companyName || currentUser.companyName || "",
+    companyId: currentUser.companyId || currentUser.company_id || "",
+    generatedBy: {
+      id: currentUser.id || "",
+      name: currentUser.name || "",
+      username: currentUser.username || "",
+      role: currentUser.role || ""
+    },
+    counts: {
+      products: products.length,
+      customers: customers.length,
+      sales: sales.length,
+      receivables: receivables.length,
+      purchases: purchases.length,
+      suppliers: suppliers.length,
+      categories: categories.length,
+      promotions: promotions.length,
+      combos: combos.length,
+      cashClosures: cashClosures.length,
+      auditEvents: auditEvents.length
+    },
     storeSettings,
+    categories,
     products,
     customers,
     sales,
     receivables,
     purchases,
     suppliers,
-    cashClosures
+    promotions,
+    combos,
+    cashClosures,
+    auditEvents
   };
   const blob = new Blob([JSON.stringify(backup, null, 2)], { type: "application/json;charset=utf-8" });
   const url = URL.createObjectURL(blob);
@@ -8605,6 +8669,10 @@ function exportBackupJson() {
   link.click();
   link.remove();
   URL.revokeObjectURL(url);
+  lastBackupMeta = { generatedAt, counts: backup.counts };
+  persistJson(LAST_BACKUP_KEY, lastBackupMeta);
+  ventasMessage = "Respaldo operativo descargado. Guarda el archivo JSON en un lugar seguro.";
+  if (activeView === "reports") renderMain();
 }
 function exportInventoryCsv() {
   const rows = products.map((product) => {

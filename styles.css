@@ -3540,6 +3540,110 @@ body.app-correspondencia .metrics article:hover {
   margin-bottom: 14px;
 }
 
+.backup-control-panel {
+  display: grid;
+  gap: 14px;
+  margin-bottom: 14px;
+  border: 1px solid rgb(15 118 110 / 18%);
+  border-radius: 22px;
+  padding: clamp(14px, 2vw, 18px);
+  background:
+    linear-gradient(135deg, rgb(255 255 255 / 96%), rgb(240 253 250 / 78%)),
+    radial-gradient(circle at 90% 10%, rgb(15 118 110 / 14%), transparent 34%);
+  box-shadow: 0 18px 44px rgb(15 118 110 / 8%);
+}
+
+.backup-control-panel.is-empty {
+  border-color: rgb(245 158 11 / 28%);
+  background:
+    linear-gradient(135deg, rgb(255 255 255 / 96%), rgb(255 251 235 / 80%)),
+    radial-gradient(circle at 90% 10%, rgb(245 158 11 / 14%), transparent 34%);
+}
+
+.backup-control-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.backup-control-head h3 {
+  margin: 3px 0 4px;
+  color: var(--accent-dark);
+  font-size: clamp(1.15rem, 2.2vw, 1.5rem);
+}
+
+.backup-control-head span,
+.backup-control-grid small,
+.backup-check-grid span {
+  display: block;
+  color: var(--muted);
+  font-size: 0.84rem;
+  font-weight: 830;
+  line-height: 1.35;
+}
+
+.backup-control-grid,
+.backup-check-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 10px;
+}
+
+.backup-control-grid article,
+.backup-check-grid article {
+  border: 1px solid rgb(15 118 110 / 14%);
+  border-radius: 14px;
+  padding: 12px;
+  background: rgb(255 255 255 / 84%);
+}
+
+.backup-control-grid span {
+  display: block;
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 950;
+  text-transform: uppercase;
+}
+
+.backup-control-grid strong,
+.backup-check-grid strong {
+  display: block;
+  color: var(--accent-dark);
+}
+
+.backup-control-grid strong {
+  margin: 5px 0;
+  font-size: 1.35rem;
+}
+
+.backup-check-grid article {
+  display: grid;
+  grid-template-columns: 30px minmax(0, 1fr);
+  gap: 8px;
+}
+
+.backup-check-grid article.pending {
+  border-color: rgb(245 158 11 / 26%);
+  background: linear-gradient(135deg, #ffffff, #fffbeb);
+}
+
+.backup-check-grid b {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 999px;
+  background: #dcfce7;
+  color: #047857;
+  font-size: 0.72rem;
+}
+
+.backup-check-grid article.pending b {
+  background: #fef3c7;
+  color: #92400e;
+}
+
 .report-role-panel {
   display: grid;
   grid-template-columns: minmax(230px, 0.78fr) auto minmax(360px, 1.28fr);
@@ -15075,6 +15179,8 @@ body.system-zow-site .site-footer {
   body.app-ventas .daily-operation-track,
   .settings-overview-grid,
   .store-launch-grid,
+  .backup-control-grid,
+  .backup-check-grid,
   .settings-preset-row,
   .catalog-role-panel,
   .catalog-role-cards,
@@ -15102,6 +15208,7 @@ body.system-zow-site .site-footer {
 
   body.app-ventas .commercial-alerts-head,
   body.app-ventas .commercial-alert-card,
+  .backup-control-head,
   .cashier-cash-guide-head,
   .commercial-readiness-head,
   .commercial-roadmap-head,
@@ -15115,6 +15222,7 @@ body.system-zow-site .site-footer {
   }
 
   body.app-ventas .commercial-alert-card button,
+  .backup-control-head button,
   body.app-ventas .inventory-filter-bar > .ghost-button,
   body.app-ventas .training-mode-banner button,
   .commercial-roadmap-next button,
