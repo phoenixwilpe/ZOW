@@ -7175,17 +7175,56 @@ async function savePurchase(event, status = "confirmada") {
 }
 
 async function receivePurchaseOrder(purchaseId) {
-  const purchase = purchases.find((item) => item.id === purchaseId);
-  if (!purchase || !confirm(`Recibir la orden ${purchase.code}? Esto sumara los productos al stock.`)) return;
+  const localPurchase = purchases.find((item) => item.id === purchaseId);
+  if (!localPurchase) return;
+  let purchase = localPurchase;
+  let items = [];
+  try {
+    const response = await apiRequest(`/ventas/purchases/${purchaseId}`);
+    purchase = response.purchase || localPurchase;
+    items = response.items || [];
+  } catch (error) {
+    ventasMessage = error.message || "No se pudo cargar el detalle de la orden.";
+    renderMain();
+    return;
+  }
+  if (!items.length) {
+    window.alert("La orden no tiene productos para recibir.");
+    return;
+  }
+  if (!confirm(buildPurchaseReceptionConfirmText(purchase, items))) return;
   try {
     await apiRequest(`/ventas/purchases/${purchaseId}/receive`, { method: "PATCH" });
-    ventasMessage = `Orden ${purchase.code} recibida. Stock actualizado y movimiento registrado en Kardex.`;
+    const totalUnits = items.reduce((sum, item) => sum + Number(item.quantity || 0), 0);
+    ventasMessage = `Orden ${purchase.code} recibida: ${num(totalUnits)} unidad${totalUnits === 1 ? "" : "es"} en ${num(items.length)} producto${items.length === 1 ? "" : "s"}. Stock y Kardex actualizados.`;
     activeView = "purchases";
     await render();
   } catch (error) {
     ventasMessage = error.message || "No se pudo recibir la orden.";
     renderMain();
   }
+}
+
+function buildPurchaseReceptionConfirmText(purchase, items) {
+  const totalUnits = items.reduce((sum, item) => sum + Number(item.quantity || 0), 0);
+  const lines = [
+    `Recibir orden ${purchase.code}`,
+    `Proveedor: ${purchase.supplier_name || "Proveedor sin registrar"}`,
+    `Total orden: ${money(purchase.total || 0)}`,
+    `Productos: ${num(items.length)} / Unidades: ${num(totalUnits)}`,
+    "",
+    "Impacto en inventario:"
+  ];
+  items.slice(0, 12).forEach((item) => {
+    const product = products.find((entry) => entry.id === item.product_id || entry.id === item.productId);
+    const currentStock = Number(product?.stock || 0);
+    const quantity = Number(item.quantity || 0);
+    const nextStock = currentStock + quantity;
+    lines.push(`- ${item.product_name || product?.name || "Producto"}: ${num(currentStock)} + ${num(quantity)} = ${num(nextStock)} | costo ${money(item.unit_cost || 0)}`);
+  });
+  if (items.length > 12) lines.push(`- ... ${num(items.length - 12)} producto(s) mas`);
+  lines.push("", "Al confirmar se sumara stock, se actualizara costo y se registrara Kardex.");
+  return lines.join("\n");
 }
 
 async function cancelPurchaseOrder(purchaseId) {
