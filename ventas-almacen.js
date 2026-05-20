@@ -4304,10 +4304,12 @@ function renderHelp() {
         <button class="primary-button" type="button" id="printSalesManualBtn">Imprimir manual</button>
         <button class="ghost-button" type="button" id="printCertificationBtn">Reporte de certificacion</button>
         <button class="ghost-button" type="button" id="printCommercialSummaryBtn">Resumen comercial</button>
+        <button class="ghost-button" type="button" id="printClosureRoadmapBtn">Ruta de cierre</button>
         <button class="ghost-button" type="button" id="printDemoGuideBtn">Guia demo</button>
       </div>
     </section>
     ${renderCommercialReadinessPanel(certification, automated)}
+    ${renderCommercialClosureRoadmapPanel()}
     ${renderDemoSalesGuidePanel()}
     <section class="help-guide-grid">
       ${guides.map((guide) => `<article>
@@ -4385,6 +4387,8 @@ function renderHelp() {
   document.querySelector("#printSalesManualBtn")?.addEventListener("click", printSalesCommercialManual);
   document.querySelector("#printCertificationBtn")?.addEventListener("click", printSalesCertificationReport);
   document.querySelector("#printCommercialSummaryBtn")?.addEventListener("click", printSalesCommercialSummary);
+  document.querySelector("#printClosureRoadmapBtn")?.addEventListener("click", printCommercialClosureRoadmap);
+  document.querySelector("#printClosureRoadmapInlineBtn")?.addEventListener("click", printCommercialClosureRoadmap);
   document.querySelector("#printDemoGuideBtn")?.addEventListener("click", printDemoSalesGuide);
   document.querySelector("#printDemoGuideInlineBtn")?.addEventListener("click", printDemoSalesGuide);
   document.querySelectorAll("[data-help-role]").forEach((button) => {
@@ -4393,6 +4397,181 @@ function renderHelp() {
       renderHelp();
     });
   });
+}
+
+function renderCommercialClosureRoadmapPanel() {
+  const roadmap = buildCommercialClosureRoadmap();
+  const next = roadmap.items.find((item) => item.state !== "done") || roadmap.items[roadmap.items.length - 1];
+  return `<section class="commercial-roadmap-panel ${roadmap.percent >= 85 ? "is-ready" : roadmap.percent >= 60 ? "is-review" : "is-pending"}">
+    <div class="commercial-roadmap-head">
+      <div>
+        <p class="eyebrow">Cierre para vender</p>
+        <h3>${escapeHtml(roadmap.title)}</h3>
+        <span>${escapeHtml(roadmap.detail)}</span>
+      </div>
+      <strong>${roadmap.percent}%</strong>
+    </div>
+    <div class="commercial-roadmap-next">
+      <div>
+        <span>Siguiente prioridad</span>
+        <strong>${escapeHtml(next.title)}</strong>
+        <small>${escapeHtml(next.detail)}</small>
+      </div>
+      <div>
+        ${next.view && canAccessView(next.view) ? `<button class="primary-button" type="button" data-module-view="${next.view}">Abrir modulo</button>` : ""}
+        <button class="ghost-button" type="button" id="printClosureRoadmapInlineBtn">Imprimir ruta</button>
+      </div>
+    </div>
+    <div class="commercial-roadmap-grid">
+      ${roadmap.items.map((item, index) => `<article class="${item.state}">
+        <b>${index + 1}</b>
+        <div>
+          <span>${escapeHtml(item.status)}</span>
+          <strong>${escapeHtml(item.title)}</strong>
+          <small>${escapeHtml(item.detail)}</small>
+          ${item.view && canAccessView(item.view) ? `<button class="ghost-button" type="button" data-module-view="${item.view}">Revisar</button>` : ""}
+        </div>
+      </article>`).join("")}
+    </div>
+  </section>`;
+}
+
+function buildCommercialClosureRoadmap() {
+  const setupSteps = buildSetupAssistantSteps();
+  const setupDone = setupSteps.filter((item) => item.done).length;
+  const setupPercent = Math.round((setupDone / setupSteps.length) * 100);
+  const activeUsers = users.filter((user) => user.active !== false);
+  const confirmedSales = sales.filter((sale) => sale.status !== "anulada");
+  const voidedSales = sales.filter((sale) => sale.status === "anulada");
+  const activeProducts = products.filter(isProductActive);
+  const hasProductDepth = activeProducts.length >= 12;
+  const hasDemoCustomers = customers.length >= 3;
+  const hasPurchaseFlow = purchases.some((purchase) => ["recibida", "confirmada"].includes(purchase.status)) || purchases.length >= 2;
+  const hasCashProof = Boolean(cashClosures.length);
+  const hasReceivableProof = Boolean(receivables.length || sales.some((sale) => Number(sale.balance_due || 0) > 0));
+  const security = buildAccessSecurityChecks(activeUsers.filter((user) => ["ventas_admin", "cajero", "almacen", "vendedor", "supervisor"].includes(user.role)));
+  const securityRisks = security.checks.filter((item) => ["danger", "warning"].includes(item.level));
+  const companySeparated = Boolean(currentUser?.companyId || currentUser?.company_id);
+  const membershipReady = Boolean(currentUser?.membershipEndsAt || currentUser?.companyPlan || currentUser?.company_plan);
+  const hasCompleteRealFlow = Boolean(
+    storeSettings.companyName &&
+    activeUsers.length &&
+    activeProducts.length &&
+    confirmedSales.length &&
+    voidedSales.length &&
+    hasCashProof &&
+    hasPurchaseFlow &&
+    (hasReceivableProof || !storeSettings.allowCredit)
+  );
+  const responsiveReviewReady = Boolean(confirmedSales.length && activeProducts.length && cashClosures.length);
+  const items = [
+    closureRoadmapItem({
+      title: "Prueba real completa",
+      done: hasCompleteRealFlow,
+      review: confirmedSales.length > 0 && activeProducts.length > 0,
+      detail: hasCompleteRealFlow
+        ? "Venta, anulacion, caja, inventario, compra y cobranza ya tienen evidencia."
+        : "Crear empresa, usuarios, productos, venta, anulacion, compra, cierre y reporte final.",
+      view: hasCompleteRealFlow ? "reports" : "sell"
+    }),
+    closureRoadmapItem({
+      title: "Revision visual final",
+      done: responsiveReviewReady,
+      review: activeProducts.length > 0,
+      detail: responsiveReviewReady
+        ? "Hay datos suficientes para revisar celular, tablet y monitor con pantallas reales."
+        : "Probar POS, carrito, cobro, inventario, reportes y login en diferentes pantallas.",
+      view: "sell"
+    }),
+    closureRoadmapItem({
+      title: "Configuracion inicial guiada",
+      done: setupPercent >= 100,
+      review: setupPercent >= 60,
+      detail: `Asistente de entrega al ${setupPercent}%. Completa empresa, cajas, usuarios, productos y prueba final.`,
+      view: "settings"
+    }),
+    closureRoadmapItem({
+      title: "Backups y recuperacion",
+      done: canAccessView("reports"),
+      review: true,
+      detail: canAccessView("reports")
+        ? "Exportacion JSON y CSV disponibles. Falta ejecutar respaldo antes de cada entrega real."
+        : "Habilitar respaldo operativo para el rol encargado.",
+      view: "reports"
+    }),
+    closureRoadmapItem({
+      title: "Planes y suspension",
+      done: membershipReady,
+      review: companySeparated,
+      detail: membershipReady
+        ? "La empresa tiene datos de plan/membresia visibles para control comercial."
+        : "Validar desde panel ZOW alta, vencimiento y bloqueo por membresia.",
+      view: "help"
+    }),
+    closureRoadmapItem({
+      title: "Manual comercial final",
+      done: true,
+      review: false,
+      detail: "Manual, resumen comercial, guia demo, certificacion y ruta de cierre ya se pueden imprimir.",
+      view: "help"
+    }),
+    closureRoadmapItem({
+      title: "Seguridad final",
+      done: companySeparated && !securityRisks.length,
+      review: companySeparated,
+      detail: securityRisks.length
+        ? `${num(securityRisks.length)} alerta(s) de permisos o acceso requieren revision.`
+        : "Sesion con empresa separada y sin alertas fuertes de permisos visibles.",
+      view: "users"
+    }),
+    closureRoadmapItem({
+      title: "Datos demo profesionales",
+      done: hasProductDepth && hasDemoCustomers && confirmedSales.length >= 3,
+      review: activeProducts.length >= 5,
+      detail: hasProductDepth && hasDemoCustomers && confirmedSales.length >= 3
+        ? "Demo con productos, clientes y ventas suficientes para mostrar reportes."
+        : "Preparar empresa demo con productos reales, clientes, ventas, compras, caja y reportes.",
+      view: activeProducts.length < 12 ? "inventory" : "customers"
+    })
+  ];
+  const score = items.reduce((sum, item) => sum + (item.state === "done" ? 1 : item.state === "review" ? 0.5 : 0), 0);
+  const percent = Math.round((score / items.length) * 100);
+  return {
+    percent,
+    items,
+    title: percent >= 85 ? "Sistema en etapa comercial" : percent >= 60 ? "Sistema avanzado con pendientes controlables" : "Sistema requiere cierre operativo",
+    detail: `${items.filter((item) => item.state === "done").length}/${items.length} puntos completos. Usa esta ruta para no perder control antes de vender.`
+  };
+}
+
+function closureRoadmapItem({ title, done, review, detail, view }) {
+  const state = done ? "done" : review ? "review" : "pending";
+  const status = done ? "Listo" : review ? "Revisar" : "Pendiente";
+  return { title, detail, view, state, status };
+}
+
+function printCommercialClosureRoadmap() {
+  const printable = window.open("", "_blank", "width=900,height=920");
+  if (!printable) return;
+  const roadmap = buildCommercialClosureRoadmap();
+  const title = storeSettings.storeName || storeSettings.companyName || currentUser.companyName || "Empresa cliente";
+  printable.document.write(`<!doctype html><html><head><meta charset="UTF-8"><title>Ruta de cierre ${escapeHtml(title)}</title><style>
+    *{box-sizing:border-box}body{font-family:Arial,sans-serif;margin:0;padding:28px;color:#10251f;background:#fff}
+    .toolbar{margin-bottom:16px}.toolbar button{border:0;border-radius:10px;padding:11px 18px;background:#0f172a;color:#fff;font-weight:900}
+    .head{display:flex;justify-content:space-between;gap:22px;border-bottom:3px solid #0f766e;padding-bottom:16px;margin-bottom:18px}
+    h1{margin:0;font-size:25px;text-transform:uppercase}.muted{color:#5b6f69;font-size:12px;line-height:1.45}.score{font-size:42px;font-weight:900;color:#0f766e;text-align:right}
+    .grid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}.item{break-inside:avoid;border:1px solid #d9ebe5;border-radius:14px;padding:14px;background:#f8fffc}.item.review{background:#fffbeb;border-color:#fde68a}.item.pending{background:#fff1f2;border-color:#fecdd3}
+    .item b{display:inline-grid;place-items:center;border-radius:999px;padding:5px 9px;background:#dcfce7;color:#047857;font-size:10px}.item.review b{background:#fef3c7;color:#92400e}.item.pending b{background:#fee2e2;color:#991b1b}
+    .item strong{display:block;margin:8px 0 4px;color:#0f3d34}.item span,.item small{display:block;color:#53645f;font-size:12px;line-height:1.38}.foot{margin-top:20px;text-align:center;color:#64748b;font-size:11px}
+    @media print{.toolbar{display:none}body{padding:18px}.item{break-inside:avoid}}
+  </style></head><body>
+    <div class="toolbar"><button onclick="print()">Imprimir / Guardar PDF</button></div>
+    <div class="head"><div><h1>Ruta de cierre comercial</h1><p class="muted">${escapeHtml(title)}<br>ZOW Ventas-Almacen<br>Generado: ${formatDateTime(new Date().toISOString())}<br>${escapeHtml(roadmap.detail)}</p></div><div class="score">${roadmap.percent}%</div></div>
+    <div class="grid">${roadmap.items.map((item, index) => `<article class="item ${item.state}"><b>${escapeHtml(item.status)}</b><strong>${index + 1}. ${escapeHtml(item.title)}</strong><span>${escapeHtml(item.detail)}</span></article>`).join("")}</div>
+    <p class="foot">SYSTEM ZOW SAAS - Control de cierre antes de vender</p>
+  </body></html>`);
+  printable.document.close();
+  printable.focus();
 }
 
 function printSalesCommercialManual() {
