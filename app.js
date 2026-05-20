@@ -2208,15 +2208,34 @@ async function renderCompanySystemsPanel(companyId) {
         </div>
       </div>
       <form class="admin-form" id="companySystemsForm">
-        <fieldset class="system-checks">
-          <legend>Sistemas habilitados</legend>
+        <fieldset class="system-checks system-access-editor">
+          <legend>Sistemas contratados y vigencia</legend>
           ${response.systems
             .map(
               (system) => `
-                <label class="check-row">
-                  <input type="checkbox" data-company-system-check value="${escapeHtml(system.id)}" ${activeIds.includes(system.id) ? "checked" : ""} />
-                  ${escapeHtml(system.name)}
-                </label>
+                <article class="system-access-card ${system.access_status === "active" ? "is-active" : "is-inactive"}">
+                  <label class="check-row">
+                    <input type="checkbox" data-company-system-check value="${escapeHtml(system.id)}" ${activeIds.includes(system.id) ? "checked" : ""} />
+                    <strong>${escapeHtml(system.name)}</strong>
+                  </label>
+                  <span>${escapeHtml(system.description || "Sistema SaaS ZOW")}</span>
+                  <div class="system-access-fields">
+                    <label>Plan
+                      <select data-system-plan="${escapeHtml(system.id)}">
+                        <option value="basico" ${(system.access_plan || company.plan) === "basico" ? "selected" : ""}>Basico</option>
+                        <option value="profesional" ${(system.access_plan || company.plan) === "profesional" ? "selected" : ""}>Profesional</option>
+                        <option value="institucional" ${(system.access_plan || company.plan) === "institucional" ? "selected" : ""}>Institucional</option>
+                      </select>
+                    </label>
+                    <label>Inicio
+                      <input type="date" data-system-start="${escapeHtml(system.id)}" value="${escapeHtml(normalizeDateForInput(system.access_starts_at) || normalizeDateForInput(company.starts_at) || todayInputDate())}" />
+                    </label>
+                    <label>Vence
+                      <input type="date" data-system-end="${escapeHtml(system.id)}" value="${escapeHtml(normalizeDateForInput(system.access_ends_at) || normalizeDateForInput(company.ends_at))}" />
+                    </label>
+                  </div>
+                  <small>${system.access_status === "active" ? `Activo / ${escapeHtml(membershipRemainingLabel(system.access_ends_at || company.ends_at))}` : "Inactivo para esta empresa"}</small>
+                </article>
               `
             )
             .join("")}
@@ -2235,13 +2254,31 @@ async function renderCompanySystemsPanel(companyId) {
       method: "PATCH",
       body: {
         systems: getCheckedValues("[data-company-system-check]"),
-        plan: company.plan
+        plan: company.plan,
+        systemAccess: buildCompanySystemAccessPayload()
       }
     });
     await loadRemoteConfig();
     renderMetrics();
     renderZowAdmin();
   });
+}
+
+function buildCompanySystemAccessPayload() {
+  return saasSystems.reduce((payload, system) => {
+    const selectorId = cssEscape(system.id);
+    payload[system.id] = {
+      plan: document.querySelector(`[data-system-plan="${selectorId}"]`)?.value || "basico",
+      startsAt: document.querySelector(`[data-system-start="${selectorId}"]`)?.value || "",
+      endsAt: document.querySelector(`[data-system-end="${selectorId}"]`)?.value || ""
+    };
+    return payload;
+  }, {});
+}
+
+function cssEscape(value) {
+  if (window.CSS?.escape) return CSS.escape(String(value));
+  return String(value).replace(/["\\]/g, "\\$&");
 }
 
 function renderCompanyListPanel() {

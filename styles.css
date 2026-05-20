@@ -12595,6 +12595,52 @@ body.app-ventas .business-health-grid article {
   text-transform: uppercase;
 }
 
+.system-access-editor {
+  gap: 12px;
+}
+
+.system-access-card {
+  display: grid;
+  gap: 10px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 12px;
+  background: linear-gradient(145deg, #ffffff, #f8fafc);
+}
+
+.system-access-card.is-active {
+  border-color: color-mix(in srgb, var(--accent) 28%, var(--line));
+  background: linear-gradient(145deg, #ffffff, color-mix(in srgb, var(--accent-tint) 45%, white));
+}
+
+.system-access-card > span,
+.system-access-card > small {
+  display: block;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.35;
+}
+
+.system-access-card > small {
+  color: var(--accent-dark);
+}
+
+.system-access-fields {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.system-access-fields label {
+  font-size: 12px;
+}
+
+.system-access-fields select,
+.system-access-fields input {
+  width: 100%;
+}
+
 .ok-text {
   color: var(--ok) !important;
 }
@@ -15232,6 +15278,7 @@ body.system-zow-site .site-footer {
   .role-permission-grid,
   .role-advisor-panel,
   .role-advisor-metrics,
+  .system-access-fields,
   .user-role-coverage,
   .access-security-grid,
   .shift-command-grid,

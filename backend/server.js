@@ -254,9 +254,11 @@ app.get("/api/auth/systems", requireAuth, (req, res) => {
        JOIN saas_systems ON saas_systems.id = company_system_access.system_id
        WHERE company_system_access.company_id = ? AND company_system_access.status = 'active' AND saas_systems.status = 'active'
          AND saas_systems.id IN (${sqlPlaceholders(enabledPanelSystemIds)})
+         AND (company_system_access.starts_at = '' OR company_system_access.starts_at <= ?)
+         AND (company_system_access.ends_at = '' OR company_system_access.ends_at >= ?)
        ORDER BY saas_systems.name`
     )
-    .all(req.user.company_id, ...enabledPanelSystemIds);
+    .all(req.user.company_id, ...enabledPanelSystemIds, todayIsoDate(), todayIsoDate());
   res.json({ systems });
 });
 
@@ -1219,7 +1221,9 @@ app.get("/api/companies/:id/systems", requireAuth, requireRole("zow_owner"), (re
   const systems = db
     .prepare(
       `SELECT saas_systems.*, COALESCE(company_system_access.status, 'inactive') AS access_status,
-              COALESCE(company_system_access.plan, '') AS access_plan
+              COALESCE(company_system_access.plan, '') AS access_plan,
+              COALESCE(company_system_access.starts_at, '') AS access_starts_at,
+              COALESCE(company_system_access.ends_at, '') AS access_ends_at
        FROM saas_systems
        LEFT JOIN company_system_access ON company_system_access.system_id = saas_systems.id AND company_system_access.company_id = ?
        WHERE saas_systems.id IN (${sqlPlaceholders(enabledPanelSystemIds)})
@@ -1233,17 +1237,27 @@ app.patch("/api/companies/:id/systems", requireAuth, requireRole("zow_owner"), (
   const company = db.prepare("SELECT id FROM companies WHERE id = ? AND id <> 'zow-internal'").get(req.params.id);
   if (!company) return res.status(404).json({ error: "Empresa no encontrada" });
   const enabledSystems = Array.isArray(req.body.systems) ? req.body.systems.map(String) : [];
+  const systemAccess = req.body.systemAccess && typeof req.body.systemAccess === "object" ? req.body.systemAccess : {};
   const plan = String(req.body.plan || "basico");
   const now = new Date().toISOString();
 
   const systems = db.prepare("SELECT id FROM saas_systems").all().map((system) => system.id);
   const upsertAccess = db.prepare(
-    `INSERT INTO company_system_access (company_id, system_id, status, plan, updated_at)
-     VALUES (?, ?, ?, ?, ?)
-     ON CONFLICT(company_id, system_id) DO UPDATE SET status = excluded.status, plan = excluded.plan, updated_at = excluded.updated_at`
+    `INSERT INTO company_system_access (company_id, system_id, status, plan, starts_at, ends_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?)
+     ON CONFLICT(company_id, system_id) DO UPDATE SET status = excluded.status, plan = excluded.plan, starts_at = excluded.starts_at, ends_at = excluded.ends_at, updated_at = excluded.updated_at`
   );
   systems.forEach((systemId) => {
-    upsertAccess.run(company.id, systemId, enabledSystems.includes(systemId) ? "active" : "inactive", plan, now);
+    const detail = systemAccess[systemId] || {};
+    upsertAccess.run(
+      company.id,
+      systemId,
+      enabledSystems.includes(systemId) ? "active" : "inactive",
+      String(detail.plan || plan || "basico"),
+      normalizeDateInput(detail.startsAt || detail.starts_at),
+      normalizeDateInput(detail.endsAt || detail.ends_at),
+      now
+    );
   });
   recordAuditEvent({
     req,
@@ -2742,11 +2756,14 @@ function requireSystemAccess(systemId) {
   return (req, res, next) => {
     if (req.user.role === "zow_owner") return res.status(403).json({ error: "El panel ZOW no opera sistemas de empresas" });
     const access = db
-      .prepare("SELECT status FROM company_system_access WHERE company_id = ? AND system_id = ?")
+      .prepare("SELECT status, starts_at, ends_at FROM company_system_access WHERE company_id = ? AND system_id = ?")
       .get(req.user.company_id, systemId);
     if (!access || access.status !== "active") {
       return res.status(403).json({ error: "La empresa no tiene acceso activo a este sistema" });
     }
+    const today = todayIsoDate();
+    if (access.starts_at && access.starts_at > today) return res.status(403).json({ error: "Este sistema aun no esta habilitado para la empresa" });
+    if (access.ends_at && access.ends_at < today) return res.status(403).json({ error: "La membresia de este sistema vencio. Contacte a ZOW para renovar." });
     next();
   };
 }

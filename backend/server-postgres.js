@@ -243,10 +243,13 @@ app.get("/api/auth/systems", requireAuth, async (req, res) => {
     return res.json({ systems });
   }
   const systems = await pg.all(
-    `SELECT saas_systems.*, company_system_access.plan, company_system_access.status AS access_status
+    `SELECT saas_systems.*, company_system_access.plan, company_system_access.status AS access_status,
+            company_system_access.starts_at, company_system_access.ends_at
      FROM company_system_access
      JOIN saas_systems ON saas_systems.id = company_system_access.system_id
      WHERE company_system_access.company_id = ? AND company_system_access.status = 'active' AND saas_systems.status = 'active' AND saas_systems.id = ANY(?::text[])
+       AND (COALESCE(NULLIF(company_system_access.starts_at, ''), CURRENT_DATE::text)::date <= CURRENT_DATE)
+       AND (COALESCE(NULLIF(company_system_access.ends_at, ''), CURRENT_DATE::text)::date >= CURRENT_DATE)
      ORDER BY saas_systems.name`,
     [req.user.company_id, enabledPanelSystemIds]
   );
@@ -1046,7 +1049,9 @@ app.get("/api/companies/:id/systems", requireAuth, requireRole("zow_owner"), asy
   if (!company) return res.status(404).json({ error: "Empresa no encontrada" });
   const systems = await pg.all(
     `SELECT saas_systems.*, COALESCE(company_system_access.status::text, 'inactive') AS access_status,
-            COALESCE(company_system_access.plan, '') AS access_plan
+            COALESCE(company_system_access.plan, '') AS access_plan,
+            COALESCE(company_system_access.starts_at, '') AS access_starts_at,
+            COALESCE(company_system_access.ends_at, '') AS access_ends_at
      FROM saas_systems
      LEFT JOIN company_system_access ON company_system_access.system_id = saas_systems.id AND company_system_access.company_id = ?
      WHERE saas_systems.id = ANY(?::text[])
@@ -1060,15 +1065,21 @@ app.patch("/api/companies/:id/systems", requireAuth, requireRole("zow_owner"), a
   const company = await pg.get("SELECT id FROM companies WHERE id = ? AND id <> 'zow-internal'", [req.params.id]);
   if (!company) return res.status(404).json({ error: "Empresa no encontrada" });
   const enabledSystems = Array.isArray(req.body.systems) ? req.body.systems.map(String) : [];
+  const systemAccess = req.body.systemAccess && typeof req.body.systemAccess === "object" ? req.body.systemAccess : {};
   const plan = String(req.body.plan || "basico");
   const now = new Date().toISOString();
   const systems = await pg.all("SELECT id FROM saas_systems");
   for (const system of systems) {
+    const detail = systemAccess[system.id] || {};
+    const systemPlan = String(detail.plan || plan || "basico");
+    const startsAt = normalizeDateInput(detail.startsAt || detail.starts_at);
+    const endsAt = normalizeDateInput(detail.endsAt || detail.ends_at);
+    const isEnabled = enabledSystems.includes(system.id);
     await pg.run(
-      `INSERT INTO company_system_access (company_id, system_id, status, plan, updated_at)
-       VALUES (?, ?, ?::system_status, ?, ?)
-       ON CONFLICT(company_id, system_id) DO UPDATE SET status = excluded.status, plan = excluded.plan, updated_at = excluded.updated_at`,
-      [company.id, system.id, enabledSystems.includes(system.id) ? "active" : "inactive", plan, now]
+      `INSERT INTO company_system_access (company_id, system_id, status, plan, starts_at, ends_at, updated_at)
+       VALUES (?, ?, ?::system_status, ?, ?, ?, ?)
+       ON CONFLICT(company_id, system_id) DO UPDATE SET status = excluded.status, plan = excluded.plan, starts_at = excluded.starts_at, ends_at = excluded.ends_at, updated_at = excluded.updated_at`,
+      [company.id, system.id, isEnabled ? "active" : "inactive", systemPlan, startsAt, endsAt, now]
     );
   }
   await recordAuditEvent({
@@ -2936,9 +2947,18 @@ async function requireSystemAccess(systemId, req, res) {
     res.status(403).json({ error: "El panel ZOW no opera sistemas de empresas" });
     return false;
   }
-  const access = await pg.get("SELECT status FROM company_system_access WHERE company_id = ? AND system_id = ?", [req.user.company_id, systemId]);
+  const access = await pg.get("SELECT status, starts_at, ends_at FROM company_system_access WHERE company_id = ? AND system_id = ?", [req.user.company_id, systemId]);
   if (!access || access.status !== "active") {
     res.status(403).json({ error: "La empresa no tiene acceso activo a este sistema" });
+    return false;
+  }
+  const today = todayIsoDate();
+  if (access.starts_at && String(access.starts_at).slice(0, 10) > today) {
+    res.status(403).json({ error: "Este sistema aun no esta habilitado para la empresa" });
+    return false;
+  }
+  if (access.ends_at && String(access.ends_at).slice(0, 10) < today) {
+    res.status(403).json({ error: "La membresia de este sistema vencio. Contacte a ZOW para renovar." });
     return false;
   }
   return true;
