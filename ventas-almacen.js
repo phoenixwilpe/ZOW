@@ -640,6 +640,7 @@ function renderSummary() {
     ${currentUser?.role === "supervisor" ? renderSupervisorControlPanel({ todaySales, criticalProducts, debtTotal, cashOpen }) : ""}
     ${renderTrainingBanner()}
     ${renderSalesMembershipNotice()}
+    ${renderFirstSetupGateway()}
     ${renderAdminSystemOverview({ criticalProducts, cashOpen })}
     ${renderCommercialAlertsPanel()}
     <section class="setup-overview">
@@ -674,6 +675,40 @@ function renderSummary() {
       renderMain();
     });
   });
+}
+
+function renderFirstSetupGateway() {
+  if (!["admin", "ventas_admin"].includes(currentUser?.role || "")) return "";
+  const steps = buildSetupAssistantSteps();
+  const completed = steps.filter((item) => item.done).length;
+  const percent = Math.round((completed / steps.length) * 100);
+  if (percent >= 100) return "";
+  const nextStep = steps.find((item) => !item.done);
+  const requiredSteps = steps.slice(0, 5);
+  const requiredDone = requiredSteps.filter((item) => item.done).length;
+  return `<section class="first-setup-gateway">
+    <div class="first-setup-copy">
+      <p class="eyebrow">Primera configuracion</p>
+      <h3>Completa la tienda antes de entregar usuarios</h3>
+      <span>Este acceso guia al encargado paso por paso para que la empresa quede lista: datos, comprobante, cajas, usuarios e inventario.</span>
+    </div>
+    <div class="first-setup-progress-card">
+      <strong>${percent}%</strong>
+      <span>${completed}/${steps.length} pasos listos</span>
+      <div class="setup-progress"><span style="width:${percent}%"></span></div>
+    </div>
+    <div class="first-setup-next">
+      <span>Siguiente paso</span>
+      <strong>${escapeHtml(nextStep?.label || "Revision final")}</strong>
+      <small>${escapeHtml(nextStep?.detail || "Revisa la configuracion general.")}</small>
+      <em>Base obligatoria: ${requiredDone}/${requiredSteps.length}</em>
+    </div>
+    <div class="first-setup-actions">
+      ${nextStep?.view && canAccessView(nextStep.view) ? `<button class="primary-button" type="button" data-module-view="${nextStep.view}">Completar ahora</button>` : ""}
+      <button class="ghost-button" type="button" data-module-view="settings">Ver asistente</button>
+      <button class="ghost-button" type="button" data-module-view="help">Manual rapido</button>
+    </div>
+  </section>`;
 }
 
 function renderAdminSystemOverview({ criticalProducts, cashOpen }) {

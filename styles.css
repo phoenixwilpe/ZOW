@@ -6501,6 +6501,99 @@ body.app-ventas .daily-operation-track strong {
   overflow: hidden;
 }
 
+.first-setup-gateway {
+  display: grid;
+  grid-template-columns: minmax(0, 1.25fr) minmax(150px, 0.34fr) minmax(210px, 0.65fr) auto;
+  gap: 14px;
+  align-items: stretch;
+  margin-bottom: 14px;
+  border: 1px solid rgb(245 158 11 / 26%);
+  border-radius: 20px;
+  padding: 16px;
+  background:
+    radial-gradient(circle at 92% 12%, rgb(245 158 11 / 18%), transparent 30%),
+    radial-gradient(circle at 10% 84%, rgb(16 185 129 / 16%), transparent 32%),
+    linear-gradient(145deg, #ffffff, #fffbeb);
+  box-shadow: 0 18px 42px rgb(120 53 15 / 8%);
+}
+
+.first-setup-copy h3 {
+  margin: 0 0 6px;
+  color: var(--accent-dark);
+  font-size: clamp(1.15rem, 2.2vw, 1.6rem);
+}
+
+.first-setup-copy span,
+.first-setup-next small,
+.first-setup-next em,
+.first-setup-progress-card span {
+  display: block;
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-weight: 830;
+  line-height: 1.4;
+}
+
+.first-setup-progress-card,
+.first-setup-next {
+  border: 1px solid rgb(15 118 110 / 12%);
+  border-radius: 16px;
+  padding: 12px;
+  background: rgb(255 255 255 / 74%);
+}
+
+.first-setup-progress-card strong {
+  display: block;
+  color: var(--accent-dark);
+  font-size: clamp(1.8rem, 4vw, 2.6rem);
+  line-height: 1;
+}
+
+.first-setup-progress-card .setup-progress {
+  margin-top: 10px;
+}
+
+.first-setup-next span {
+  display: block;
+  color: #92400e;
+  font-size: 0.74rem;
+  font-weight: 950;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.first-setup-next strong {
+  display: block;
+  margin: 4px 0;
+  color: var(--accent-dark);
+}
+
+.first-setup-next em {
+  width: max-content;
+  max-width: 100%;
+  margin-top: 8px;
+  border-radius: 999px;
+  padding: 5px 9px;
+  background: #fef3c7;
+  color: #92400e;
+  font-style: normal;
+  font-weight: 950;
+}
+
+.first-setup-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  justify-content: center;
+  min-width: 150px;
+}
+
+.first-setup-actions button {
+  width: 100%;
+  min-height: 40px;
+  white-space: nowrap;
+}
+
 .setup-assistant-actions {
   display: flex;
   align-items: center;
@@ -15278,6 +15371,7 @@ body.system-zow-site .site-footer {
   .role-permission-grid,
   .role-advisor-panel,
   .role-advisor-metrics,
+  .first-setup-gateway,
   .system-access-fields,
   .user-role-coverage,
   .access-security-grid,
@@ -15634,6 +15728,7 @@ body.system-zow-site .site-footer {
   .demo-data-kit-head,
   .demo-guide-head,
   body.app-ventas .training-mode-banner,
+  .first-setup-gateway,
   body.app-ventas .training-lab-panel {
     align-items: stretch;
     flex-direction: column;
@@ -15643,6 +15738,8 @@ body.system-zow-site .site-footer {
   .backup-control-head button,
   body.app-ventas .inventory-filter-bar > .ghost-button,
   body.app-ventas .training-mode-banner button,
+  .first-setup-actions,
+  .first-setup-actions button,
   .commercial-roadmap-next button,
   .demo-data-kit-actions button,
   body.app-ventas .training-lab-actions,
