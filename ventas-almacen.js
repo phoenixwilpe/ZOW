@@ -350,6 +350,8 @@ stockMovementForm.addEventListener("submit", saveStockMovement);
 document.querySelector("#stockMovementType")?.addEventListener("change", updateStockMovementPreview);
 document.querySelector("#stockMovementQuantity")?.addEventListener("input", updateStockMovementPreview);
 receivablePaymentForm.addEventListener("submit", saveReceivablePayment);
+document.querySelector("#receivablePaymentAmount")?.addEventListener("input", updateReceivablePaymentPreview);
+document.querySelector("#receivablePaymentMethod")?.addEventListener("change", updateReceivablePaymentPreview);
 voidSaleForm.addEventListener("submit", submitVoidSale);
 
 render();
@@ -7718,6 +7720,7 @@ async function payReceivable(saleId) {
     <div><span>Saldo</span><strong class="warn-text">${money(sale.balance_due)}</strong></div>
   `;
   document.querySelector("#receivablePaymentAmount").value = Number(sale.balance_due || 0).toFixed(2);
+  updateReceivablePaymentPreview();
   receivablePaymentModal.showModal();
 }
 
@@ -7727,6 +7730,33 @@ function payOldestReceivableForCustomer(customerName) {
     .sort((a, b) => new Date(a.created_at) - new Date(b.created_at))[0];
   if (!sale) return;
   payReceivable(sale.id);
+}
+
+function updateReceivablePaymentPreview() {
+  const sale = receivables.find((item) => item.id === receivablePaymentDraft.saleId);
+  const preview = document.querySelector("#receivablePaymentPreview");
+  if (!sale || !preview) return;
+  const balance = Number(sale.balance_due || 0);
+  const amount = Number(value("#receivablePaymentAmount") || 0);
+  const method = value("#receivablePaymentMethod") || "efectivo";
+  const finalBalance = Math.max(balance - amount, 0);
+  const overpay = amount > balance;
+  const invalid = !Number.isFinite(amount) || amount <= 0;
+  const status = invalid
+    ? { className: "is-danger", title: "Monto invalido", detail: "Ingresa un monto mayor a cero para aplicar el pago." }
+    : overpay
+      ? { className: "is-danger", title: "Pago superior al saldo", detail: "El monto no puede superar el saldo pendiente de la venta." }
+      : finalBalance === 0
+        ? { className: "is-ok", title: "Cuenta quedara pagada", detail: "Al confirmar, esta cuenta saldra de saldos pendientes." }
+        : { className: "is-warning", title: "Pago parcial", detail: "La cuenta seguira con saldo pendiente despues de aplicar este pago." };
+  preview.className = `receivable-payment-preview ${status.className}`;
+  preview.innerHTML = `
+    <article><span>Saldo anterior</span><strong>${money(balance)}</strong></article>
+    <article><span>Pago nuevo</span><strong>${money(amount)}</strong></article>
+    <article><span>Saldo final</span><strong>${money(finalBalance)}</strong></article>
+    <article><span>Metodo</span><strong>${escapeHtml(paymentLabel(method))}</strong></article>
+    <div><strong>${escapeHtml(status.title)}</strong><span>${escapeHtml(status.detail)}</span></div>
+  `;
 }
 
 async function saveReceivablePayment(event) {

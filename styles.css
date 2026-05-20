@@ -9135,6 +9135,36 @@ body.app-ventas .business-health-grid article {
   margin-bottom: 12px;
 }
 
+.receivable-payment-preview {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr)) minmax(200px, 1.15fr);
+  gap: 10px;
+  margin-top: 12px;
+  border: 1px solid rgb(15 118 110 / 12%);
+  border-radius: 16px;
+  padding: 12px;
+  background: linear-gradient(145deg, rgb(255 255 255 / 94%), rgb(236 253 245 / 76%));
+}
+
+.receivable-payment-preview.is-warning {
+  border-color: rgb(245 158 11 / 26%);
+  background: linear-gradient(145deg, rgb(255 255 255 / 95%), rgb(255 251 235 / 82%));
+}
+
+.receivable-payment-preview.is-danger {
+  border-color: rgb(239 68 68 / 24%);
+  background: linear-gradient(145deg, rgb(255 255 255 / 95%), rgb(254 242 242 / 82%));
+}
+
+.receivable-payment-preview article,
+.receivable-payment-preview > div {
+  min-width: 0;
+  border: 1px solid rgb(15 118 110 / 10%);
+  border-radius: 13px;
+  padding: 10px;
+  background: rgb(255 255 255 / 72%);
+}
+
 .receivable-payment-card div {
   border: 1px solid color-mix(in srgb, var(--accent) 16%, var(--line));
   border-radius: 8px;
@@ -9142,14 +9172,17 @@ body.app-ventas .business-health-grid article {
   background: linear-gradient(135deg, #ffffff, color-mix(in srgb, var(--accent-tint) 32%, white));
 }
 
-.receivable-payment-card span {
+.receivable-payment-card span,
+.receivable-payment-preview span {
   display: block;
   color: var(--muted);
   font-size: 0.76rem;
   font-weight: 850;
+  line-height: 1.32;
 }
 
-.receivable-payment-card strong {
+.receivable-payment-card strong,
+.receivable-payment-preview strong {
   display: block;
   margin-top: 4px;
   color: var(--accent-dark);
@@ -14511,6 +14544,7 @@ body.system-zow-site .site-footer {
   .finance-overview-cards.is-cashier,
   .cashier-cash-guide-grid,
   .stock-movement-preview,
+  .receivable-payment-preview,
   .customer-filter-bar,
   .customer-filter-actions,
   .help-guide-grid,
@@ -15535,6 +15569,8 @@ body.app-ventas .sale-detail-summary article,
 body.app-ventas .sale-detail-card,
 body.app-ventas .sale-detail-items article,
 body.app-ventas .receivable-payment-card div,
+body.app-ventas .receivable-payment-preview article,
+body.app-ventas .receivable-payment-preview > div,
 body.app-ventas .stock-movement-product {
   border-radius: 16px;
   border-color: rgb(15 118 110 / 12%);
