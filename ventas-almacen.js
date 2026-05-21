@@ -94,6 +94,7 @@ let purchaseCart = [];
 let notificationsOpen = false;
 let activeSaleDraftRestored = false;
 let helpRolePreview = currentUser?.role || "cajero";
+let settingsWindow = "inicio";
 let ventasPermissions = null;
 
 const starterProducts = [
@@ -4668,10 +4669,13 @@ function renderUsers() {
 function renderSettings() {
   setCount("Tienda");
   const isSystemAdmin = currentUser?.role === "admin";
+  const allowedWindows = ["inicio", "empresa", "comprobante", "respaldo", "modelos"];
+  if (!allowedWindows.includes(settingsWindow)) settingsWindow = "inicio";
   mainList().innerHTML = `
     ${isSystemAdmin ? renderAdminConfigConsole() : `${renderSetupAssistant()}${renderStoreLaunchChecklist()}`}
+    ${isSystemAdmin ? "" : renderSettingsWindowNav()}
     ${renderStoreSettingsOverview()}
-    <section class="admin-panel settings-command-panel">
+    <section class="admin-panel settings-command-panel settings-window-panel ${settingsWindow === "empresa" ? "is-active" : ""}" ${settingsWindow === "empresa" ? "" : "hidden"}>
       <div class="admin-panel-head"><div><p class="eyebrow">Empresa</p><h3>Datos para ventas e impresion</h3></div></div>
       <form class="admin-form" id="storeSettingsForm">
         <div class="settings-preset-row">
@@ -4698,9 +4702,10 @@ function renderSettings() {
         <div class="modal-actions"><button class="primary-button" type="submit">Guardar configuracion</button></div>
       </form>
     </section>
-    ${renderReceiptPreview()}
-    ${isSystemAdmin ? "" : renderBackupControlPanel()}
-    ${isSystemAdmin ? "" : renderRoleConfigGuide()}
+    ${isSystemAdmin ? "" : renderSettingsStartWindow()}
+    <div class="settings-window-panel ${settingsWindow === "comprobante" ? "is-active" : ""}" ${settingsWindow === "comprobante" ? "" : "hidden"}>${renderReceiptPreview()}</div>
+    ${isSystemAdmin ? "" : `<div class="settings-window-panel ${settingsWindow === "respaldo" ? "is-active" : ""}" ${settingsWindow === "respaldo" ? "" : "hidden"}>${renderBackupControlPanel()}</div>`}
+    ${isSystemAdmin ? "" : `<div class="settings-window-panel ${settingsWindow === "modelos" ? "is-active" : ""}" ${settingsWindow === "modelos" ? "" : "hidden"}>${renderRoleConfigGuide()}</div>`}
   `;
   document.querySelector("#storeSettingsForm")?.addEventListener("submit", saveStoreSettings);
   document.querySelector("#copySetupPlanBtn")?.addEventListener("click", copySetupImplementationSummary);
@@ -4708,9 +4713,54 @@ function renderSettings() {
   document.querySelector("#printStoreDeliveryBtn")?.addEventListener("click", printStoreDeliverySheet);
   document.querySelector("#exportBackupJsonTop")?.addEventListener("click", exportBackupJson);
   document.querySelector("#printBackupProtocolBtn")?.addEventListener("click", printBackupProtocol);
+  document.querySelectorAll("[data-settings-window]").forEach((button) => {
+    button.addEventListener("click", () => {
+      settingsWindow = button.dataset.settingsWindow || "inicio";
+      renderSettings();
+    });
+  });
   document.querySelectorAll("[data-settings-preset]").forEach((button) => {
     button.addEventListener("click", () => applySettingsPreset(button.dataset.settingsPreset));
   });
+}
+
+function renderSettingsWindowNav() {
+  const windows = [
+    { key: "inicio", label: "Inicio", detail: "pasos" },
+    { key: "empresa", label: "Empresa", detail: "datos" },
+    { key: "comprobante", label: "Comprobante", detail: "ticket" },
+    { key: "respaldo", label: "Respaldo", detail: "seguridad" },
+    { key: "modelos", label: "Modelos", detail: "roles" }
+  ];
+  return `<nav class="settings-window-nav" aria-label="Ventanas de configuracion">
+    ${windows.map((item) => `<button class="${settingsWindow === item.key ? "is-active" : ""}" type="button" data-settings-window="${item.key}">
+      <strong>${escapeHtml(item.label)}</strong>
+      <span>${escapeHtml(item.detail)}</span>
+    </button>`).join("")}
+  </nav>`;
+}
+
+function renderSettingsStartWindow() {
+  const launchChecks = buildStoreLaunchChecks();
+  const pending = launchChecks.filter((item) => !item.done);
+  const cards = [
+    { window: "empresa", title: "Datos de empresa", detail: "Nombre, moneda, cajas, impuesto y reglas de venta." },
+    { window: "comprobante", title: "Comprobante", detail: "Vista previa de ticket y datos fiscales visibles." },
+    { window: "respaldo", title: "Respaldo", detail: "Exporta JSON y protocolo antes de entregar o actualizar." },
+    { window: "modelos", title: "Modelos de trabajo", detail: "Tienda chica, operador integral o roles separados." }
+  ];
+  return `<section class="settings-start-window settings-window-panel ${settingsWindow === "inicio" ? "is-active" : ""}" ${settingsWindow === "inicio" ? "" : "hidden"}>
+    <div class="admin-panel-head">
+      <div><p class="eyebrow">Ventanas de configuracion</p><h3>Ordena la tienda paso por paso</h3><span>Elige una ventana para trabajar solo en esa parte y evitar pantallas largas.</span></div>
+      <strong>${pending.length ? `${num(pending.length)} pendiente${pending.length === 1 ? "" : "s"}` : "Listo"}</strong>
+    </div>
+    <div class="settings-start-grid">
+      ${cards.map((card) => `<button type="button" data-settings-window="${card.window}">
+        <span>${escapeHtml(card.title)}</span>
+        <strong>${escapeHtml(card.detail)}</strong>
+      </button>`).join("")}
+    </div>
+  </section>`;
 }
 
 function renderAdminConfigConsole() {

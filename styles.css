@@ -9238,6 +9238,88 @@ body.app-ventas .product-margin-preview span {
     linear-gradient(145deg, rgb(255 255 255 / 94%), rgb(248 253 250 / 86%));
 }
 
+.settings-window-nav {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 14px;
+  border: 1px solid rgb(15 118 110 / 12%);
+  border-radius: 18px;
+  padding: 8px;
+  background: rgb(255 255 255 / 78%);
+  box-shadow: 0 16px 36px rgb(15 32 28 / 7%);
+}
+
+.settings-window-nav button,
+.settings-start-grid button {
+  border: 1px solid rgb(15 118 110 / 12%);
+  border-radius: 14px;
+  padding: 12px;
+  background: rgb(248 253 250 / 86%);
+  color: var(--accent-dark);
+  text-align: left;
+  cursor: pointer;
+  transition: transform 150ms ease, box-shadow 150ms ease, border-color 150ms ease, background 150ms ease;
+}
+
+.settings-window-nav button:hover,
+.settings-start-grid button:hover,
+.settings-window-nav button.is-active {
+  border-color: rgb(15 118 110 / 28%);
+  background: linear-gradient(135deg, rgb(16 185 129 / 14%), rgb(245 158 11 / 10%));
+  box-shadow: 0 12px 28px rgb(15 118 110 / 10%);
+  transform: translateY(-1px);
+}
+
+.settings-window-nav strong,
+.settings-window-nav span,
+.settings-start-grid span,
+.settings-start-grid strong {
+  display: block;
+}
+
+.settings-window-nav strong {
+  font-size: 0.9rem;
+  font-weight: 950;
+}
+
+.settings-window-nav span,
+.settings-start-grid strong {
+  color: var(--muted);
+  font-size: 0.74rem;
+  font-weight: 850;
+  line-height: 1.35;
+}
+
+.settings-window-panel[hidden] {
+  display: none !important;
+}
+
+.settings-start-window {
+  display: grid;
+  gap: 14px;
+  margin-bottom: 14px;
+  border: 1px solid rgb(15 118 110 / 14%);
+  border-radius: 18px;
+  padding: 16px;
+  background:
+    radial-gradient(circle at 92% 10%, rgb(16 185 129 / 12%), transparent 32%),
+    linear-gradient(135deg, rgb(255 255 255 / 96%), rgb(240 253 250 / 78%));
+}
+
+.settings-start-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.settings-start-grid span {
+  margin-bottom: 5px;
+  color: var(--accent-dark);
+  font-size: 0.9rem;
+  font-weight: 950;
+}
+
 .settings-preset-row {
   grid-template-columns: repeat(3, minmax(0, 1fr));
   margin-bottom: 8px;
@@ -16198,6 +16280,8 @@ body.system-zow-site .site-footer {
   body.app-ventas .inventory-filter-actions,
   body.app-ventas .daily-operation-track,
   .settings-overview-grid,
+  .settings-window-nav,
+  .settings-start-grid,
   .store-launch-grid,
   .backup-control-grid,
   .backup-check-grid,
