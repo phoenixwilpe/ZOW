@@ -4189,6 +4189,7 @@ function renderInventory() {
     </section>
     ${renderInventoryDecisionStrip({ reorderProducts, expiringProducts, overstockProducts, marginRiskProducts, riskProducts })}
     ${renderInventoryRiskBoard({ expiringProducts, overstockProducts, marginRiskProducts })}`}
+    ${can("manageInventory") ? renderInventoryImportGuide() : ""}
     <section class="admin-panel inventory-reorder-panel">
       <div class="admin-panel-head">
         <div><p class="eyebrow">Reposicion inteligente</p><h3>Productos que necesitan atencion</h3></div>
@@ -4214,6 +4215,9 @@ function renderInventory() {
   bindInventoryFilterBar();
   document.querySelector("#prepareSuggestedPurchaseFromInventory")?.addEventListener("click", prepareSuggestedPurchase);
   document.querySelector("#exportInventoryRiskCsv")?.addEventListener("click", exportInventoryRiskCsv);
+  document.querySelector("#downloadProductTemplateInventory")?.addEventListener("click", downloadProductImportTemplate);
+  document.querySelector("#importProductsFileInventory")?.addEventListener("change", importProductsFile);
+  document.querySelector("#printInventoryImportGuide")?.addEventListener("click", printInventoryImportGuide);
   document.querySelector("#loadStarterProducts")?.addEventListener("click", loadStarterProducts);
   document.querySelectorAll("[data-stock-move]").forEach((button) => {
     button.addEventListener("click", () => openStockMovement(button.dataset.stockMove, button.dataset.type));
@@ -4400,6 +4404,57 @@ function renderInventoryDecisionStrip({ reorderProducts, expiringProducts, overs
       <button class="ghost-button" type="button" id="exportInventoryRiskCsv" ${riskProducts.length ? "" : "disabled"}>Exportar riesgos CSV</button>
     </div>
   </section>`;
+}
+
+function inventoryImportGuideItems() {
+  return [
+    { title: "Columnas clave", detail: "codigo, nombre, categoria, unidad, costo, precio, stock_minimo y stock_inicial.", level: "ok" },
+    { title: "Bloquea importacion", detail: "Codigo o nombre vacio, codigo repetido en el archivo o codigo de barras usado por otro producto.", level: "danger" },
+    { title: "Permite con alerta", detail: "Precio menor al costo, precio en cero o stock inicial igual/menor al minimo.", level: "warning" },
+    { title: "Actualiza sin duplicar", detail: "Si el codigo ya existe en la empresa, el sistema actualiza datos y stock del producto.", level: "info" }
+  ];
+}
+
+function renderInventoryImportGuide() {
+  const items = inventoryImportGuideItems();
+  return `<section class="inventory-import-guide">
+    <div class="inventory-import-head">
+      <div>
+        <p class="eyebrow">Carga inicial segura</p>
+        <h3>Importa productos con validacion previa</h3>
+        <span>Antes de guardar, el sistema revisa codigos, barras, precios y stock para evitar errores de inventario.</span>
+      </div>
+      <div class="inventory-import-actions">
+        <button class="ghost-button" type="button" id="downloadProductTemplateInventory">Plantilla CSV</button>
+        <label class="ghost-button file-action">Importar archivo<input id="importProductsFileInventory" type="file" accept=".csv,text/csv,.xlsx,.xls,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" /></label>
+        <button class="ghost-button" type="button" id="printInventoryImportGuide">Guia</button>
+      </div>
+    </div>
+    <div class="inventory-import-grid">
+      ${items.map((item) => `<article class="is-${item.level}"><strong>${escapeHtml(item.title)}</strong><span>${escapeHtml(item.detail)}</span></article>`).join("")}
+    </div>
+  </section>`;
+}
+
+function printInventoryImportGuide() {
+  const company = storeSettings.storeName || storeSettings.companyName || currentUser.companyName || "Empresa cliente";
+  const printable = window.open("", "_blank", "width=860,height=900");
+  if (!printable) return;
+  const items = inventoryImportGuideItems();
+  const columns = ["codigo", "codigo_barras", "nombre", "categoria", "unidad", "costo", "precio", "stock_minimo", "stock_inicial", "lote", "vencimiento"];
+  printable.document.write(`<!doctype html><html><head><meta charset="UTF-8"><title>Guia importacion inventario ${escapeHtml(company)}</title><style>
+    body{font-family:Arial,sans-serif;margin:0;padding:24px;background:#f6fbf8;color:#10251f}.toolbar{margin-bottom:14px}.toolbar button{border:0;border-radius:999px;background:#0f766e;color:#fff;padding:10px 14px;font-weight:900}.sheet{max-width:900px;margin:auto;background:#fff;border:1px solid #d9ebe5;border-radius:18px;padding:24px;box-shadow:0 18px 45px rgba(15,32,28,.1)}h1{margin:0 0 6px;font-size:24px}p{color:#64746f;margin:0 0 16px}.grid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}.card{border:1px solid #d9ebe5;border-radius:14px;background:#f8fffc;padding:14px;break-inside:avoid}.card strong{display:block;color:#0f3d34;margin-bottom:5px}.card span{color:#64746f;font-size:13px;line-height:1.4}.card.is-danger{background:#fff7f7;border-color:#fecaca}.card.is-warning{background:#fffbeb;border-color:#fde68a}.columns{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0 18px}.columns span{border:1px solid #d9ebe5;border-radius:999px;padding:7px 10px;background:#f8fffc;font-size:12px;font-weight:800}.note{border:1px dashed #94a3b8;border-radius:14px;padding:14px;margin-top:16px;color:#64746f;font-size:13px;line-height:1.45}.foot{text-align:center;color:#64748b;font-size:11px;margin-top:18px}@media(max-width:720px){body{padding:10px}.grid{grid-template-columns:1fr}.sheet{padding:18px}}@media print{body{background:#fff;padding:0}.toolbar{display:none}.sheet{box-shadow:none;border:0;border-radius:0}}
+  </style></head><body><div class="toolbar"><button onclick="print()">Imprimir / Guardar PDF</button></div><main class="sheet">
+    <h1>Guia de importacion de inventario</h1>
+    <p>${escapeHtml(company)} / ${formatDateTime(new Date().toISOString())}</p>
+    <h2>Columnas aceptadas</h2>
+    <div class="columns">${columns.map((column) => `<span>${escapeHtml(column)}</span>`).join("")}</div>
+    <div class="grid">${items.map((item) => `<article class="card is-${item.level}"><strong>${escapeHtml(item.title)}</strong><span>${escapeHtml(item.detail)}</span></article>`).join("")}</div>
+    <div class="note"><strong>Recomendacion:</strong> descarga la plantilla, completa maximo 1000 productos por archivo y revisa la vista previa antes de confirmar. No uses el mismo codigo para productos diferentes.</div>
+    <p class="foot">SYSTEM ZOW SAAS - Control de inventario</p>
+  </main></body></html>`);
+  printable.document.close();
+  printable.focus();
 }
 
 function inventoryDecisionScore({ reorderProducts, expiringProducts, overstockProducts, marginRiskProducts }) {
