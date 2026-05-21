@@ -6151,6 +6151,67 @@ body.app-ventas .training-lab-actions > strong {
   background: #f8fdff;
 }
 
+.role-manual-test-panel {
+  display: grid;
+  gap: 14px;
+  margin-bottom: 14px;
+  border: 1px solid rgb(15 118 110 / 18%);
+  border-radius: 18px;
+  padding: 16px;
+  background:
+    radial-gradient(circle at 92% 10%, rgb(245 158 11 / 12%), transparent 32%),
+    linear-gradient(135deg, rgb(255 255 255 / 96%), rgb(240 253 250 / 78%));
+  box-shadow: 0 18px 44px rgb(15 118 110 / 7%);
+}
+
+.role-manual-test-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.role-manual-test-head h3 {
+  margin: 3px 0 4px;
+  color: var(--accent-dark);
+  font-size: clamp(1.12rem, 2.1vw, 1.45rem);
+}
+
+.role-manual-test-head span,
+.role-manual-test-grid span,
+.role-manual-test-grid small {
+  display: block;
+  color: var(--muted);
+  font-size: 0.84rem;
+  font-weight: 830;
+  line-height: 1.38;
+}
+
+.role-manual-test-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.role-manual-test-grid article {
+  border: 1px solid rgb(15 118 110 / 14%);
+  border-radius: 14px;
+  padding: 12px;
+  background: rgb(255 255 255 / 82%);
+}
+
+.role-manual-test-grid span {
+  font-size: 0.74rem;
+  font-weight: 950;
+  text-transform: uppercase;
+}
+
+.role-manual-test-grid strong {
+  display: block;
+  margin: 5px 0 4px;
+  color: var(--accent-dark);
+}
+
 .commercial-roadmap-grid button {
   margin-top: 8px;
 }
@@ -16090,6 +16151,7 @@ body.system-zow-site .site-footer {
   .inventory-import-grid,
   body.app-ventas .commercial-alerts-grid,
   .device-qa-grid,
+  .role-manual-test-grid,
   body.app-ventas .receipt-preview-shell {
     grid-template-columns: 1fr;
   }
@@ -16116,6 +16178,7 @@ body.system-zow-site .site-footer {
   .commercial-roadmap-head,
   .commercial-roadmap-next,
   .device-qa-head,
+  .role-manual-test-head,
   .inventory-import-head,
   .owner-daily-head,
   .demo-data-kit-head,
@@ -16137,6 +16200,7 @@ body.system-zow-site .site-footer {
   .first-setup-actions button,
   .commercial-roadmap-next button,
   .device-qa-head button,
+  .role-manual-test-head button,
   .inventory-import-actions,
   .inventory-import-actions button,
   .inventory-import-actions .file-action,

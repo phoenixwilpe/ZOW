@@ -4775,6 +4775,7 @@ function renderHelp() {
     ${renderCommercialClosureRoadmapPanel()}
     ${renderDemoDataKitPanel()}
     ${renderDeviceQaPanel()}
+    ${renderRoleManualTestPanel()}
     ${renderDemoSalesGuidePanel()}
     <section class="help-guide-grid">
       ${guides.map((guide) => `<article>
@@ -4859,6 +4860,7 @@ function renderHelp() {
   document.querySelector("#printDemoDataKitBtn")?.addEventListener("click", printDemoDataKit);
   document.querySelector("#printDemoDataKitInlineBtn")?.addEventListener("click", printDemoDataKit);
   document.querySelector("#printDeviceQaBtn")?.addEventListener("click", printDeviceQaChecklist);
+  document.querySelector("#printRoleManualTestBtn")?.addEventListener("click", printRoleManualTestPlan);
   document.querySelector("#downloadDemoProductsBtn")?.addEventListener("click", downloadDemoProductsCsv);
   document.querySelector("#downloadDemoCustomersBtn")?.addEventListener("click", downloadDemoCustomersCsv);
   document.querySelector("#loadStarterProductsFromHelp")?.addEventListener("click", loadStarterProducts);
@@ -5298,6 +5300,55 @@ function printDeviceQaChecklist() {
   printable.document.write(`<!doctype html><html><head><meta charset="UTF-8"><title>Checklist visual ${escapeHtml(title)}</title><style>
     body{font-family:Arial,sans-serif;margin:0;padding:24px;color:#12231f;background:#f7fbfa}.toolbar{margin-bottom:14px}.toolbar button{border:0;border-radius:999px;background:#0f766e;color:#fff;padding:10px 14px;font-weight:900}.sheet{max-width:860px;margin:auto;background:#fff;border:1px solid #d9ebe5;border-radius:18px;padding:24px;box-shadow:0 18px 45px rgba(15,32,28,.1)}h1{margin:0 0 6px;color:#0f3d34}p{margin:0 0 18px;color:#64746f}.grid{display:grid;grid-template-columns:repeat(2,1fr);gap:14px}section{border:1px solid #d9ebe5;border-radius:14px;background:#f8fffc;padding:14px;break-inside:avoid}h2{font-size:15px;margin:0 0 10px;color:#0f766e}label{display:flex;gap:9px;align-items:flex-start;margin:8px 0;font-size:13px;line-height:1.35}label span{width:14px;height:14px;border:1px solid #94a3b8;border-radius:3px;flex:0 0 auto}.signs{display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-top:28px}.signs div{border-top:1px solid #94a3b8;text-align:center;padding-top:8px;color:#64746f;font-size:12px}.foot{text-align:center;color:#64748b;font-size:11px;margin-top:18px}@media(max-width:720px){body{padding:10px}.grid{grid-template-columns:1fr}.sheet{padding:18px}}@media print{body{background:#fff;padding:0}.toolbar{display:none}.sheet{box-shadow:none;border:0;border-radius:0}.grid{grid-template-columns:repeat(2,1fr)}}
   </style></head><body><div class="toolbar"><button onclick="print()">Imprimir / Guardar PDF</button></div><main class="sheet"><h1>Checklist visual por dispositivo</h1><p>${escapeHtml(title)} / ${formatDateTime(new Date().toISOString())}</p><div class="grid">${content}</div><div class="signs"><div>Revision SYSTEM ZOW</div><div>Conformidad cliente</div></div><p class="foot">SYSTEM ZOW SAAS - Control visual previo a entrega</p></main></body></html>`);
+  printable.document.close();
+  printable.focus();
+}
+
+function roleManualTestScenarios() {
+  return [
+    { role: "Encargado de sistema", user: "admin", module: "Configuracion", checks: ["Editar datos de empresa y moneda", "Crear o editar usuarios", "Configurar cantidad de cajas", "Imprimir hoja de entrega", "Exportar respaldo JSON"] },
+    { role: "Cajero", user: "cajero", module: "Venta POS", checks: ["Abrir caja asignada", "Buscar producto y agregar al carrito", "Cobrar efectivo/tarjeta/QR", "Imprimir comprobante", "Cerrar caja sin acceder a configuracion"] },
+    { role: "Almacen", user: "almacen", module: "Inventario", checks: ["Ver stock y Kardex", "Importar o editar productos si corresponde", "Preparar compra sugerida", "Recibir compra y verificar aumento de stock", "Confirmar que no puede vender en caja"] },
+    { role: "Supervisor", user: "supervisor", module: "Reportes", checks: ["Revisar ventas y anulaciones", "Ver diferencias de caja", "Consultar stock critico", "Reimprimir comprobantes permitidos", "Confirmar que no puede abrir/cerrar caja"] },
+    { role: "Vendedor", user: "vendedor", module: "Clientes", checks: ["Registrar o consultar cliente", "Ver catalogo/precios permitidos", "Copiar mensaje de seguimiento", "Consultar cartera sin cobrar si no tiene permiso", "Confirmar que no puede administrar inventario"] }
+  ];
+}
+
+function renderRoleManualTestPanel() {
+  const scenarios = roleManualTestScenarios();
+  return `<section class="role-manual-test-panel">
+    <div class="role-manual-test-head">
+      <div>
+        <p class="eyebrow">Prueba real por roles</p>
+        <h3>Verifica cada credencial antes de entregar</h3>
+        <span>Usa estos escenarios con usuarios reales de la empresa para confirmar que cada rol ve solo lo que necesita.</span>
+      </div>
+      <button class="ghost-button" type="button" id="printRoleManualTestBtn">Imprimir prueba</button>
+    </div>
+    <div class="role-manual-test-grid">
+      ${scenarios.map((scenario) => `<article>
+        <span>${escapeHtml(scenario.module)}</span>
+        <strong>${escapeHtml(scenario.role)}</strong>
+        <small>Probar con usuario tipo: ${escapeHtml(scenario.user)}</small>
+      </article>`).join("")}
+    </div>
+  </section>`;
+}
+
+function printRoleManualTestPlan() {
+  const company = storeSettings.storeName || storeSettings.companyName || currentUser.companyName || "Empresa cliente";
+  const printable = window.open("", "_blank", "width=900,height=920");
+  if (!printable) return;
+  const scenarios = roleManualTestScenarios();
+  printable.document.write(`<!doctype html><html><head><meta charset="UTF-8"><title>Prueba por roles ${escapeHtml(company)}</title><style>
+    body{font-family:Arial,sans-serif;margin:0;padding:24px;background:#f6fbf8;color:#10251f}.toolbar{margin-bottom:14px}.toolbar button{border:0;border-radius:999px;background:#0f766e;color:#fff;padding:10px 14px;font-weight:900}.sheet{max-width:940px;margin:auto;background:#fff;border:1px solid #d9ebe5;border-radius:18px;padding:24px;box-shadow:0 18px 45px rgba(15,32,28,.1)}h1{margin:0 0 6px;font-size:24px}p{color:#64746f;margin:0 0 16px}.grid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}.card{border:1px solid #d9ebe5;border-radius:14px;background:#f8fffc;padding:14px;break-inside:avoid}.card h2{font-size:15px;margin:0 0 4px;color:#0f3d34}.card small{display:block;color:#64746f;margin-bottom:10px}.check{display:flex;gap:9px;align-items:flex-start;margin:8px 0;color:#33443f;font-size:13px;line-height:1.35}.check b{width:15px;height:15px;border:1px solid #94a3b8;border-radius:3px;flex:0 0 auto}.signs{display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-top:28px}.signs div{border-top:1px solid #94a3b8;text-align:center;padding-top:8px;color:#64746f;font-size:12px}.foot{text-align:center;color:#64748b;font-size:11px;margin-top:18px}@media(max-width:720px){body{padding:10px}.grid{grid-template-columns:1fr}.sheet{padding:18px}}@media print{body{background:#fff;padding:0}.toolbar{display:none}.sheet{box-shadow:none;border:0;border-radius:0}.grid{grid-template-columns:repeat(2,1fr)}}
+  </style></head><body><div class="toolbar"><button onclick="print()">Imprimir / Guardar PDF</button></div><main class="sheet">
+    <h1>Prueba real por roles</h1>
+    <p>${escapeHtml(company)} / ${formatDateTime(new Date().toISOString())}<br>Objetivo: confirmar permisos, pantallas visibles y bloqueos antes de entregar credenciales.</p>
+    <div class="grid">${scenarios.map((scenario) => `<article class="card"><h2>${escapeHtml(scenario.role)}</h2><small>Modulo principal: ${escapeHtml(scenario.module)} / usuario tipo: ${escapeHtml(scenario.user)}</small>${scenario.checks.map((check) => `<div class="check"><b></b><span>${escapeHtml(check)}</span></div>`).join("")}</article>`).join("")}</div>
+    <div class="signs"><div>Revision SYSTEM ZOW</div><div>Encargado de sistema</div></div>
+    <p class="foot">SYSTEM ZOW SAAS - Validacion manual de roles</p>
+  </main></body></html>`);
   printable.document.close();
   printable.focus();
 }
