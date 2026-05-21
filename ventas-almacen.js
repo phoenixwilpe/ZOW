@@ -6513,6 +6513,7 @@ function bindVentasUsersPanel() {
   });
   document.querySelector("#exportVentasUsersCsv")?.addEventListener("click", exportVentasUsersCsv);
   document.querySelector("#printVentasUsersSheet")?.addEventListener("click", printVentasUsersSheet);
+  document.querySelector("#printSalesSecurityChecklist")?.addEventListener("click", printSalesSecurityChecklist);
 }
 
 function renderRoleAssignmentAdvisor(operativeUsers) {
@@ -6729,10 +6730,47 @@ function renderAccessSecurityPanel(operativeUsers) {
       </article>`).join("")}
     </div>
     <div class="access-security-tips">
-      <strong>Buenas practicas</strong>
-      <span>Entrega credenciales personales, desactiva usuarios que ya no trabajan y usa operador integral solo en tiendas pequenas o responsables de confianza.</span>
+      <div><strong>Buenas practicas</strong>
+      <span>Entrega credenciales personales, desactiva usuarios que ya no trabajan y usa operador integral solo en tiendas pequenas o responsables de confianza.</span></div>
+      <button class="ghost-button" type="button" id="printSalesSecurityChecklist">Imprimir revision</button>
     </div>
   </section>`;
+}
+
+function printSalesSecurityChecklist() {
+  const operativeUsers = users.filter((user) => ["ventas_admin", "cajero", "almacen", "vendedor", "supervisor"].includes(user.role));
+  const security = buildAccessSecurityChecks(operativeUsers);
+  const company = storeSettings.storeName || storeSettings.companyName || currentUser.companyName || "Empresa cliente";
+  const printable = window.open("", "_blank", "width=900,height=920");
+  if (!printable) return;
+  const roleSummary = Object.entries(operativeUsers.reduce((acc, user) => {
+    const label = roleLabel(user.role);
+    acc[label] = (acc[label] || 0) + 1;
+    return acc;
+  }, {})).map(([role, count]) => `<span>${escapeHtml(role)}: ${num(count)}</span>`).join("");
+  const practices = [
+    "Cada persona debe usar su propia credencial.",
+    "No compartir usuario entre cajeros.",
+    "Desactivar usuarios que ya no trabajan en la empresa.",
+    "Asignar caja fija cuando existan varias cajas.",
+    "Usar operador integral solo para tiendas pequenas o responsables de confianza.",
+    "Revisar usuarios con acceso amplio antes de entregar el sistema.",
+    "Cerrar sesion al terminar el turno o al usar equipos compartidos."
+  ];
+  printable.document.write(`<!doctype html><html><head><meta charset="UTF-8"><title>Revision de accesos ${escapeHtml(company)}</title><style>
+    body{font-family:Arial,sans-serif;margin:0;padding:24px;background:#f6fbf8;color:#10251f}.toolbar{margin-bottom:14px}.toolbar button{border:0;border-radius:999px;background:#0f766e;color:#fff;padding:10px 14px;font-weight:900}.sheet{max-width:940px;margin:auto;background:#fff;border:1px solid #d9ebe5;border-radius:18px;padding:24px;box-shadow:0 18px 45px rgba(15,32,28,.1)}h1{margin:0 0 6px;font-size:24px}p{color:#64746f;margin:0 0 16px}.summary{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0 18px}.summary span{border:1px solid #d9ebe5;border-radius:999px;background:#f8fffc;padding:8px 10px;font-size:12px;font-weight:800}.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}.card,.practice{border:1px solid #d9ebe5;border-radius:14px;background:#f8fffc;padding:14px;break-inside:avoid}.card.is-danger{background:#fff7f7;border-color:#fecaca}.card.is-warning{background:#fffbeb;border-color:#fde68a}.card strong{display:block;font-size:20px;color:#0f3d34;margin:4px 0}.card span,.practice{color:#64746f;font-size:13px;line-height:1.4}.practice{display:flex;gap:9px;align-items:flex-start}.practice b{width:15px;height:15px;border:1px solid #94a3b8;border-radius:3px;flex:0 0 auto}.signs{display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-top:28px}.signs div{border-top:1px solid #94a3b8;text-align:center;padding-top:8px;color:#64746f;font-size:12px}.foot{text-align:center;color:#64748b;font-size:11px;margin-top:18px}@media(max-width:760px){body{padding:10px}.grid{grid-template-columns:1fr}.sheet{padding:18px}}@media print{body{background:#fff;padding:0}.toolbar{display:none}.sheet{box-shadow:none;border:0;border-radius:0}.grid{grid-template-columns:repeat(3,1fr)}}
+  </style></head><body><div class="toolbar"><button onclick="print()">Imprimir / Guardar PDF</button></div><main class="sheet">
+    <h1>Revision de seguridad de accesos</h1>
+    <p>${escapeHtml(company)} / ${formatDateTime(new Date().toISOString())}</p>
+    <div class="summary">${roleSummary || "<span>Sin usuarios operativos activos</span>"}</div>
+    <section class="grid">${security.checks.map((item) => `<article class="card is-${item.level}"><span>${escapeHtml(item.label)}</span><strong>${escapeHtml(item.value)}</strong><span>${escapeHtml(item.detail)}</span></article>`).join("")}</section>
+    <h2>Checklist de buenas practicas</h2>
+    ${practices.map((practice) => `<div class="practice"><b></b><span>${escapeHtml(practice)}</span></div>`).join("")}
+    <div class="signs"><div>Revision SYSTEM ZOW</div><div>Encargado de sistema</div></div>
+    <p class="foot">SYSTEM ZOW SAAS - Control de seguridad de usuarios</p>
+  </main></body></html>`);
+  printable.document.close();
+  printable.focus();
 }
 
 function userRoleScope(role) {

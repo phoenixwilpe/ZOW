@@ -4144,9 +4144,21 @@ body.app-correspondencia .metrics article:hover {
 }
 
 .access-security-tips {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
   border-radius: 14px;
   padding: 11px;
   background: rgb(255 255 255 / 72%);
+}
+
+.access-security-tips > div {
+  min-width: 0;
+}
+
+.access-security-tips button {
+  flex: 0 0 auto;
 }
 
 .access-security-tips strong {
@@ -16159,6 +16171,7 @@ body.system-zow-site .site-footer {
   .route-card-head,
   .route-stats,
   .access-security-head,
+  .access-security-tips,
   .price-row,
   .cart-row .cart-actions,
   .purchase-assist-card {
@@ -16167,6 +16180,7 @@ body.system-zow-site .site-footer {
   }
 
   .purchase-assist-card .primary-button,
+  .access-security-tips button,
   .admin-head-actions {
     width: 100%;
   }
