@@ -19015,6 +19015,7 @@ body.app-ventas .touch-cart-line {
 }
 
 body.app-ventas .cart-item-name {
+  min-width: 0;
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 6px 10px;
 }
@@ -19025,6 +19026,12 @@ body.app-ventas .cart-item-name strong {
   color: #10251f;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+body.app-ventas .cart-item-name small {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  line-height: 1.25;
 }
 
 body.app-ventas .cart-item-name > span {
@@ -19079,12 +19086,14 @@ body.app-ventas .cart-line-footer > strong {
   min-height: 48px;
   display: grid;
   align-items: center;
+  min-width: 0;
   padding: 8px 12px;
   border-radius: 14px;
   background: linear-gradient(135deg, #10251f, #0f766e);
   color: white;
   font-size: 1rem;
   font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
 }
 
 body.app-ventas .cart-line-footer .danger-action {
@@ -19319,6 +19328,24 @@ body.app-ventas .pos-focus-mode .cart-line-controls {
 
   body.app-ventas .cart-item-name strong {
     white-space: normal;
+  }
+
+  body.app-ventas .cart-item-name > span {
+    justify-self: start;
+    white-space: normal;
+  }
+
+  body.app-ventas .cart-line-controls {
+    gap: 8px;
+  }
+
+  body.app-ventas .cart-line-footer {
+    align-items: stretch;
+  }
+
+  body.app-ventas .cart-line-footer > strong,
+  body.app-ventas .cart-line-footer .danger-action {
+    width: 100%;
   }
 }
 

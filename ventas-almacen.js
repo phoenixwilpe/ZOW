@@ -4671,10 +4671,9 @@ function renderSettings() {
   const isSystemAdmin = currentUser?.role === "admin";
   const allowedWindows = ["inicio", "empresa", "comprobante", "respaldo", "modelos"];
   if (!allowedWindows.includes(settingsWindow)) settingsWindow = "inicio";
-  mainList().innerHTML = `
-    ${isSystemAdmin ? renderAdminConfigConsole() : `${renderSetupAssistant()}${renderStoreLaunchChecklist()}`}
-    ${isSystemAdmin ? "" : renderSettingsWindowNav()}
-    ${renderStoreSettingsOverview()}
+  mainList().innerHTML = isSystemAdmin ? renderAdminConfigConsole() : `
+    ${renderSettingsWindowNav()}
+    ${renderSettingsStartWindow()}
     <section class="admin-panel settings-command-panel settings-window-panel ${settingsWindow === "empresa" ? "is-active" : ""}" ${settingsWindow === "empresa" ? "" : "hidden"}>
       <div class="admin-panel-head"><div><p class="eyebrow">Empresa</p><h3>Datos para ventas e impresion</h3></div></div>
       <form class="admin-form" id="storeSettingsForm">
@@ -4702,10 +4701,9 @@ function renderSettings() {
         <div class="modal-actions"><button class="primary-button" type="submit">Guardar configuracion</button></div>
       </form>
     </section>
-    ${isSystemAdmin ? "" : renderSettingsStartWindow()}
     <div class="settings-window-panel ${settingsWindow === "comprobante" ? "is-active" : ""}" ${settingsWindow === "comprobante" ? "" : "hidden"}>${renderReceiptPreview()}</div>
-    ${isSystemAdmin ? "" : `<div class="settings-window-panel ${settingsWindow === "respaldo" ? "is-active" : ""}" ${settingsWindow === "respaldo" ? "" : "hidden"}>${renderBackupControlPanel()}</div>`}
-    ${isSystemAdmin ? "" : `<div class="settings-window-panel ${settingsWindow === "modelos" ? "is-active" : ""}" ${settingsWindow === "modelos" ? "" : "hidden"}>${renderRoleConfigGuide()}</div>`}
+    <div class="settings-window-panel ${settingsWindow === "respaldo" ? "is-active" : ""}" ${settingsWindow === "respaldo" ? "" : "hidden"}>${renderBackupControlPanel()}</div>
+    <div class="settings-window-panel ${settingsWindow === "modelos" ? "is-active" : ""}" ${settingsWindow === "modelos" ? "" : "hidden"}>${renderRoleConfigGuide()}</div>
   `;
   document.querySelector("#storeSettingsForm")?.addEventListener("submit", saveStoreSettings);
   document.querySelector("#copySetupPlanBtn")?.addEventListener("click", copySetupImplementationSummary);
@@ -4754,12 +4752,15 @@ function renderSettingsStartWindow() {
       <div><p class="eyebrow">Ventanas de configuracion</p><h3>Ordena la tienda paso por paso</h3><span>Elige una ventana para trabajar solo en esa parte y evitar pantallas largas.</span></div>
       <strong>${pending.length ? `${num(pending.length)} pendiente${pending.length === 1 ? "" : "s"}` : "Listo"}</strong>
     </div>
+    ${renderStoreSettingsOverview()}
     <div class="settings-start-grid">
       ${cards.map((card) => `<button type="button" data-settings-window="${card.window}">
         <span>${escapeHtml(card.title)}</span>
         <strong>${escapeHtml(card.detail)}</strong>
       </button>`).join("")}
     </div>
+    ${renderSetupAssistant()}
+    ${renderStoreLaunchChecklist()}
   </section>`;
 }
 
