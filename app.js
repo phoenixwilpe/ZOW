@@ -2181,6 +2181,9 @@ function renderZowAdmin(mode = "overview") {
   document.querySelectorAll("[data-company-edit]").forEach((button) => {
     button.addEventListener("click", () => renderCompanyEditPanel(button.dataset.companyEdit));
   });
+  document.querySelectorAll("[data-company-handoff]").forEach((button) => {
+    button.addEventListener("click", () => printCompanyHandoffSheet(button.dataset.companyHandoff));
+  });
   document.querySelectorAll("[data-company-status]").forEach((button) => {
     button.addEventListener("click", async () => {
       const company = companies.find((item) => item.id === button.dataset.companyId);
@@ -2327,6 +2330,9 @@ function renderCompanyListPanel() {
                 <button class="ghost-button" type="button" data-company-systems="${company.id}">
                   Sistemas
                 </button>
+                <button class="ghost-button" type="button" data-company-handoff="${company.id}">
+                  Entrega
+                </button>
               </article>
             `;
             }
@@ -2335,6 +2341,46 @@ function renderCompanyListPanel() {
       </div>
     </section>
   `;
+}
+
+function printCompanyHandoffSheet(companyId) {
+  const company = companies.find((item) => item.id === companyId);
+  if (!company) return;
+  const renewal = companyRenewalStatus(company);
+  const systems = String(company.systems || "")
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
+  const printable = window.open("", "_blank", "width=900,height=920");
+  if (!printable) return;
+  const systemsHtml = systems.length
+    ? systems.map((system) => `<li>${escapeHtml(system)}</li>`).join("")
+    : "<li>Sin sistemas activos. Revisar accesos antes de entregar.</li>";
+  const steps = [
+    "Ingresar con el usuario encargado y cambiar la contrasena si corresponde.",
+    "Completar datos de empresa, logo, moneda, cajas y comprobantes.",
+    "Crear usuarios operativos por rol y entregar credenciales personales.",
+    "Registrar datos iniciales del sistema contratado.",
+    "Realizar una prueba completa antes de empezar con operacion real."
+  ];
+  printable.document.write(`<!doctype html><html><head><meta charset="UTF-8"><title>Entrega ${escapeHtml(company.name)}</title><style>
+    *{box-sizing:border-box}body{margin:0;padding:22px;background:#f5f8fb;color:#17242a;font-family:Arial,sans-serif}.toolbar{position:sticky;top:0;background:#fff;padding:10px;border-bottom:1px solid #dce8ea}.toolbar button{border:0;border-radius:999px;background:#123b36;color:#fff;padding:10px 14px;font-weight:900;cursor:pointer}.sheet{max-width:920px;margin:18px auto;background:#fff;border:1px solid #dce8ea;border-radius:20px;overflow:hidden;box-shadow:0 18px 48px rgba(18,36,42,.12)}.hero{display:flex;justify-content:space-between;gap:20px;padding:26px;background:linear-gradient(135deg,#102c2a,#17695f);color:#ecfdf5}.hero h1{margin:0 0 8px;font-size:26px}.hero p{margin:0;color:#d8fff5;line-height:1.45}.badge{align-self:flex-start;border:1px solid rgba(255,255,255,.25);border-radius:999px;padding:8px 12px;font-weight:900}.content{padding:24px;display:grid;gap:18px}.grid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}.card{border:1px solid #dce8ea;border-radius:16px;background:#f9fdfb;padding:14px}.card span{display:block;color:#64757b;font-size:11px;text-transform:uppercase;font-weight:900}.card strong{display:block;margin-top:6px;color:#102c2a}.card small{display:block;margin-top:4px;color:#64757b;line-height:1.35}.section h2{margin:0 0 10px;color:#102c2a;font-size:16px}.section ul,.section ol{margin:0;padding-left:22px}.section li{margin:7px 0;line-height:1.4}.warning{border-left:5px solid #f59e0b;background:#fffbeb}.danger{border-left:5px solid #dc2626;background:#fff1f1}.signs{display:grid;grid-template-columns:1fr 1fr;gap:22px;margin-top:18px}.signs div{border-top:1px solid #94a3b8;padding-top:8px;text-align:center;color:#64757b;font-size:12px}.foot{text-align:center;color:#64748b;font-size:11px;padding:0 24px 24px}@media(max-width:760px){body{padding:10px}.hero,.grid{grid-template-columns:1fr;display:grid}.content{padding:18px}}@media print{body{background:#fff;padding:0}.toolbar{display:none}.sheet{box-shadow:none;border:0;border-radius:0}.hero{-webkit-print-color-adjust:exact;print-color-adjust:exact}.card,.section{break-inside:avoid}}
+  </style></head><body><div class="toolbar"><button onclick="print()">Imprimir / Guardar PDF</button></div><main class="sheet">
+    <section class="hero"><div><h1>Acta rapida de entrega SaaS</h1><p>${escapeHtml(company.name)}<br>Generado: ${formatDateOnly(todayInputDate())}</p></div><span class="badge">SYSTEM ZOW</span></section>
+    <section class="content">
+      <div class="grid">
+        <article class="card"><span>Empresa</span><strong>${escapeHtml(company.name)}</strong><small>ID: ${escapeHtml(company.slug || "")}</small></article>
+        <article class="card ${renewal.state === "expired" ? "danger" : ["today", "warning"].includes(renewal.state) ? "warning" : ""}"><span>Plan y vigencia</span><strong>${escapeHtml(planLabel(company.plan))} / ${escapeHtml(billingPeriodLabel(company.billing_period))}</strong><small>${escapeHtml(renewal.label)} / vence: ${escapeHtml(formatDateOnly(company.ends_at))}</small></article>
+        <article class="card"><span>Encargado</span><strong>${escapeHtml(company.admin_name || "Encargado de sistema")}</strong><small>Usuario: ${escapeHtml(company.admin_username || "Pendiente")}</small></article>
+        <article class="card"><span>Contacto</span><strong>${escapeHtml(company.contact_name || "Sin contacto")}</strong><small>${escapeHtml(company.contact_phone || "")} ${escapeHtml(company.contact_email || "")}</small></article>
+      </div>
+      <section class="section"><h2>Sistemas contratados</h2><ul>${systemsHtml}</ul></section>
+      <section class="section"><h2>Primeros pasos recomendados</h2><ol>${steps.map((step) => `<li>${escapeHtml(step)}</li>`).join("")}</ol></section>
+      <section class="section"><h2>Nota de seguridad</h2><p>No se imprimen contrasenas en esta hoja. Entrega claves de forma privada y recomienda no compartir usuarios entre funcionarios.</p></section>
+      <div class="signs"><div>Firma SYSTEM ZOW</div><div>Firma empresa cliente</div></div>
+    </section><p class="foot">SYSTEM ZOW SAAS - Documento de entrega comercial y tecnica</p></main></body></html>`);
+  printable.document.close();
+  printable.focus();
 }
 
 function renderZowProductionReviewPanel() {
