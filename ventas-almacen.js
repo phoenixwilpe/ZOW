@@ -4776,6 +4776,7 @@ function renderHelp() {
     ${renderDemoDataKitPanel()}
     ${renderDeviceQaPanel()}
     ${renderRoleManualTestPanel()}
+    ${renderOperationalSaleTestPanel()}
     ${renderDemoSalesGuidePanel()}
     <section class="help-guide-grid">
       ${guides.map((guide) => `<article>
@@ -4861,6 +4862,7 @@ function renderHelp() {
   document.querySelector("#printDemoDataKitInlineBtn")?.addEventListener("click", printDemoDataKit);
   document.querySelector("#printDeviceQaBtn")?.addEventListener("click", printDeviceQaChecklist);
   document.querySelector("#printRoleManualTestBtn")?.addEventListener("click", printRoleManualTestPlan);
+  document.querySelector("#printOperationalSaleTestBtn")?.addEventListener("click", printOperationalSaleTestPlan);
   document.querySelector("#downloadDemoProductsBtn")?.addEventListener("click", downloadDemoProductsCsv);
   document.querySelector("#downloadDemoCustomersBtn")?.addEventListener("click", downloadDemoCustomersCsv);
   document.querySelector("#loadStarterProductsFromHelp")?.addEventListener("click", loadStarterProducts);
@@ -5348,6 +5350,57 @@ function printRoleManualTestPlan() {
     <div class="grid">${scenarios.map((scenario) => `<article class="card"><h2>${escapeHtml(scenario.role)}</h2><small>Modulo principal: ${escapeHtml(scenario.module)} / usuario tipo: ${escapeHtml(scenario.user)}</small>${scenario.checks.map((check) => `<div class="check"><b></b><span>${escapeHtml(check)}</span></div>`).join("")}</article>`).join("")}</div>
     <div class="signs"><div>Revision SYSTEM ZOW</div><div>Encargado de sistema</div></div>
     <p class="foot">SYSTEM ZOW SAAS - Validacion manual de roles</p>
+  </main></body></html>`);
+  printable.document.close();
+  printable.focus();
+}
+
+function operationalSaleTestSteps() {
+  return [
+    { title: "1. Abrir caja", detail: "Ingresar como cajero, seleccionar caja, registrar monto inicial y confirmar que el POS permite cobrar.", view: "finance" },
+    { title: "2. Buscar producto", detail: "Buscar por nombre, codigo o lector. Agregar al carrito y comprobar cantidad, precio y stock disponible.", view: "sell" },
+    { title: "3. Cobrar venta", detail: "Probar efectivo y al menos un metodo adicional. Confirmar vuelto, comprobante y venta en historial.", view: "sell" },
+    { title: "4. Validar inventario", detail: "Revisar que el stock bajó y que el Kardex registró la salida de producto.", view: "inventory" },
+    { title: "5. Anular venta", detail: "Anular la venta de prueba, escribir motivo y confirmar que el stock se devuelve.", view: "history" },
+    { title: "6. Cerrar caja", detail: "Contar efectivo, comparar esperado contra contado, registrar observacion e imprimir cierre.", view: "finance" }
+  ];
+}
+
+function renderOperationalSaleTestPanel() {
+  const steps = operationalSaleTestSteps();
+  return `<section class="operational-sale-test-panel">
+    <div class="operational-sale-test-head">
+      <div>
+        <p class="eyebrow">Prueba de venta completa</p>
+        <h3>Recorre el flujo real antes de cobrar a clientes</h3>
+        <span>Valida caja, POS, cobro, comprobante, Kardex, anulacion y cierre con una venta controlada.</span>
+      </div>
+      <button class="ghost-button" type="button" id="printOperationalSaleTestBtn">Imprimir flujo</button>
+    </div>
+    <div class="operational-sale-test-grid">
+      ${steps.map((step) => `<article>
+        <strong>${escapeHtml(step.title)}</strong>
+        <span>${escapeHtml(step.detail)}</span>
+        ${step.view && canAccessView(step.view) ? `<button class="ghost-button" type="button" data-module-view="${step.view}">Abrir</button>` : ""}
+      </article>`).join("")}
+    </div>
+  </section>`;
+}
+
+function printOperationalSaleTestPlan() {
+  const company = storeSettings.storeName || storeSettings.companyName || currentUser.companyName || "Empresa cliente";
+  const printable = window.open("", "_blank", "width=900,height=920");
+  if (!printable) return;
+  const steps = operationalSaleTestSteps();
+  printable.document.write(`<!doctype html><html><head><meta charset="UTF-8"><title>Prueba de venta ${escapeHtml(company)}</title><style>
+    body{font-family:Arial,sans-serif;margin:0;padding:24px;background:#f6fbf8;color:#10251f}.toolbar{margin-bottom:14px}.toolbar button{border:0;border-radius:999px;background:#0f766e;color:#fff;padding:10px 14px;font-weight:900}.sheet{max-width:940px;margin:auto;background:#fff;border:1px solid #d9ebe5;border-radius:18px;padding:24px;box-shadow:0 18px 45px rgba(15,32,28,.1)}h1{margin:0 0 6px;font-size:24px}p{color:#64746f;margin:0 0 16px}.grid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}.step{border:1px solid #d9ebe5;border-radius:14px;background:#f8fffc;padding:14px;break-inside:avoid}.step h2{font-size:15px;margin:0 0 6px;color:#0f3d34}.step span{display:block;color:#64746f;font-size:13px;line-height:1.4}.check{display:flex;gap:9px;align-items:flex-start;margin-top:10px;color:#33443f;font-size:13px}.check b{width:15px;height:15px;border:1px solid #94a3b8;border-radius:3px;flex:0 0 auto}.note{border:1px dashed #94a3b8;border-radius:14px;padding:14px;margin-top:16px;color:#64746f;font-size:13px;line-height:1.45}.signs{display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-top:28px}.signs div{border-top:1px solid #94a3b8;text-align:center;padding-top:8px;color:#64746f;font-size:12px}.foot{text-align:center;color:#64748b;font-size:11px;margin-top:18px}@media(max-width:720px){body{padding:10px}.grid{grid-template-columns:1fr}.sheet{padding:18px}}@media print{body{background:#fff;padding:0}.toolbar{display:none}.sheet{box-shadow:none;border:0;border-radius:0}.grid{grid-template-columns:repeat(2,1fr)}}
+  </style></head><body><div class="toolbar"><button onclick="print()">Imprimir / Guardar PDF</button></div><main class="sheet">
+    <h1>Prueba operativa completa de venta</h1>
+    <p>${escapeHtml(company)} / ${formatDateTime(new Date().toISOString())}<br>Objetivo: validar que una venta real controla caja, stock, comprobante, anulacion y cierre.</p>
+    <div class="grid">${steps.map((step) => `<article class="step"><h2>${escapeHtml(step.title)}</h2><span>${escapeHtml(step.detail)}</span><div class="check"><b></b><span>Realizado y conforme</span></div></article>`).join("")}</div>
+    <div class="note"><strong>Resultado esperado:</strong> la venta aparece en historial, el comprobante se genera, el stock baja al vender, vuelve al anular y el cierre de caja refleja la operacion.</div>
+    <div class="signs"><div>Revision SYSTEM ZOW</div><div>Encargado / Cajero</div></div>
+    <p class="foot">SYSTEM ZOW SAAS - Validacion de flujo de venta</p>
   </main></body></html>`);
   printable.document.close();
   printable.focus();
