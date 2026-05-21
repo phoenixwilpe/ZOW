@@ -4530,6 +4530,7 @@ function renderSettings() {
   document.querySelector("#storeSettingsForm")?.addEventListener("submit", saveStoreSettings);
   document.querySelector("#copySetupPlanBtn")?.addEventListener("click", copySetupImplementationSummary);
   document.querySelector("#printSetupPlanBtn")?.addEventListener("click", printSetupImplementationPlan);
+  document.querySelector("#printStoreDeliveryBtn")?.addEventListener("click", printStoreDeliverySheet);
   document.querySelectorAll("[data-settings-preset]").forEach((button) => {
     button.addEventListener("click", () => applySettingsPreset(button.dataset.settingsPreset));
   });
@@ -5479,6 +5480,7 @@ function renderSetupAssistant() {
         <span>${completed}/${checks.length}</span>
         <button class="ghost-button" type="button" id="copySetupPlanBtn">Copiar resumen</button>
         <button class="ghost-button" type="button" id="printSetupPlanBtn">Plan de implementacion</button>
+        <button class="primary-button" type="button" id="printStoreDeliveryBtn">Hoja de entrega</button>
       </div>
     </div>
     <div class="setup-progress"><span style="width:${percent}%"></span></div>
@@ -5575,6 +5577,58 @@ function printSetupImplementationPlan() {
     <div class="box"><strong>Recomendacion ZOW</strong><p class="muted">Antes de entregar credenciales a cajeros, realiza una venta de prueba, una anulacion, una compra pendiente recibida y un cierre de caja.</p></div>
     <p class="foot">SYSTEM ZOW SAAS - Plan operativo para entrega de tienda</p>
   </body></html>`);
+  printable.document.close();
+  printable.focus();
+}
+
+function printStoreDeliverySheet() {
+  const printable = window.open("", "_blank", "width=980,height=920");
+  if (!printable) return;
+  const company = storeSettings.storeName || storeSettings.companyName || currentUser.companyName || "Empresa cliente";
+  const legalName = storeSettings.companyName || currentUser.companyName || "Sin nombre legal";
+  const activeUsers = users.filter((user) => user.active);
+  const launchChecks = buildStoreLaunchChecks();
+  const setupSteps = buildSetupAssistantSteps();
+  const completed = setupSteps.filter((item) => item.done).length;
+  const percent = Math.round((completed / setupSteps.length) * 100);
+  const activeProducts = products.filter(isProductActive);
+  const lowStock = activeProducts.filter((product) => Number(product.stock || 0) <= Number(product.min_stock || 0));
+  const roleRows = activeUsers.map((user) => `<tr>
+    <td><strong>${escapeHtml(user.name || user.username)}</strong><br><small>${escapeHtml(user.ci || "CI no registrado")}</small></td>
+    <td>${escapeHtml(user.username)}<br><small>${escapeHtml(user.email || "Sin correo")}</small></td>
+    <td>${escapeHtml(roleLabel(user.role))}<br><small>${escapeHtml(user.position || "Sin cargo")}</small></td>
+    <td>${escapeHtml(user.phone || "Sin celular")}</td>
+  </tr>`).join("");
+  const steps = [
+    "Ingresar con el encargado de sistema y revisar datos de empresa.",
+    "Confirmar cantidad de cajas y reglas de venta.",
+    "Probar ingreso de cada usuario operativo.",
+    "Abrir caja, vender un producto, cobrar e imprimir comprobante.",
+    "Anular la venta de prueba y verificar devolucion de stock.",
+    "Cerrar caja e imprimir cierre del turno."
+  ];
+  printable.document.write(`<!doctype html><html><head><meta charset="UTF-8"><title>Hoja de entrega ${escapeHtml(company)}</title><style>
+    *{box-sizing:border-box}body{margin:0;padding:24px;background:#f5fbf8;color:#10251f;font-family:Arial,sans-serif}.toolbar{position:sticky;top:0;z-index:2;margin:-24px -24px 16px;padding:10px 24px;background:#fff;border-bottom:1px solid #d9ebe5}.toolbar button{border:0;border-radius:999px;background:#0f766e;color:#fff;padding:10px 15px;font-weight:900}.sheet{max-width:1040px;margin:auto;background:#fff;border:1px solid #d9ebe5;border-radius:20px;overflow:hidden;box-shadow:0 18px 45px rgba(15,32,28,.1)}.hero{display:grid;grid-template-columns:1fr auto;gap:20px;padding:26px;background:linear-gradient(135deg,#064e3b,#0f766e 68%,#f59e0b);color:#ecfdf5}.hero h1{margin:0 0 7px;font-size:25px}.hero p{margin:0;color:#d1fae5;line-height:1.45}.score{align-self:center;border:1px solid rgba(255,255,255,.24);border-radius:20px;padding:14px 18px;text-align:center}.score strong{display:block;font-size:34px}.content{padding:24px}.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:18px}.metric,.check,.step,.note{border:1px solid #d9ebe5;border-radius:15px;background:#f8fffc;padding:13px}.metric span,.check span,.step span{display:block;color:#64746f;font-size:11px;font-weight:900;text-transform:uppercase}.metric strong{display:block;margin-top:6px;font-size:18px}.two{display:grid;grid-template-columns:1.08fr .92fr;gap:18px}.section-title{display:flex;justify-content:space-between;gap:14px;align-items:end;border-bottom:1px solid #d9ebe5;margin:14px 0 12px;padding-bottom:9px}.section-title h2{margin:0;font-size:16px}.section-title span{color:#64746f;font-size:12px}table{width:100%;border-collapse:separate;border-spacing:0 8px}th{text-align:left;color:#64746f;font-size:11px;text-transform:uppercase}td{padding:10px;background:#f8fffc;border-top:1px solid #d9ebe5;border-bottom:1px solid #d9ebe5;font-size:13px;vertical-align:top}td:first-child{border-left:1px solid #d9ebe5;border-radius:12px 0 0 12px}td:last-child{border-right:1px solid #d9ebe5;border-radius:0 12px 12px 0}.checks,.steps{display:grid;gap:9px}.check{display:grid;grid-template-columns:auto 1fr;gap:10px;align-items:start}.check b{display:inline-grid;place-items:center;width:28px;height:28px;border-radius:999px;background:#dcfce7;color:#047857;font-size:11px}.check.pending{background:#fffbeb;border-color:#fde68a}.check.pending b{background:#fef3c7;color:#92400e}.check strong,.step strong{display:block;margin-bottom:4px;color:#0f3d34}.check small,.step small,.note{color:#64746f;font-size:12px;line-height:1.42}.steps{counter-reset:step}.step{position:relative;padding-left:42px}.step::before{counter-increment:step;content:counter(step);position:absolute;left:13px;top:13px;width:22px;height:22px;border-radius:999px;background:#0f766e;color:#fff;display:grid;place-items:center;font-size:11px;font-weight:900}.signs{display:grid;grid-template-columns:repeat(3,1fr);gap:20px;margin-top:28px}.signs div{border-top:1px solid #94a3b8;text-align:center;padding-top:8px;color:#64746f;font-size:12px}.foot{text-align:center;color:#64748b;font-size:11px;padding:0 24px 24px}@media(max-width:820px){body{padding:10px}.toolbar{margin:-10px -10px 12px;padding:10px}.hero,.two{grid-template-columns:1fr}.grid{grid-template-columns:1fr 1fr}.content{padding:18px}}@media print{body{background:#fff;padding:0}.toolbar{display:none}.sheet{box-shadow:none;border:0;border-radius:0}.hero{-webkit-print-color-adjust:exact;print-color-adjust:exact}.content{padding:18px}.metric,.check,.step,tr{break-inside:avoid}}
+  </style></head><body><div class="toolbar"><button onclick="print()">Imprimir / Guardar PDF</button></div><main class="sheet">
+    <section class="hero"><div><h1>Hoja de entrega ZOW Ventas-Almacen</h1><p>${escapeHtml(company)}<br>${escapeHtml(legalName)}<br>Generado: ${formatDateTime(new Date().toISOString())}</p></div><div class="score"><span>Avance</span><strong>${percent}%</strong></div></section>
+    <section class="content">
+      <div class="grid">
+        <article class="metric"><span>Moneda</span><strong>${escapeHtml(storeSettings.currency || "BOB")}</strong></article>
+        <article class="metric"><span>Cajas</span><strong>${num(storeSettings.cashRegisterCount || 1)}</strong></article>
+        <article class="metric"><span>Usuarios activos</span><strong>${num(activeUsers.length)}</strong></article>
+        <article class="metric"><span>Productos activos</span><strong>${num(activeProducts.length)}</strong></article>
+      </div>
+      <div class="two">
+        <section><div class="section-title"><h2>Checklist de entrega</h2><span>${launchChecks.filter((item) => item.done).length}/${launchChecks.length}</span></div><div class="checks">${launchChecks.map((item) => `<article class="check ${item.done ? "" : "pending"}"><b>${item.done ? "OK" : "!"}</b><div><strong>${escapeHtml(item.label)}</strong><small>${escapeHtml(item.detail)}</small></div></article>`).join("")}</div></section>
+        <section><div class="section-title"><h2>Primeros pasos</h2><span>Prueba operativa</span></div><div class="steps">${steps.map((step) => `<article class="step"><strong>${escapeHtml(step)}</strong><small>Marcar como realizado durante la capacitacion inicial.</small></article>`).join("")}</div></section>
+      </div>
+      <div class="section-title"><h2>Usuarios entregados</h2><span>Sin contrasenas visibles</span></div>
+      <table><thead><tr><th>Persona</th><th>Usuario</th><th>Rol</th><th>Celular</th></tr></thead><tbody>${roleRows || `<tr><td colspan="4">No hay usuarios operativos activos registrados.</td></tr>`}</tbody></table>
+      <div class="note"><strong>Notas de seguridad:</strong> entregar contrasenas por separado, cambiar claves cuando la empresa lo solicite, desactivar usuarios que ya no trabajen y revisar stock bajo antes de iniciar ventas reales. Stock bajo actual: ${num(lowStock.length)} producto${lowStock.length === 1 ? "" : "s"}.</div>
+      <div class="signs"><div>Entrega SYSTEM ZOW</div><div>Encargado de sistema</div><div>Conformidad cliente</div></div>
+    </section>
+    <p class="foot">SYSTEM ZOW SAAS - Documento de entrega operativo</p>
+  </main></body></html>`);
   printable.document.close();
   printable.focus();
 }
