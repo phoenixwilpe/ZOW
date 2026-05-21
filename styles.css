@@ -3567,6 +3567,14 @@ body.app-correspondencia .metrics article:hover {
   gap: 16px;
 }
 
+.backup-control-actions {
+  display: flex;
+  flex: 0 0 auto;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
 .backup-control-head h3 {
   margin: 3px 0 4px;
   color: var(--accent-dark);
@@ -16121,6 +16129,8 @@ body.system-zow-site .site-footer {
 
   body.app-ventas .commercial-alert-card button,
   .backup-control-head button,
+  .backup-control-actions,
+  .backup-control-actions button,
   body.app-ventas .inventory-filter-bar > .ghost-button,
   body.app-ventas .training-mode-banner button,
   .first-setup-actions,

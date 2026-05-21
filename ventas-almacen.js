@@ -2496,7 +2496,10 @@ function renderBackupControlPanel() {
         <h3>${lastBackupAt ? "Ultimo respaldo registrado" : "Crea un respaldo antes de vender"}</h3>
         <span>${escapeHtml(lastBackupText)}. El respaldo se descarga en tu equipo; la nube no se borra por actualizar el sistema.</span>
       </div>
-      <button class="primary-button" type="button" id="exportBackupJsonTop">Exportar respaldo JSON</button>
+      <div class="backup-control-actions">
+        <button class="ghost-button" type="button" id="printBackupProtocolBtn">Protocolo</button>
+        <button class="primary-button" type="button" id="exportBackupJsonTop">Exportar respaldo JSON</button>
+      </div>
     </div>
     <div class="backup-control-grid">
       <article><span>Productos</span><strong>${num(products.length)}</strong><small>Inventario visible</small></article>
@@ -2508,6 +2511,43 @@ function renderBackupControlPanel() {
       ${checks.map((item) => `<article class="${item.done ? "done" : "pending"}"><b>${item.done ? "OK" : "!"}</b><div><strong>${escapeHtml(item.label)}</strong><span>${escapeHtml(item.detail)}</span></div></article>`).join("")}
     </div>
   </section>`;
+}
+
+function printBackupProtocol() {
+  const company = storeSettings.storeName || storeSettings.companyName || currentUser.companyName || "Empresa cliente";
+  const lastBackupAt = lastBackupMeta?.generatedAt || "";
+  const checks = [
+    "Antes de actualizar el sistema o publicar una version importante.",
+    "Despues de cargar productos, clientes o usuarios iniciales.",
+    "Antes de entregar credenciales a cajeros, almacen o supervisores.",
+    "Al finalizar una capacitacion con datos reales.",
+    "Cuando la empresa solicite evidencia de configuracion o control interno."
+  ];
+  const contents = [
+    ["Productos", products.length],
+    ["Clientes", customers.length],
+    ["Ventas", sales.length],
+    ["Compras", purchases.length],
+    ["Cierres de caja", cashClosures.length],
+    ["Usuarios", users.length]
+  ];
+  const printable = window.open("", "_blank", "width=860,height=900");
+  if (!printable) return;
+  printable.document.write(`<!doctype html><html><head><meta charset="UTF-8"><title>Protocolo de respaldo ${escapeHtml(company)}</title><style>
+    body{font-family:Arial,sans-serif;margin:0;padding:24px;background:#f6fbf8;color:#10251f}.toolbar{margin-bottom:14px}.toolbar button{border:0;border-radius:999px;background:#0f766e;color:#fff;padding:10px 14px;font-weight:900}.sheet{max-width:900px;margin:auto;background:#fff;border:1px solid #d9ebe5;border-radius:18px;padding:24px;box-shadow:0 18px 45px rgba(15,32,28,.1)}h1{margin:0 0 6px;font-size:24px}p{color:#64746f;margin:0 0 16px}.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:14px 0}.metric,.check{border:1px solid #d9ebe5;border-radius:14px;background:#f8fffc;padding:13px;break-inside:avoid}.metric span{display:block;color:#64746f;font-size:11px;font-weight:900;text-transform:uppercase}.metric strong{display:block;margin-top:6px;font-size:20px;color:#0f3d34}.check{display:flex;gap:9px;align-items:flex-start;color:#64746f;font-size:13px;line-height:1.4}.check b{width:15px;height:15px;border:1px solid #94a3b8;border-radius:3px;flex:0 0 auto}.note{border:1px dashed #94a3b8;border-radius:14px;padding:14px;margin-top:16px;color:#64746f;font-size:13px;line-height:1.45}.signs{display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-top:28px}.signs div{border-top:1px solid #94a3b8;text-align:center;padding-top:8px;color:#64746f;font-size:12px}.foot{text-align:center;color:#64748b;font-size:11px;margin-top:18px}@media(max-width:720px){body{padding:10px}.grid{grid-template-columns:1fr}.sheet{padding:18px}}@media print{body{background:#fff;padding:0}.toolbar{display:none}.sheet{box-shadow:none;border:0;border-radius:0}.grid{grid-template-columns:repeat(3,1fr)}}
+  </style></head><body><div class="toolbar"><button onclick="print()">Imprimir / Guardar PDF</button></div><main class="sheet">
+    <h1>Protocolo de respaldo operativo</h1>
+    <p>${escapeHtml(company)} / Generado: ${formatDateTime(new Date().toISOString())}<br>Ultimo respaldo local: ${escapeHtml(lastBackupAt ? formatDateTime(lastBackupAt) : "Sin registro en este navegador")}</p>
+    <h2>Contenido visible en el respaldo JSON</h2>
+    <div class="grid">${contents.map(([label, count]) => `<article class="metric"><span>${escapeHtml(label)}</span><strong>${num(count)}</strong></article>`).join("")}</div>
+    <h2>Cuando respaldar</h2>
+    ${checks.map((check) => `<div class="check"><b></b><span>${escapeHtml(check)}</span></div>`).join("")}
+    <div class="note"><strong>Importante:</strong> el respaldo JSON es una copia operativa para revision y soporte. Para respaldo completo de base de datos se debe mantener activo el backup de Supabase/PostgreSQL.</div>
+    <div class="signs"><div>Responsable SYSTEM ZOW</div><div>Encargado de sistema</div></div>
+    <p class="foot">SYSTEM ZOW SAAS - Respaldo y recuperacion</p>
+  </main></body></html>`);
+  printable.document.close();
+  printable.focus();
 }
 
 function buildReportRoleProfile({ supervisorMode, businessHealth, confirmedSales, voidedSales, pendingTotal, stockRisks, expiryRisks, totalClosureDifference }) {
@@ -4659,12 +4699,15 @@ function renderSettings() {
       </form>
     </section>
     ${renderReceiptPreview()}
+    ${isSystemAdmin ? "" : renderBackupControlPanel()}
     ${isSystemAdmin ? "" : renderRoleConfigGuide()}
   `;
   document.querySelector("#storeSettingsForm")?.addEventListener("submit", saveStoreSettings);
   document.querySelector("#copySetupPlanBtn")?.addEventListener("click", copySetupImplementationSummary);
   document.querySelector("#printSetupPlanBtn")?.addEventListener("click", printSetupImplementationPlan);
   document.querySelector("#printStoreDeliveryBtn")?.addEventListener("click", printStoreDeliverySheet);
+  document.querySelector("#exportBackupJsonTop")?.addEventListener("click", exportBackupJson);
+  document.querySelector("#printBackupProtocolBtn")?.addEventListener("click", printBackupProtocol);
   document.querySelectorAll("[data-settings-preset]").forEach((button) => {
     button.addEventListener("click", () => applySettingsPreset(button.dataset.settingsPreset));
   });
