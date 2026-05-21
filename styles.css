@@ -17778,6 +17778,69 @@ body.app-ventas .pos-shift-grid {
   margin-bottom: 0;
 }
 
+body.app-ventas .pos-turn-strip {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(118px, 1fr));
+  gap: 8px;
+  margin: -2px 0 12px;
+}
+
+body.app-ventas .pos-turn-strip article {
+  position: relative;
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid rgb(15 118 110 / 12%);
+  border-radius: 14px;
+  padding: 9px 10px;
+  background: rgb(255 255 255 / 78%);
+}
+
+body.app-ventas .pos-turn-strip article::before {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 4px;
+  background: #64748b;
+}
+
+body.app-ventas .pos-turn-strip article.is-ok::before {
+  background: #10b981;
+}
+
+body.app-ventas .pos-turn-strip article.is-warning::before {
+  background: #f59e0b;
+}
+
+body.app-ventas .pos-turn-strip article.is-danger::before {
+  background: #ef4444;
+}
+
+body.app-ventas .pos-turn-strip span,
+body.app-ventas .pos-turn-strip small {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 0.69rem;
+  font-weight: 900;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+body.app-ventas .pos-turn-strip strong {
+  display: block;
+  min-width: 0;
+  margin: 3px 0;
+  overflow: hidden;
+  color: #10251f;
+  font-size: 0.88rem;
+  font-weight: 950;
+  line-height: 1.1;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 body.app-ventas .pos-shift-grid article {
   position: relative;
   min-width: 0;
@@ -18390,6 +18453,17 @@ body.app-ventas .pos-customer-row select {
   body.app-ventas .pos-search-row {
     top: 68px;
     grid-template-columns: 1fr;
+  }
+
+  body.app-ventas .pos-turn-strip {
+    display: flex;
+    overflow-x: auto;
+    padding-bottom: 2px;
+    scrollbar-width: thin;
+  }
+
+  body.app-ventas .pos-turn-strip article {
+    flex: 0 0 152px;
   }
 
   body.app-ventas .touch-pos-shell {

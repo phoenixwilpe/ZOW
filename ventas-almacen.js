@@ -1235,6 +1235,55 @@ function renderSaleReadinessPanel(readiness, simpleMode = false) {
   </section>`;
 }
 
+function renderPosTurnStrip({ isCashOpen, totals }) {
+  const today = new Date().toISOString().slice(0, 10);
+  const todaySales = sales.filter((sale) => String(sale.created_at || "").startsWith(today) && sale.status !== "anulada");
+  const todayIncome = todaySales.reduce((sum, sale) => sum + Number(sale.amount_paid || sale.cash_received || sale.total || 0), 0);
+  const goal = Number(storeSettings.dailySalesGoal || 0);
+  const goalProgress = goal > 0 ? Math.min(Math.round(todayIncome / goal * 100), 999) : 0;
+  const lowStockCount = products.filter((product) => isProductActive(product) && Number(product.stock || 0) <= Number(product.min_stock || 0)).length;
+  const receiptReady = Boolean((storeSettings.taxId || "").trim() && (storeSettings.address || "").trim());
+  const items = [
+    {
+      level: isCashOpen ? "ok" : "danger",
+      label: "Caja",
+      value: isCashOpen ? `Caja ${num(cashSession.registerNumber)}` : "Abrir",
+      detail: isCashOpen ? "Lista para cobrar" : "Necesaria para vender"
+    },
+    {
+      level: receiptReady ? "ok" : "warning",
+      label: "Comprobante",
+      value: receiptReady ? "Listo" : "Pendiente",
+      detail: receiptReady ? "Datos de tienda completos" : "Falta NIT o direccion"
+    },
+    {
+      level: lowStockCount ? "warning" : "ok",
+      label: "Stock bajo",
+      value: num(lowStockCount),
+      detail: lowStockCount ? "Revisar reposicion" : "Sin alertas criticas"
+    },
+    {
+      level: saleCart.length ? "ok" : "info",
+      label: "Carrito",
+      value: saleCart.length ? money(totals.total) : "Vacio",
+      detail: saleCart.length ? `${num(saleCart.length)} item${saleCart.length === 1 ? "" : "s"}` : "Toca productos para vender"
+    },
+    {
+      level: goal > 0 ? (goalProgress >= 100 ? "ok" : "info") : "info",
+      label: "Meta diaria",
+      value: goal > 0 ? `${num(goalProgress)}%` : "Sin meta",
+      detail: goal > 0 ? `${money(todayIncome)} de ${money(goal)}` : "Configurable por encargado"
+    }
+  ];
+  return `<section class="pos-turn-strip" aria-label="Estado rapido del turno">
+    ${items.map((item) => `<article class="is-${item.level}">
+      <span>${escapeHtml(item.label)}</span>
+      <strong>${escapeHtml(item.value)}</strong>
+      <small>${escapeHtml(item.detail)}</small>
+    </article>`).join("")}
+  </section>`;
+}
+
 function renderAlerts() {
   const alerts = products.filter((product) => isProductActive(product) && Number(product.stock || 0) <= Number(product.min_stock || 0));
   const outOfStock = alerts.filter((product) => Number(product.stock || 0) <= 0);
@@ -1321,6 +1370,7 @@ function renderSell() {
         ${posNotice ? `<div class="pos-toast">${escapeHtml(posNotice)}</div>` : ""}
         ${lastSaleReceipt ? renderLastSaleReceipt() : ""}
         ${simpleCashier ? renderSimpleCashierStatus(isCashOpen, totals) : renderPosShiftPanel(isCashOpen, totals)}
+        ${renderPosTurnStrip({ isCashOpen, totals })}
         ${activeSaleDraftInfo()}
         ${saleCart.length ? renderPosMiniCartPreview(totals, isCashOpen) : ""}
         <div class="pos-search-row">
