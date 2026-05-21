@@ -4546,6 +4546,7 @@ function renderHelp() {
     ${renderCommercialReadinessPanel(certification, automated)}
     ${renderCommercialClosureRoadmapPanel()}
     ${renderDemoDataKitPanel()}
+    ${renderDeviceQaPanel()}
     ${renderDemoSalesGuidePanel()}
     <section class="help-guide-grid">
       ${guides.map((guide) => `<article>
@@ -4629,6 +4630,7 @@ function renderHelp() {
   document.querySelector("#printDemoGuideInlineBtn")?.addEventListener("click", printDemoSalesGuide);
   document.querySelector("#printDemoDataKitBtn")?.addEventListener("click", printDemoDataKit);
   document.querySelector("#printDemoDataKitInlineBtn")?.addEventListener("click", printDemoDataKit);
+  document.querySelector("#printDeviceQaBtn")?.addEventListener("click", printDeviceQaChecklist);
   document.querySelector("#downloadDemoProductsBtn")?.addEventListener("click", downloadDemoProductsCsv);
   document.querySelector("#downloadDemoCustomersBtn")?.addEventListener("click", downloadDemoCustomersCsv);
   document.querySelector("#loadStarterProductsFromHelp")?.addEventListener("click", loadStarterProducts);
@@ -5029,6 +5031,47 @@ function renderCommercialReadinessPanel(certification, automated) {
       </div>
     </div>
   </section>`;
+}
+
+function deviceQaItems() {
+  return [
+    { area: "Celular", checks: ["Login visible sin recortes", "Menu desplegable usable", "POS no salta al carrito al agregar varios productos", "Cobro permite escribir monto completo", "Ticket/precomprobante abre correctamente"] },
+    { area: "Tablet", checks: ["Productos y carrito se leen sin solaparse", "Botones tactiles tienen buen tamano", "Modal de cobro cabe en pantalla", "Historial e inventario mantienen columnas legibles"] },
+    { area: "Monitor", checks: ["Productos disponibles se ven completos", "Panel derecho no tapa contenido", "No aparece scroll horizontal innecesario", "Menu lateral y tarjetas quedan alineadas"] },
+    { area: "Operacion", checks: ["Abrir caja", "Vender producto", "Cobrar efectivo/tarjeta/QR/credito", "Anular y devolver stock", "Cerrar caja e imprimir cierre"] }
+  ];
+}
+
+function renderDeviceQaPanel() {
+  const items = deviceQaItems();
+  return `<section class="device-qa-panel">
+    <div class="device-qa-head">
+      <div>
+        <p class="eyebrow">Prueba visual final</p>
+        <h3>Checklist por dispositivo antes de entregar</h3>
+        <span>Usa esta guia para revisar celular, tablet y monitor grande con una empresa real o demo.</span>
+      </div>
+      <button class="ghost-button" type="button" id="printDeviceQaBtn">Imprimir checklist</button>
+    </div>
+    <div class="device-qa-grid">
+      ${items.map((group) => `<article>
+        <strong>${escapeHtml(group.area)}</strong>
+        ${group.checks.map((check) => `<span><b></b>${escapeHtml(check)}</span>`).join("")}
+      </article>`).join("")}
+    </div>
+  </section>`;
+}
+
+function printDeviceQaChecklist() {
+  const title = storeSettings.storeName || storeSettings.companyName || currentUser.companyName || "ZOW Ventas-Almacen";
+  const printable = window.open("", "_blank", "width=860,height=900");
+  if (!printable) return;
+  const content = deviceQaItems().map((group) => `<section><h2>${escapeHtml(group.area)}</h2>${group.checks.map((check) => `<label><span></span>${escapeHtml(check)}</label>`).join("")}</section>`).join("");
+  printable.document.write(`<!doctype html><html><head><meta charset="UTF-8"><title>Checklist visual ${escapeHtml(title)}</title><style>
+    body{font-family:Arial,sans-serif;margin:0;padding:24px;color:#12231f;background:#f7fbfa}.toolbar{margin-bottom:14px}.toolbar button{border:0;border-radius:999px;background:#0f766e;color:#fff;padding:10px 14px;font-weight:900}.sheet{max-width:860px;margin:auto;background:#fff;border:1px solid #d9ebe5;border-radius:18px;padding:24px;box-shadow:0 18px 45px rgba(15,32,28,.1)}h1{margin:0 0 6px;color:#0f3d34}p{margin:0 0 18px;color:#64746f}.grid{display:grid;grid-template-columns:repeat(2,1fr);gap:14px}section{border:1px solid #d9ebe5;border-radius:14px;background:#f8fffc;padding:14px;break-inside:avoid}h2{font-size:15px;margin:0 0 10px;color:#0f766e}label{display:flex;gap:9px;align-items:flex-start;margin:8px 0;font-size:13px;line-height:1.35}label span{width:14px;height:14px;border:1px solid #94a3b8;border-radius:3px;flex:0 0 auto}.signs{display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-top:28px}.signs div{border-top:1px solid #94a3b8;text-align:center;padding-top:8px;color:#64746f;font-size:12px}.foot{text-align:center;color:#64748b;font-size:11px;margin-top:18px}@media(max-width:720px){body{padding:10px}.grid{grid-template-columns:1fr}.sheet{padding:18px}}@media print{body{background:#fff;padding:0}.toolbar{display:none}.sheet{box-shadow:none;border:0;border-radius:0}.grid{grid-template-columns:repeat(2,1fr)}}
+  </style></head><body><div class="toolbar"><button onclick="print()">Imprimir / Guardar PDF</button></div><main class="sheet"><h1>Checklist visual por dispositivo</h1><p>${escapeHtml(title)} / ${formatDateTime(new Date().toISOString())}</p><div class="grid">${content}</div><div class="signs"><div>Revision SYSTEM ZOW</div><div>Conformidad cliente</div></div><p class="foot">SYSTEM ZOW SAAS - Control visual previo a entrega</p></main></body></html>`);
+  printable.document.close();
+  printable.focus();
 }
 
 function demoSalesGuideSteps() {
