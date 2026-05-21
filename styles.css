@@ -7608,6 +7608,109 @@ body.app-ventas .daily-operation-track strong {
   font-size: 1.02rem;
 }
 
+.owner-daily-panel {
+  display: grid;
+  gap: 14px;
+  margin-bottom: 14px;
+  border: 1px solid rgb(15 118 110 / 18%);
+  border-radius: 20px;
+  padding: clamp(14px, 2vw, 18px);
+  background:
+    radial-gradient(circle at 92% 8%, rgb(245 158 11 / 13%), transparent 34%),
+    linear-gradient(135deg, rgb(255 255 255 / 96%), rgb(236 253 245 / 76%));
+  box-shadow: 0 18px 45px rgb(15 32 28 / 8%);
+}
+
+.owner-daily-panel.is-warning {
+  border-color: rgb(245 158 11 / 24%);
+  background:
+    radial-gradient(circle at 92% 8%, rgb(245 158 11 / 16%), transparent 34%),
+    linear-gradient(135deg, #ffffff, #fffbeb);
+}
+
+.owner-daily-panel.is-danger {
+  border-color: rgb(220 38 38 / 22%);
+  background:
+    radial-gradient(circle at 92% 8%, rgb(220 38 38 / 10%), transparent 34%),
+    linear-gradient(135deg, #ffffff, #fff7f7);
+}
+
+.owner-daily-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.owner-daily-head h3 {
+  margin: 3px 0 4px;
+  color: var(--accent-dark);
+  font-size: clamp(1.15rem, 2.2vw, 1.55rem);
+}
+
+.owner-daily-head span,
+.owner-daily-grid span,
+.owner-daily-grid small,
+.owner-daily-actions span {
+  display: block;
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-weight: 830;
+  line-height: 1.38;
+}
+
+.owner-daily-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.owner-daily-grid article,
+.owner-daily-actions article {
+  border: 1px solid rgb(15 118 110 / 13%);
+  border-radius: 15px;
+  padding: 12px;
+  background: rgb(255 255 255 / 82%);
+}
+
+.owner-daily-grid strong {
+  display: block;
+  margin: 5px 0 3px;
+  color: var(--accent-dark);
+  font-size: clamp(1rem, 1.8vw, 1.3rem);
+  line-height: 1;
+}
+
+.owner-daily-actions {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.owner-daily-actions article {
+  display: grid;
+  gap: 7px;
+}
+
+.owner-daily-actions article.is-ok {
+  border-color: rgb(16 185 129 / 24%);
+  background: rgb(236 253 245 / 78%);
+}
+
+.owner-daily-actions article.is-warning {
+  border-color: rgb(245 158 11 / 25%);
+  background: rgb(255 251 235 / 78%);
+}
+
+.owner-daily-actions article.is-danger {
+  border-color: rgb(220 38 38 / 24%);
+  background: rgb(254 242 242 / 78%);
+}
+
+.owner-daily-actions strong {
+  color: var(--accent-dark);
+}
+
 .executive-brief-panel {
   display: grid;
   grid-template-columns: minmax(260px, 0.92fr) minmax(320px, 1.3fr);
@@ -15947,6 +16050,8 @@ body.system-zow-site .site-footer {
   body.app-ventas .history-role-panel,
   body.app-ventas .history-role-cards,
   .report-decision-grid,
+  .owner-daily-grid,
+  .owner-daily-actions,
   .executive-brief-metrics,
   .executive-brief-priority,
   body.app-ventas .inventory-filter-bar,
@@ -15992,6 +16097,7 @@ body.system-zow-site .site-footer {
   .commercial-roadmap-next,
   .device-qa-head,
   .inventory-import-head,
+  .owner-daily-head,
   .demo-data-kit-head,
   .demo-guide-head,
   body.app-ventas .training-mode-banner,
@@ -16012,6 +16118,7 @@ body.system-zow-site .site-footer {
   .inventory-import-actions,
   .inventory-import-actions button,
   .inventory-import-actions .file-action,
+  .owner-daily-head button,
   .demo-data-kit-actions button,
   body.app-ventas .training-lab-actions,
   body.app-ventas .training-lab-actions button {

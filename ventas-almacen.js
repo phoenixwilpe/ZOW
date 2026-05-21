@@ -2382,6 +2382,7 @@ function renderReports() {
         ${businessHealth.items.map((item) => `<article class="${item.className}"><strong>${escapeHtml(item.label)}</strong><span>${escapeHtml(item.detail)}</span></article>`).join("")}
       </div>
     </section>
+    ${renderOwnerDailyPanel({ businessHealth, confirmedSales, totalIncome, totalSold, averageSale, pendingTotal, stockRisks, expiryRisks, totalClosureDifference, paymentBreakdown })}
     ${renderExecutiveBriefPanel({ businessHealth, confirmedSales, voidedSales, totalIncome, totalSold, averageSale, pendingTotal, stockRisks, expiryRisks, paymentBreakdown })}
     ${renderReportDecisionPanel({ businessHealth, confirmedSales, stockRisks, expiryRisks, pendingTotal, marginPercent, totalClosureDifference })}
     ${supervisorMode ? renderSupervisorReportFocus({ voidedSales, pendingTotal, stockRisks, expiryRisks, totalClosureDifference, paymentBreakdown }) : `
@@ -2472,6 +2473,7 @@ function renderReports() {
   document.querySelector("#exportProductPerformanceCsv")?.addEventListener("click", () => exportProductPerformanceCsv(profitRows));
   document.querySelector("#exportTopCustomersCsv")?.addEventListener("click", () => exportTopCustomersCsv(confirmedSales));
   document.querySelector("#exportCategorySalesCsv")?.addEventListener("click", () => exportCategorySalesCsv(profitRows));
+  document.querySelector("#copyOwnerDailyBrief")?.addEventListener("click", copyOwnerDailyBrief);
   document.querySelector("#copyExecutiveBrief")?.addEventListener("click", copyExecutiveBrief);
   document.querySelector("#printExecutiveBrief")?.addEventListener("click", printExecutiveBrief);
   bindProductLabelActions();
@@ -2598,6 +2600,83 @@ function renderExecutiveBriefPanel({ businessHealth, confirmedSales, voidedSales
       ${priority.map((item) => `<article class="${item.className}"><strong>${escapeHtml(item.title)}</strong><span>${escapeHtml(item.detail)}</span>${item.view && canAccessView(item.view) ? `<button class="ghost-button" type="button" data-module-view="${item.view}">Abrir</button>` : ""}</article>`).join("")}
     </div>
   </section>`;
+}
+
+function renderOwnerDailyPanel({ businessHealth, confirmedSales, totalIncome, totalSold, averageSale, pendingTotal, stockRisks, expiryRisks, totalClosureDifference, paymentBreakdown }) {
+  const mainPayment = paymentBreakdown.slice().sort((a, b) => Number(b.total || 0) - Number(a.total || 0))[0];
+  const collectionRate = totalSold > 0 ? Math.round((totalIncome / totalSold) * 100) : 0;
+  const actions = buildOwnerDailyActions({ confirmedSales, pendingTotal, stockRisks, expiryRisks, totalClosureDifference, businessHealth });
+  const status = businessHealth.score >= 80 ? "is-ok" : businessHealth.score >= 55 ? "is-warning" : "is-danger";
+  return `<section class="owner-daily-panel ${status}">
+    <div class="owner-daily-head">
+      <div>
+        <p class="eyebrow">Vista del dueno</p>
+        <h3>Revision diaria en 2 minutos</h3>
+        <span>${escapeHtml(ownerDailySummaryText({ businessHealth, confirmedSales, pendingTotal, stockRisks }))}</span>
+      </div>
+      <button class="ghost-button" type="button" id="copyOwnerDailyBrief">Copiar resumen diario</button>
+    </div>
+    <div class="owner-daily-grid">
+      <article><span>Cobrado</span><strong>${money(totalIncome)}</strong><small>${collectionRate}% del vendido</small></article>
+      <article><span>Ventas</span><strong>${num(confirmedSales.length)}</strong><small>Ticket ${money(averageSale)}</small></article>
+      <article><span>Metodo fuerte</span><strong>${escapeHtml(mainPayment?.label || "Sin ventas")}</strong><small>${money(mainPayment?.total || 0)}</small></article>
+      <article><span>Por cobrar</span><strong>${money(pendingTotal)}</strong><small>Seguimiento a clientes</small></article>
+      <article><span>Stock critico</span><strong>${num(stockRisks.length)}</strong><small>${num(expiryRisks.length)} vencimiento${expiryRisks.length === 1 ? "" : "s"}</small></article>
+    </div>
+    <div class="owner-daily-actions">
+      ${actions.map((item) => `<article class="${item.className}"><strong>${escapeHtml(item.title)}</strong><span>${escapeHtml(item.detail)}</span>${item.view && canAccessView(item.view) ? `<button class="ghost-button" type="button" data-module-view="${item.view}">Abrir</button>` : ""}</article>`).join("")}
+    </div>
+  </section>`;
+}
+
+function buildOwnerDailyActions({ confirmedSales, pendingTotal, stockRisks, expiryRisks, totalClosureDifference, businessHealth }) {
+  const actions = [];
+  if (!confirmedSales.length) actions.push({ title: "Validar una venta", detail: "Haz una venta de prueba para confirmar caja, stock y comprobante.", view: "sell", className: "is-warning" });
+  if (pendingTotal > 0) actions.push({ title: "Cobrar saldos", detail: `Hay ${money(pendingTotal)} pendiente. Prioriza clientes con deuda mas antigua.`, view: "customers", className: "is-warning" });
+  if (stockRisks.length) actions.push({ title: "Comprar reposicion", detail: `${num(stockRisks.length)} producto(s) pueden frenar ventas por falta de stock.`, view: "inventory", className: "is-danger" });
+  if (expiryRisks.length) actions.push({ title: "Mover vencimientos", detail: `${num(expiryRisks.length)} producto(s) requieren revision antes de vender.`, view: "inventory", className: "is-warning" });
+  if (totalClosureDifference > 1) actions.push({ title: "Revisar caja", detail: `Diferencias acumuladas: ${money(totalClosureDifference)}.`, view: "finance", className: "is-danger" });
+  if (!actions.length && businessHealth.score >= 80) actions.push({ title: "Mantener ritmo", detail: "Operacion estable. Revisa productos mas vendidos y stock para no perder ventas.", view: "reports", className: "is-ok" });
+  if (!actions.length) actions.push({ title: "Revisar reporte", detail: "No hay alertas graves, pero conviene mirar ventas, caja y utilidad.", view: "reports", className: "is-ok" });
+  return actions.slice(0, 3);
+}
+
+function ownerDailySummaryText({ businessHealth, confirmedSales, pendingTotal, stockRisks }) {
+  if (!confirmedSales.length) return "Aun no hay ventas en el periodo filtrado. Haz una prueba o revisa fechas.";
+  if (stockRisks.length) return "Hay ventas, pero el stock bajo puede frenar la operacion.";
+  if (pendingTotal > 0) return "La venta funciona; toca cuidar cobranza para no dejar dinero pendiente.";
+  if (businessHealth.score >= 80) return "La operacion se ve sana para el periodo. Mantener control diario.";
+  return "Operacion activa con puntos por revisar antes del cierre.";
+}
+
+async function copyOwnerDailyBrief() {
+  const report = buildExecutiveBriefData();
+  const actions = buildOwnerDailyActions({
+    confirmedSales: report.confirmedSales,
+    pendingTotal: report.pendingTotal,
+    stockRisks: report.stockRisks,
+    expiryRisks: report.expiryRisks,
+    totalClosureDifference: report.totalClosureDifference,
+    businessHealth: report.businessHealth
+  });
+  const lines = [
+    `Vista diaria del dueno - ${report.company}`,
+    `Periodo: ${report.period}`,
+    `Salud: ${report.businessHealth.score}/100 (${reportDecisionTitle(report.businessHealth.score)})`,
+    `Ventas: ${num(report.confirmedSales.length)} / Vendido: ${money(report.totalSold)} / Cobrado: ${money(report.totalIncome)}`,
+    `Ticket promedio: ${money(report.averageSale)} / Por cobrar: ${money(report.pendingTotal)}`,
+    `Stock critico: ${num(report.stockRisks.length)} / Vencimientos: ${num(report.expiryRisks.length)}`,
+    "",
+    "Acciones:",
+    ...actions.map((item, index) => `${index + 1}. ${item.title}: ${item.detail}`)
+  ];
+  try {
+    await navigator.clipboard.writeText(lines.join("\n"));
+    ventasMessage = "Vista diaria del dueno copiada al portapapeles.";
+  } catch {
+    ventasMessage = lines.join("\n");
+  }
+  renderMain();
 }
 
 function buildExecutiveBriefActions({ confirmedSales, pendingTotal, stockRisks, expiryRisks, businessHealth }) {
